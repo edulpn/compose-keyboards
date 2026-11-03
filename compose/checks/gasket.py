@@ -206,7 +206,7 @@ def main():
             rec(f"A no overlap: {nm} / {a}", v < 0.05, f"{v:.3f} mm3")
 
     # ---- B: clearances (mm)
-    no_posts = case.cut(G.P2W(union([cyl(x, y, PR.CTRL_BOSS_R + 0.5, CT.board_bot - 0.6, CT.board_bot + 5)
+    no_posts = case.cut(G.P2W(union([cyl(x, y, CS.POST_R + 0.5, CT.board_bot - 0.6, CT.board_bot + 5)
                                       for x, y in CT.mounts])))      # the board sits on the post tops
     parts_b = dict(parts, **{"case (posts excl.)": no_posts})
     for a, b_, lim in (("plate", "case", PR.FLOAT_GAP - 0.05), ("plate", "frame", 0.5), ("plate", "cover", 0.5),
@@ -278,11 +278,11 @@ def main():
 
     # ---- E: hardware
     cover_t = CT.cover_top - CT.cover_under
-    grip = cover_t - (PR.M25_HEAD_H + 0.2) + CS.COVER_BOSS_H
-    rec("E cover screws M2.5x6 button: thread into the standoffs", 2.5 <= 6 - grip <= 5.0, f"{6 - grip:.2f} mm engaged")
+    grip = cover_t - (PR.M3_HEAD_H + 0.2) + CS.COVER_BOSS_H
+    rec("E cover screws M3x6 button: thread into the standoffs", 2.5 <= 6 - grip <= 5.0, f"{6 - grip:.2f} mm engaged")
     eng = CS.STANDOFF_THREAD - CS.PCB_T
-    rec("E standoff male thread through the board into the post insert", 3.0 <= eng <= PR.M25_INSERT_L,
-        f"{eng:.1f} mm, hole {PR.M25_INSERT_L} mm")
+    rec("E standoff male thread through the board into the post insert", 3.0 <= eng <= PR.M3_INSERT_L,
+        f"{eng:.1f} mm, hole {PR.M3_INSERT_L} mm")
     rec("E Pico top -> cover underside", CT.pico_gap >= PR.STANDOFF_MIN_GAP, f"{CT.pico_gap:.2f} mm")
     rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
         f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")

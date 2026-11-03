@@ -24,9 +24,9 @@ Interface (the standard; see README "Controller rev 2"):
     100 nF, 330 ohm series resistor, MF-RHT050 polyfuse VBUS -> LED 5 V, 10 uF bulk (hot-plug friendly, see the sim).
     A second gate of the 74HCT125 (220 ohm in, 100k pull-down, 330 ohm out) re-drives the chain from the
     left half to the right half. Leave it all empty and the cables' 5 V lines stay dead; firmware RGB off.
-  - Mounting: four M2.5 holes, (+-17.75, +19.5) beside the Pico's front end and (+-13.7, -22.5) beside its
-    USB end. M2.5 x 12 male-female hex standoffs (Raspberry Pi kit hardware) screw through the board into
-    inserts in four case posts, clamping it; the cover drops onto them and takes four M2.5 x 6 screws.
+  - Mounting: four M3 holes, (+-17.75, +19.5) beside the Pico's front end and (+-13.7, -22.5) beside its
+    USB end. M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four
+    case posts, clamping it; the cover drops onto them and takes four M3 x 6 screws.
     Copper- and part-free circles around them on top; no bottom part or lead over the posts.
   - Top face: Pico sockets, the two FFC connectors and the front connector row only. Bottom face: every
     passive and the RGB buffer (through-hole, soldered from the top), I2C pull-ups.
@@ -343,6 +343,8 @@ def check_layout(fps):
         post = Point(x, y).buffer(POST_R + 0.3)                # case post under the board
         assert ol.contains(Point(x, y).buffer(M_CLEAR / 2 + 1.2)), f"standoff hole at {x, y} too near the edge"
         for ref, g in boxes.items():
+            if ref.startswith("U1"):                           # Pico sockets: their bodies (courtyard less its 0.5 mm
+                g = g.buffer(-0.5, join_style=2)               #   margin); the keep circle carries its own margin
             assert not (keep if ref not in bottom else post).intersects(g), f"standoff/post at {x, y} hits {ref}"
         for ref, fp in fps.items():                            # top parts' lead tails clear the post
             if ref in bottom:

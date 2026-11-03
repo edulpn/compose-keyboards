@@ -21,13 +21,13 @@ The controller is the shared [controller rev 2](../../docs/controller-rev2.md).
 - **Look:** rev 1's bevelled frames (6 mm tall, 4 mm inset) and reveal line over the tub's top edge; the outer corners are rounded at 4.5 mm so the bevel stays clean all the way round.
 - **Gasket mount:** each plate is a 5 mm core holding the switches plus a thin 2 mm flange round its edge, flush with the plate's top face. The flange is pinched between foam pads: pads on a ledge in the tub below, pads under the frame above. Nothing screws through the plate or the half board. Each frame screws to the tub from below with six M3 screws into heat-set inserts and bottoms out on the tub's bosses, so the squeeze is set by geometry, not by how hard the screws are tightened. The plate floats 0.6 mm clear of the walls and frame sideways.
 - **Pads = ordinary foam weatherstrip tape.** Self-adhesive closed-cell EPDM or neoprene sponge, 1/8″ (3 mm) thick, 3/8″ or 10 mm wide, cut across into 4 mm slices with scissors. The pads are 10 mm along the edge and 4 mm inward, stuck to the ledge and to the frame's underside. They are installed at 2.1 mm, which is 30–34 % squeeze for 3.0–3.2 mm tape (that foam is happy at 25–50 %). There are 20 pad pairs per half: 18 found by scanning the plate edge for every spot where a slice fits between the plate edge and the half board, plus one pair at each end of the inner (bridge) edge on seats that stand straight up from the floor, so they don't lean into the controller.
-- **Middle bay:** the controller sits on four floor posts (M2.5 inserts) and is clamped by its four standoffs; the cover drops onto the standoffs and takes four M2.5 × 6 screws, so it comes off without touching the ribbons. The bay is open from wall to wall below the plates' inner edges, so the ribbons run straight out from the board's side edges to the halves. There are 24 mm under the board.
+- **Middle bay:** the controller sits on four floor posts (M3 inserts) and is clamped by its four M3 standoffs; the cover drops onto the standoffs and takes four M3 × 6 screws, so it comes off without touching the ribbons. The bay is open from wall to wall below the plates' inner edges, so the ribbons run straight out from the board's side edges to the halves. There are 24 mm under the board.
 - **Checked (`gasket-checks`, all passing):**
   - no overlap between any two parts that mustn't touch (tub, plates, frames, cover, controller board and the parts on both its faces, Pico stack, standoffs, half-board proxies, pads);
   - clearances: plate to tub 0.6 mm, plate to frame 0.58 mm, cover to frames 0.3 mm, board to tub 0.5 mm, Pico to cover 0.7 mm;
   - the pad gap measured on the solids along the plate normal at every pad (2.10 mm everywhere, top and bottom);
   - assembly paths: plates and frames drop in along the plate normal, the controller and the cover drop straight down;
-  - hardware engagement: cover screws 2.8 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover;
+  - hardware engagement: cover screws 2.95 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover;
   - printability: each exported part is sliced at 0.2 mm in its print orientation and every layer must rest on the one below within 45°. Short bridges over hole ceilings and lips up to 1.2 mm are allowed. A plate with the flange halfway up its edge (the earlier design) fails this check.
 - **Still to do:** the rev 2 half boards (FFC connector on the bottom face, outline 5 mm inside the plate), then fixing the cable length.
 
@@ -35,8 +35,9 @@ The controller is the shared [controller rev 2](../../docs/controller-rev2.md).
 
 | part | qty |
 |---|---|
-| M3 × 6 screws + M3 × 5 × 4 heat-set inserts (frames; driven up from under the case through the bosses) | 12 + 12 |
-| M2.5 × 12 male–female standoffs, M2.5 × 6 button-head screws, M2.5 heat-set inserts (controller, cover) | 4 + 4 + 4 |
+| M3 × 6 button-head screws (12 for the frames, driven up from under the case through the bosses; 4 for the cover) | 16 |
+| M3 × 5 × 4 heat-set inserts (12 in the frames, 4 in the controller posts) | 16 |
+| M3 × 12 male–female hex standoffs, 5 or 5.5 mm across flats (controller) | 4 |
 | foam weatherstrip tape, closed-cell EPDM/neoprene, self-adhesive, 1/8″ × 3/8″ (3 × 10 mm), ~0.4 m | 1 roll |
 | rubber bumpons, 10 mm | as rev 1 |
 
