@@ -591,6 +591,8 @@ def _make_once(name, board, passes):
         print(f"  {name}: router gave no result")
         return 1, 1
     t, v = r
+    if hasattr(board, "kb2_after_route"):           # e.g. copper pours + stitching vias (rev 2 RGB half boards)
+        board.kb2_after_route(board)
     path = os.path.join(PCB_OUT, name + ".kicad_pcb")
     pcbnew.SaveBoard(path, board)
     board = pcbnew.LoadBoard(path)

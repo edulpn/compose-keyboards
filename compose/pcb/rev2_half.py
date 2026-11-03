@@ -407,6 +407,9 @@ def build(name):
         ol = ol.difference(unary_union(s.ledcut))
     b.kb2_outline = (ol, PK.OX, PK.OY)
     PK.outline(b, ol, PK.OX, PK.OY)
+    if rgb:
+        b.kb2_gnd_pour = True
+        b.kb2_after_route = gnd_pour
     if rgb and POWER_W > PR.TRACE_W:
         pw = pcbnew.NETCLASS("Power")
         pw.SetTrackWidth(MM(POWER_W))
@@ -539,6 +542,101 @@ def build(name):
     return b
 
 
+GND_POUR_CLEAR = 0.3
+STITCH_PITCH = 3.0
+
+
+def gnd_pour(b):
+    """After routing (RGB boards): GND fills both copper layers, tied together by stitching vias wherever one
+    fits. The router never sees GND (see _export_dsn_power): 136 pads on one net was what kept it from
+    finishing. KiCad's DRC then reports any GND pad the pour can't reach."""
+    pcbnew, PK = _pc()
+    from shapely.geometry import Point as P_, LineString as LS_, Polygon as Pg_
+    from shapely.ops import unary_union as uu
+    from shapely.strtree import STRtree
+    ToMM = pcbnew.ToMM
+    gnd = b.GetNetsByName()["GND"]
+    ol, ox, oy = b.kb2_outline
+    kol = Pg_([PK.K(p, ox, oy) for p in ol.exterior.coords], [[PK.K(p, ox, oy) for p in r.coords] for r in ol.interiors])
+    # obstacles per layer for a via (both layers) in KiCad coordinates
+    obst = []
+    for fp in b.GetFootprints():
+        for p in fp.Pads():
+            q = p.GetPosition()
+            r = max(ToMM(p.GetSize().x), ToMM(p.GetSize().y)) / 2
+            obst.append(P_(ToMM(q.x), ToMM(q.y)).buffer(r))
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            q = t.GetPosition()
+            obst.append(P_(ToMM(q.x), ToMM(q.y)).buffer(ToMM(t.GetWidth()) / 2))
+        else:
+            a, c = t.GetStart(), t.GetEnd()
+            obst.append(LS_([(ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y))]).buffer(ToMM(t.GetWidth()) / 2))
+    for d in b.GetDrawings():                                    # exposed-copper art
+        if d.GetLayer() in (pcbnew.F_Cu, pcbnew.B_Cu):
+            bb = d.GetBoundingBox()
+            obst.append(Pg_([(ToMM(bb.GetLeft()), ToMM(bb.GetTop())), (ToMM(bb.GetRight()), ToMM(bb.GetTop())),
+                             (ToMM(bb.GetRight()), ToMM(bb.GetBottom())), (ToMM(bb.GetLeft()), ToMM(bb.GetBottom()))]))
+    for z in b.Zones():
+        if z.GetIsRuleArea():
+            o = z.Outline()
+            pts = [(ToMM(o.CVertex(i).x), ToMM(o.CVertex(i).y)) for i in range(o.TotalVertices())]
+            obst.append(Pg_(pts).buffer(0))
+    tree = STRtree(obst)
+    vr = PR.VIA_D / 2
+    keep = kol.buffer(-(vr + 0.5))
+    minx, miny, maxx, maxy = keep.bounds
+    n = 0
+    y = miny
+    while y <= maxy:
+        x = minx
+        while x <= maxx:
+            c = P_(x, y)
+            if keep.contains(c):
+                probe = c.buffer(vr + PR.CLEARANCE + 0.05)
+                if not any(obst[int(i)].intersects(probe) for i in tree.query(probe)):
+                    v = pcbnew.PCB_VIA(b)
+                    v.SetPosition(PK.V(x, y))
+                    v.SetWidth(PK.MM(PR.VIA_D))
+                    v.SetDrill(PK.MM(PR.VIA_DRILL))
+                    v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+                    v.SetNet(gnd)
+                    b.Add(v)
+                    n += 1
+            x += STITCH_PITCH
+        y += STITCH_PITCH
+    for lay in (pcbnew.F_Cu, pcbnew.B_Cu):
+        z = pcbnew.ZONE(b)
+        z.SetLayer(lay)
+        z.SetNet(gnd)
+        z.SetLocalClearance(PK.MM(GND_POUR_CLEAR))
+        z.SetMinThickness(PK.MM(0.25))
+        z.SetThermalReliefGap(PK.MM(0.3))
+        z.SetThermalReliefSpokeWidth(PK.MM(0.35))
+        z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+        z.SetAssignedPriority(0)
+        o = z.Outline()
+        o.NewOutline()
+        for p in list(kol.exterior.coords)[:-1]:
+            o.Append(PK.MM(p[0]), PK.MM(p[1]))
+        b.Add(z)
+    pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+    # stitching vias the pour didn't reach on both faces would dangle: drop them
+    dead = []
+    zs = [z for z in b.Zones() if not z.GetIsRuleArea()]
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd.GetNetCode() and not t.GetNetname() == "":
+            q = t.GetPosition()
+            hit = sum(1 for z in zs if z.GetFilledPolysList(z.GetLayer()).Contains(q))
+            if hit < 2 and not any(tr.GetNetCode() == gnd.GetNetCode() and tr.GetClass() != "PCB_VIA" and
+                                   (tr.GetStart() == q or tr.GetEnd() == q) for tr in b.GetTracks()):
+                dead.append(t)
+    for t in dead:
+        b.Remove(t)
+    pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+    print(f"  GND pour on F and B, {n - len(dead)} stitching vias")
+
+
 _export_dsn = None
 
 
@@ -548,6 +646,11 @@ def _export_dsn_power(board, path):
     import re
     okx = _export_dsn(board, path)
     t = open(path).read()
+    if getattr(board, "kb2_gnd_pour", False):            # GND is poured after routing: not the router's job
+        t = re.sub(r"\(net GND\s*\(pins[^)]*\)\s*\)", "", t, count=1)
+        i = t.index("(network")
+        t = t[:i] + re.sub(r'(?<=[\s(])"?GND"?(?=[\s)])', "", t[i:])
+        open(path, "w").write(t)
     m = re.search(r"\(class kicad_default ([^(]*)", t)
     if m and "(class Power" in t:
         names = m.group(1).split()
