@@ -31,6 +31,7 @@ MM = pcbnew.FromMM
 V = lambda x, y: pcbnew.VECTOR2I(MM(x), MM(y))
 DEG = lambda d: pcbnew.EDA_ANGLE(d, pcbnew.DEGREES_T)
 OX, OY = 40.0, 60.0            # half board: plate-local (x, y) -> KiCad (x + OX, OY - y)
+JOB_TIMEOUT_MIN = 8            # Freerouting job limit per attempt (minutes)
 
 
 def K(p, ox=OX, oy=OY):
@@ -70,10 +71,10 @@ class Nets:
 
 
 def outline(board, poly, ox, oy):
-    """Edge.Cuts from a shapely polygon; returns the segments so they can be swapped."""
+    """Edge.Cuts from a shapely polygon (its holes become board cutouts); returns the segments."""
     segs = []
-    pts = list(poly.exterior.coords)
-    for a, c in zip(pts[:-1], pts[1:]):
+    rings = [list(poly.exterior.coords)] + [list(r.coords) for r in poly.interiors]
+    for a, c in ((a, c) for pts in rings for a, c in zip(pts[:-1], pts[1:])):
         s = pcbnew.PCB_SHAPE(board)
         s.SetShape(pcbnew.SHAPE_T_SEGMENT)
         s.SetStart(V(*K(a, ox, oy)))
@@ -453,10 +454,11 @@ def route(board, name, passes=40):
     if os.path.exists(ses):
         os.remove(ses)
     cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", str(passes),
-           "--gui.enabled=false", "--router.optimizer.max_passes=5", "--router.job_timeout=00:08:00",
+           "--gui.enabled=false", "--router.optimizer.max_passes=5",
+           f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
            "--usage_and_diagnostic_data.disable_analytics=true"]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=720)
+        subprocess.run(cmd, capture_output=True, text=True, timeout=JOB_TIMEOUT_MIN * 60 + 240)
     except subprocess.TimeoutExpired:
         pass
     if not os.path.exists(ses):

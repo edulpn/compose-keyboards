@@ -26,14 +26,22 @@ python3 -m compose checks out           # fit / assembly / print checks
 python3 -m compose sim out              # copper-level matrix simulation
 python3 -m compose render out           # images
 
-# Controller rev 2 (docs/controller-rev2.md) and the rev 2 case (layouts/lily58/rev2.md)
+# Controller rev 2 (docs/controller-rev2.md)
 python3 -m compose controller out       # route, DRC, Gerbers (add --resilk to redraw only the silkscreen)
 python3 -m compose sim-controller out   # copper-level simulation
 python3 -m compose spice-controller out # ngspice simulation
-C58_REV=2 python3 -m compose gasket-case out_r2t     # rev 2 printable parts
-C58_REV=2 python3 -m compose gasket-checks out_r2t   # rev 2 fit, gasket, assembly and printability checks
-C58_REV=2 python3 -m compose gasket-render out_r2t   # rev 2 renders
+
+# Compose58 rev 2 (layouts/lily58/rev2.md): set C58_REV=2
+C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
+C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
+C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + controller rev 2, copper level (after both are routed)
+C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
+C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
+C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, ribbon and printability checks
+C58_REV=2 python3 -m compose gasket-render out_r2t   # renders
 ```
+
+`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that). The RGB half boards take the router a while: up to 45 minutes per attempt.
 
 Outputs go to `out*/`, which is not committed: releases carry them.
 
@@ -44,12 +52,12 @@ compose/            the platform (Python package)
   params.py           every dimension: angles, thicknesses, gaps, pads, hardware
   geom.py, layout.py  frames and transforms; the Layout/Key types
   case/               sandwich.py (rev 1 case), gasket.py (rev 2 case), build, coupons, tilt risers
-  pcb/                half boards + controller rev 1 (placement, KiCad, routing), board art
+  pcb/                rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py), board art
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
   checks/             fit, assembly, gasket and printability checks
   sim/                copper-level and ngspice simulations
   render/             renders and board previews (web/ holds the MIT render helpers)
-  firmware.py         QMK keyboard definition
+  firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
 layouts/<name>/     one folder per layout: its key list and hardware positions
 docs/               platform docs (this wiki), images
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases

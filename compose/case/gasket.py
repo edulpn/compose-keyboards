@@ -166,8 +166,12 @@ def plate2_local():
     cutters = [cut.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), k.rot).translate(cq.Vector(k.x, k.y, 0))
                for k in L.keys]
     plate = plate.cut(cq.Compound.makeCompound(cutters))
-    # the half board hangs from the plate on M2 screws into inserts (the posts of rev 1, now board-to-plate only)
-    plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in L.posts]))
+    # the half board (compose/pcb/rev2_half.py) hangs from the plate on four M2 screws into inserts, and the
+    # diodes' top-side solder joints sit in shallow pockets (one plan for all four board variants)
+    from compose.pcb import rev2_half as H2
+    hb = H2.plan()
+    plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in hb.posts]))
+    plate = plate.cut(poly_prism(hb.pockets, -1.0, PR.JOINT_POCKET_D))
     plate = plate.cut(union([cyl(x, y, PR.NOTCH_R, -1.0, TH + 1.0) for x, y in GL.screws_all]))
     return plate.clean()
 

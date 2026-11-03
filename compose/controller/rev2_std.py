@@ -13,6 +13,10 @@ PICO_HALF_L = 25.5                         # Pico board ends at y = -+25.5 (USB 
 FFC_DEPTH = 4.69 + 0.91                    # FFC pad row -> cable-side courtyard edge (Molex 200528)
 FFC_PAD_X = W2 - FFC_DEPTH                 # cable side flush with the side edges
 FFC_Y0 = 1.6                               # FFC connectors' centre (y): forward, so the narrowed back clears them
+FFC_ENTRY_H = 1.0                          # cable slot height above the face the connector sits on (2 mm body)
+FFC_INSERT = 4.0                           # cable length inside each connector (contacts + stiffener)
+FFC_W = 21.0                               # 20-way 1.0 mm cable width
+FFC_T = 0.3
 FFC_SPAN = 13.8                            # FFC courtyard half-length along y (centred on FFC_Y0)
 CLIP_X, CLIP_Y = 16.6, -14.3               # behind CLIP_Y the board is only 2 x CLIP_X wide (the plates' inner seats)
 # four M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four case posts,

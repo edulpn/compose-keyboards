@@ -1,10 +1,10 @@
 # Compose58 rev 2
 
-[Compose58](README.md) › rev 2 · **Status: in progress.** The case, cover and controller are designed and checked; the half boards are next.
+[Compose58](README.md) › rev 2 · **Status: in progress.** The case, cover, controller and half boards are designed and checked; nothing is built yet.
 
 ![rev 2](images/rev2_hero.png)
 
-**On this page:** [The rev 2 case](#the-rev-2-case-gasket-mount) · [Design notes and ideas](#design-notes-and-ideas)
+**On this page:** [The rev 2 case](#the-rev-2-case-gasket-mount) · [The rev 2 half boards](#the-rev-2-half-boards) · [Design notes and ideas](#design-notes-and-ideas)
 
 ## The rev 2 case: gasket mount
 
@@ -29,7 +29,7 @@ The controller is the shared [controller rev 2](../../docs/controller-rev2.md).
   - assembly paths: plates and frames drop in along the plate normal, the controller and the cover drop straight down;
   - hardware engagement: cover screws 2.95 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover;
   - printability: each exported part is sliced at 0.2 mm in its print orientation and every layer must rest on the one below within 45°. Short bridges over hole ceilings and lips up to 1.2 mm are allowed. A plate with the flange halfway up its edge (the earlier design) fails this check.
-- **Still to do:** the rev 2 half boards (FFC connector on the bottom face, outline 5 mm inside the plate), then fixing the cable length.
+- **Ribbons:** each half's 20-pin FFC hangs in a U in the bay between the controller and the half (below). The checks model it at its real length, including the twist that takes up the splay, and keep it clear of everything.
 
 **Rev 2 hardware (case)**
 
@@ -43,14 +43,58 @@ The controller is the shared [controller rev 2](../../docs/controller-rev2.md).
 
 ![gasket stack, exploded](images/rev2_gasket.png)
 
+## The rev 2 half boards
+
+`compose/pcb/rev2_half.py` builds four boards: `C58_REV=2 python3 -m compose half-rev2 out_r2t` (place, route, DRC, Gerbers; `--plan` draws the placement only).
+
+| board | switches | LEDs |
+|---|---|---|
+| `half_rev2_hotswap` | Kailh MX hotswap sockets | none |
+| `half_rev2_solder` | soldered | none |
+| `half_rev2_hotswap_rgb` | Kailh MX hotswap sockets | SK6812 MINI-E under every switch |
+| `half_rev2_solder_rgb` | soldered | SK6812 MINI-E under every switch |
+
+Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard; order five of the one you want (two per keyboard).
+
+- **One reversible board for both halves**, as on rev 1. The left half has its switches on the front and everything else on the back. The right half is the same board flipped over. Every part that sits on one face has a copy on each face (sockets, LEDs, capacitors, the cable connector); fit only the copies on the face away from the switches. Through-hole parts (diodes, solder-in switches) serve both.
+- **Outline:** the plate outline less 5 mm, inside the gasket pads. No case screws go through it: the board hangs from the plate on four M2 screws into heat-set inserts in the plate, placed in column gaps clear of every part.
+- **Matrix:** the layout's rows and columns, COL2ROW, a through-hole diode per key in the column or row gap beside it. The plate has a shallow pocket over each diode's top-side solder joint.
+- **Cable connector:** a Molex 200528-0200 (20 positions, 1.0 mm pitch, bottom contact) on the bottom face, flush with the inner edge and centred on the controller's connector. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves. COL6 and ROW5 aren't used by this layout.
+- **Cable:** 20-pin, 1.0 mm pitch, 0.3 mm FFC with contacts on opposite sides ("type B"), **50 mm** (60 mm also fits), two of them, the same for both halves. The slack hangs in a U below the gap between the boards. The half's connector runs along its splayed edge, 10° off the controller's, and the ribbon's rising leg takes that up with a slight twist. A 50 mm U bottoms out 12 mm above the floor and a 60 mm one 7 mm above it; longer cables would drag on the floor.
+- **RGB boards:** an SK6812 MINI-E (reverse mount) in a cutout under each switch's LED window. It's soldered on the bottom face and shines up through the board into the switch. Use switches with a south-facing LED window. One chain per half: up the outer column, down the next and so on, then the inner key and the thumb arc from the inside out. There's a 100 nF 1206 capacitor beside every third LED. 5 V and GND come from slots 2/19 and 1/4/20. The plain boards wire slot 3 straight to slot 18 instead, so the controller's RGB chain still passes through.
+- **Firmware:** `C58_REV=2 python3 -m compose firmware-rev2 out_r2t` writes `firmware/keyboard.json` (plain) and `firmware/rgb/keyboard.json` (RGB Matrix, 58 LEDs, brightness capped at 32). Both use the controller rev 2 pin map: a 6 × 14 matrix, with left keys at their own row and column and right keys at column 13 − col.
+- **Checked:**
+  - DRC on every board: 0 errors, 0 unconnected.
+  - `C58_REV=2 python3 -m compose sim-half-rev2 out_r2t` rebuilds each board's netlist from its copper alone and fits the parts as a builder would, the left half one way up and the right half flipped. For every board and both halves it checks:
+    - every key runs column slot → switch → diode → row slot;
+    - spare slots stay unconnected;
+    - RGB boards: one unbroken LED chain from slot 3 to slot 18, with every LED and capacitor across 5 V and GND;
+    - plain boards: the RGB pass-through.
+
+    Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and two cables: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a reversed cable) are caught.
+  - The case checks use the real underside parts of every variant at once and the ribbons; the plate's M2 inserts and diode pockets come from the same placement, so one plate fits all four boards.
+
+**Rev 2 half boards (per half)**
+
+| part | qty |
+|---|---|
+| half board (one of the four above) | 1 |
+| Kailh MX hotswap sockets (hotswap boards) | 29 |
+| 1N4148 diodes, DO-35 | 29 |
+| Molex 200528-0200 FFC connector | 1 |
+| 20-pin 1.0 mm type B FFC, 50 mm (one per half) | 1 |
+| M2 × 4 screws + M2 heat-set inserts (board to plate; 2.4 mm of thread in the insert) | 4 + 4 |
+| *RGB boards:* SK6812 MINI-E | 29 |
+| *RGB boards:* 100 nF 1206 capacitors | 10 |
+
 ## Design notes and ideas
 
 These are collected while building rev 1. None of them blocks a rev 1 build.
 
-- **Diodes: optimised per-key placement (decided).** Keep through-hole diodes and the single reversible board. Put each diode in the same spot and orientation at every key, clear of the socket pads, so soldering order doesn't matter. Surface-mount diodes were ruled out because they'd force separate left and right PCBs, which is a logistics problem and harder for other builders. A diode bank was ruled out because of routing density.
+- **Diodes: optimised per-key placement (decided, done).** Keep through-hole diodes and the single reversible board. The aim was one spot and orientation at every key; with the LEDs, capacitors and both faces' sockets around each switch no single spot fits all 29, so each diode takes the first spot that fits from a short fixed list (column gap first, then row gap), the same list at every key. Surface-mount diodes were ruled out because they'd force separate left and right PCBs, which is a logistics problem and harder for other builders. A diode bank was ruled out because of routing density.
 - **Plan: lock down and design the controller rev 2 board first, then the rev 2 half boards (focused on a gasket mount).**
 - **Before the rev 2 release: research ergonomic defaults.** Research tent, splay plus separation (tied together on a unibody), front-to-back tilt (rev 1's 5° deserves a second look: studies tend to favour flat or negative tilt) and typing height. Choose a well-sourced middle-of-the-road release set. Weigh it against daily-use feedback from rev 1, and render and fit-check alternative sets. Anyone who wants other angles regenerates from `compose/params.py` and orders their own half PCBs (the controller is unaffected).
-- **Controller rev 2: designed** (see [Controller rev 2](../../docs/controller-rev2.md)). The half-board side of the standard is still to do: connector on the bottom face, same physical slot order, angle from the case transforms, straight-ribbon check.
+- **Controller rev 2: designed** (see [Controller rev 2](../../docs/controller-rev2.md)), and the half-board side of the standard is done: connector on the bottom face, same physical slot order, ribbon check. The ribbon hangs in a U rather than running straight: the gap between the boards is 5 mm.
 - **Rev 2 bridge cover (decided): lifts off without touching the ribbons.** The ribbons run entirely below the cover's parting line, from the controller's connectors through slots in the case's side walls. The cover never clamps, guides or closes over them. Cables to modules mounted in the cover (OLED, pointing device) are long enough to set the cover beside the board, or unplug at the controller's front-edge connectors.
 - **Flex cuts in the half PCB.** These pair with a thinner plate (a parametric web thickness, keeping 5 mm only at the supports). On rev 1 the plate is screwed solid, so there's nothing to flex; this only matters for a gasket-mounted revision.
 - **No perimeter screw holes through the half PCB.** The plate edge would then be clamped in a continuous gasket strip between frame and case. That needs fewer parts than 14 through-screws.

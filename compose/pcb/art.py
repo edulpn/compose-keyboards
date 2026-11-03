@@ -63,6 +63,7 @@ def free_area(plan):
     keep += [Point(p).buffer(1.2) for p in plan.conn_pins]
     for p in (plan.conn_pins[0], plan.conn_pins[-1]):                              # "lhs/rhs: pin 1" labels
         keep.append(sbox(p[0] - 8.5, p[1] - 1.2, p[0] - 0.5, p[1] + 1.2))
+    keep += list(getattr(plan, "extra_keep", []))                                  # rev 2: LEDs, capacitors
     return plan.outline.buffer(-1.2).difference(unary_union(keep))
 
 
@@ -131,7 +132,11 @@ def plan_half_art(plan, variant="hotswap"):
     lhs, rhs = PR.HALF_NAMES
 
     # 1. title: ring + name, exposed copper, top-left margin
-    tb = widest_box(free, 6.0, (8.0, 11.0), w_max=40.0, w_min=28.0)
+    tb = None
+    for th in (6.0, 5.0, 4.5):                       # rev 1 fits 6 mm; rev 2's board edge is further in
+        tb = widest_box(free, th, (8.0, 11.0), w_max=40.0, w_min=28.0)
+        if tb is not None:
+            break
     x0, y0, x1, y1 = tb.bounds
     h = y1 - y0
     r = h * 0.42
@@ -162,13 +167,17 @@ def plan_half_art(plan, variant="hotswap"):
     a.boxes.append(bb)
 
     # 3. build labels, per face (the same board is lhs from one face, rhs from the other)
-    lb = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), 5.0, (38.0, -87.0), w_max=34.0, w_min=20.0)
+    lb = None
+    for lh, anc in ((5.0, (38.0, -87.0)), (4.4, (38.0, -87.0)), (4.0, (38.0, -87.0)), (4.0, (5.0, -68.0))):
+        lb = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), lh, anc, w_max=34.0, w_min=20.0)
+        if lb is not None:                           # rev 1 fits the first; rev 2's denser boards may not
+            break
     x0, y0, x1, y1 = lb.bounds
     for face, sw, parts in (("F", lhs, rhs), ("B", rhs, lhs)):
         t1 = text_shape(f"{sw} → switches on this side", PR.ART_TEXT_FONT)
         t2 = text_shape(f"{parts} → sockets & diodes on this side", PR.ART_TEXT_FONT)
-        k = min(fit(t, x0, y0, x1 - x0, 2.2)[1] for t in (t1, t2))           # same size for both lines
-        l1 = strans(sscale(t1, k, k, origin=(0, 0)), x0, y0 + 2.9)
+        k = min(fit(t, x0, y0, x1 - x0, 2.2 * (y1 - y0) / 5.0)[1] for t in (t1, t2))   # same size for both lines
+        l1 = strans(sscale(t1, k, k, origin=(0, 0)), x0, y0 + 2.9 * (y1 - y0) / 5.0)
         l2 = strans(sscale(t2, k, k, origin=(0, 0)), x0, y0 + 0.5)
         g = unary_union([l1, l2])
         a.silk[face].append(g if face == "F" else mirror_about(g, (x0 + x1) / 2))
