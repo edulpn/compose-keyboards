@@ -1,0 +1,20 @@
+# generated outputs: published as GitHub Release assets, never committed
+out/
+out_*/
+# python
+__pycache__/
+*.pyc
+.venv/
+# KiCad
+*-bak
+*.kicad_prl
+fp-info-cache
+*.lck
+*-backups/
+# node (renders)
+node_modules/
+# tools fetched separately
+*.jar
+tools/
+# OS
+.DS_Store

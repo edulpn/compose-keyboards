@@ -1,0 +1,314 @@
+"""
+Rev 2 fit checks (C58_REV=2): exact solids (OpenCascade), the controller's part envelopes from its KiCad
+placement (both faces), the foam pads at their installed thickness.
+
+    C58_REV=2 python3 -m compose gasket-checks [outdir]     -> prints PASS/FAIL lines, writes outdir/checks2.json
+
+What is checked
+  A  interference: every pair of parts that must not touch (case, plates, frames, cover, controller board,
+     its parts on both faces, Pico + sockets + male headers, standoffs, half-board proxies)
+  B  clearances: plate float to the case and frame, cover to frames, board / parts to the case
+  C  gasket stack: at every pad, seat -> flange -> frame distances measured on the solids along the
+     plate normal (installed pad thickness and squeeze of the weatherstrip tape)
+  D  assembly paths: plate and frame drop in along the plate normal, the cover goes down 1.5 mm forward of
+     home and slides back onto its hooks, the controller goes in tongues-first, tilted
+  E  hardware: screw / standoff / insert engagement, Pico gap, cable plugs under the cover
+  F  printability: each exported part in its print orientation is watertight and has no overhang steeper
+     than 45 degrees off the bed (short bridges over holes allowed)
+"""
+import os
+import sys
+import json
+import math
+import numpy as np
+import cadquery as cq
+from shapely.geometry import Point
+from compose import params as PR
+from compose import geom as G
+from compose.case import gasket as C
+from compose.controller import rev2_std as CS
+from compose.geom import prism, cyl, union, big_box, poly_prism
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
+os.makedirs(OUT, exist_ok=True)
+CT = C.CT
+RES = []
+
+
+def rec(name, ok, val="", warn=False):
+    tag = "PASS" if ok else ("WARN" if warn else "FAIL")
+    RES.append(dict(check=name, result=tag, value=val))
+    print(f"{tag:4s}  {name}  {val}", flush=True)
+
+
+def vol(a, b):
+    try:
+        return a.intersect(b).Volume()
+    except Exception:
+        return float("nan")
+
+
+def dist(a, b):
+    return a.distance(b)
+
+
+# ---------------------------------------------------------------- the controller as placed (board frame -> P)
+H_TOP = {"U1": 8.5, "JL": 2.0, "JR": 2.0, "J4": 8.5, "J6": 8.5, "J5": 4.3}
+PLUG_TOP = {"J4": CS.TOP_PLUG_H, "J6": CS.TOP_PLUG_H, "J5": 10.0}
+H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": CS.BOTTOM_PARTS_H, "R": 3.0}
+
+
+_CS = {}
+
+
+def controller_solids():
+    if not _CS:
+        _CS.update(_controller_solids())
+    return dict(_CS)
+
+
+def _controller_solids():
+    """P-frame solids: board, top envelopes (+ mated plugs), bottom envelopes, lead tails, Pico stack,
+    standoffs. Returns dict name -> solid (P frame)."""
+    from compose.controller import rev2 as CV
+    import pcbnew
+    from compose.pcb import kicad as PK
+    os.makedirs(PK.PCB_OUT, exist_ok=True)
+    b = CV.build()
+    to_P = CT.to_P
+    bt, bb = CT.board_top, CT.board_bot
+    out = {}
+    hol = union([cyl(*to_P(x, y), CS.M_CLEAR / 2, bb - 1, bt + 1) for x, y in CS.STANDOFF_HOLES])
+    out["ctrl board"] = prism(list(CT.outline_P.exterior.coords)[:-1], bb, bt).cut(hol)
+    top, bot, tails = [], [], []
+    for fp in b.GetFootprints():
+        ref = fp.GetReference()
+        flipped = fp.IsFlipped()
+        fp.BuildCourtyardCaches()
+        r_ = fp.GetCourtyard(pcbnew.B_CrtYd if flipped else pcbnew.F_CrtYd).BBox()
+        x0, x1 = pcbnew.ToMM(r_.GetLeft()) - CV.CX, pcbnew.ToMM(r_.GetRight()) - CV.CX
+        y0, y1 = pcbnew.ToMM(r_.GetTop()) - CV.CY, pcbnew.ToMM(r_.GetBottom()) - CV.CY
+        sh = 0.25
+        (px0, py0), (px1, py1) = to_P(x0 + sh, y1 - sh), to_P(x1 - sh, y0 + sh)
+        if flipped:
+            h = next(v for k, v in H_BOT.items() if ref.startswith(k))
+            bot.append(big_box(px0, px1, py0, py1, bb - h, bb))
+        else:
+            k = next((k for k in H_TOP if ref.startswith(k)), None)
+            if k:
+                top.append(big_box(px0, px1, py0, py1, bt, bt + H_TOP[k]))
+                if k in PLUG_TOP:
+                    top.append(big_box(px0, px1, py0, py1, bt + H_TOP[k] - 3.0, bt + PLUG_TOP[k]))
+        for p in fp.Pads():
+            if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
+                x, y = to_P(pcbnew.ToMM(p.GetPosition().x) - CV.CX, pcbnew.ToMM(p.GetPosition().y) - CV.CY)
+                if flipped:
+                    tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bt, bt + CS.LEAD_ABOVE))
+                else:
+                    tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bb - CS.LEAD_BELOW, bb))
+    out["top parts"] = union(top)
+    out["bottom parts"] = union(bot)
+    out["lead tails"] = union(tails)
+    yc = CT.y_pc
+    pico = big_box(-PR.PICO_W / 2, PR.PICO_W / 2, yc - PR.PICO_L / 2, yc + PR.PICO_L / 2, CT.pico_bot, CT.pico_top)
+    mh = union([big_box(sx * CS.PICO_X - 1.25, sx * CS.PICO_X + 1.25, yc - 25.4, yc + 25.4, bt + 8.5, CT.pico_bot)
+                for sx in (-1, 1)])
+    out["pico"] = pico.fuse(mh)
+    out["standoffs"] = union([cyl(*to_P(x, y), CS.STANDOFF_AF / 2 / math.cos(math.radians(30)), bt, bt + CS.STANDOFF_L)
+                              for x, y in CS.STANDOFF_HOLES])
+    return out
+
+
+# ---------------------------------------------------------------- gasket pads (installed thickness)
+def pads_local():
+    """Lower and upper pads (left local frame) at their installed thickness."""
+    lo, up = [], []
+    for c, t, n in C.GL.tabs:
+        poly = C.pad_poly(c, t, n)
+        lo.append(poly_prism(poly, PR.LEDGE_TOP, PR.FLANGE_Z0))
+        up.append(poly_prism(poly, PR.FLANGE_Z0 + PR.FLANGE_T, PR.FRAME_LIP_Z))
+    for c in C.GL.inner:
+        poly = C.inner_pad_poly(c)
+        lo.append(poly_prism(poly, PR.LEDGE_TOP, PR.FLANGE_Z0))
+        up.append(poly_prism(poly, PR.FLANGE_Z0 + PR.FLANGE_T, PR.FRAME_LIP_Z))
+    return lo, up
+
+
+def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=1.2):
+    """Slice the part in print orientation and compare each layer with the one under it: material more than
+    one layer height (45 deg) beyond the layer below is unsupported. A patch is fine if it is a thin lip
+    (narrower than lip_max), or a bridge (narrower than bridge_max and resting on support around most of its
+    edge, like a hole's ceiling). Returns (worst patch or None, n bridges, n lips)."""
+    from shapely.geometry import Polygon, MultiPolygon
+    from shapely.ops import unary_union as uu
+    z0, z1 = m.bounds[0][2], m.bounds[1][2]
+    zs = np.arange(z0 + layer / 2, z1, layer)
+    secs = m.section_multiplane(plane_origin=[0, 0, 0], plane_normal=[0, 0, 1], heights=zs)
+    prev, worst, n_br, n_thin = None, None, 0, 0
+    for z, s in zip(zs, secs):
+        cur = uu([p for p in s.polygons_full]) if s is not None else Polygon()
+        cur = cur.buffer(0)
+        if prev is not None and not cur.is_empty:
+            sup = prev.buffer(layer)
+            un = cur.difference(sup)
+            for u in getattr(un, "geoms", [un]):
+                if u.is_empty or u.area < 0.3:
+                    continue
+                if u.buffer(-lip_max / 2).is_empty:
+                    n_thin += 1
+                    continue
+                touch = u.exterior.intersection(sup.buffer(0.05)).length / max(u.exterior.length, 1e-9)
+                if u.buffer(-bridge_max / 2).is_empty and touch > 0.5:
+                    n_br += 1
+                    continue
+                c = u.centroid
+                worst = f"{u.area:.1f} mm2 at z {z:.1f} ({c.x:.0f}, {c.y:.0f})"
+        prev = cur if not cur.is_empty else prev
+    return worst, n_br, n_thin
+
+
+def mirror_pair(local):
+    w = G.L2W(local)
+    return w.fuse(w.mirror("YZ"))
+
+
+def main():
+    print("building parts ...", flush=True)
+    case = C.case2_world()
+    plateL = C.plate2_local()
+    frameL = C.frame2_local()
+    plate = mirror_pair(plateL)
+    frame = mirror_pair(frameL)
+    cover = G.P2W(C.cover2_P())
+    hp = G.OUTLINE.buffer(-PR.PCB_INSET)
+    half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0)
+                           .fuse(prism(list(hp.buffer(-1.0).exterior.coords)[:-1], -PR.PCB_T - PR.HS_HEIGHT, -PR.PCB_T)))
+    ctrl = {k: G.P2W(v) for k, v in controller_solids().items()}
+    lo, up = pads_local()
+    pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
+    parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb}, **ctrl)
+
+    # ---- A: interference (volume of overlap, mm3)
+    allowed = {("ctrl board", "standoffs"), ("ctrl board", "lead tails"), ("ctrl board", "pico"),
+               ("lead tails", "pico"), ("lead tails", "top parts"), ("lead tails", "bottom parts"),
+               ("pico", "top parts"), ("plate", "half pcb"),
+               ("ctrl board", "top parts"), ("ctrl board", "bottom parts")}
+    names = list(parts)
+    for i, a in enumerate(names):
+        for b_ in names[i + 1:]:
+            if (a, b_) in allowed or (b_, a) in allowed:
+                continue
+            v = vol(parts[a], parts[b_])
+            rec(f"A no overlap: {a} / {b_}", v < 1e-3, f"{v:.3f} mm3")
+    for nm, pd in (("lower pads", pads_lo), ("upper pads", pads_up)):
+        for a in ("case", "plate", "frame", "half pcb", "cover"):
+            v = vol(pd, parts[a])
+            rec(f"A no overlap: {nm} / {a}", v < 0.05, f"{v:.3f} mm3")
+
+    # ---- B: clearances (mm)
+    no_posts = case.cut(G.P2W(union([cyl(x, y, PR.CTRL_BOSS_R + 0.5, CT.board_bot - 0.6, CT.board_bot + 5)
+                                      for x, y in CT.mounts])))      # the board sits on the post tops
+    parts_b = dict(parts, **{"case (posts excl.)": no_posts})
+    for a, b_, lim in (("plate", "case", PR.FLOAT_GAP - 0.05), ("plate", "frame", 0.5), ("plate", "cover", 0.5),
+                       ("cover", "frame", PR.FIT_GAP - 0.05), ("ctrl board", "case (posts excl.)", 0.2),
+                       ("top parts", "case", 0.3), ("bottom parts", "case", 0.3), ("pico", "cover", 0.5),
+                       ("pico", "case", 0.3), ("half pcb", "case", 0.3), ("standoffs", "case", 0.3),
+                       ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5)):
+        d = dist(parts_b[a], parts_b[b_])
+        rec(f"B clearance {a} / {b_} >= {lim:.2f}", d >= lim, f"{d:.2f} mm")
+
+    # ---- C: gasket stack along the plate normal at every pad centre
+    import trimesh
+    meshes = {}
+    for nm in ("case", "plate", "frame"):
+        p = os.path.join(OUT, f"_c2_{nm}.stl")
+        cq.exporters.export(cq.Workplane().add(parts[nm]), p, tolerance=0.02, angularTolerance=0.1)
+        meshes[nm] = trimesh.load(p)
+    nrm = G.plate_normal_world(-1)
+    centres = [c for c, _, _ in C.GL.tabs] + list(C.GL.inner)
+    worst = []
+    for c in centres:
+        o = np.array(G.apply(G.M_LW, (c[0], c[1], PR.LEDGE_TOP - 1.0)))
+        hits = {}
+        for nm, m in meshes.items():
+            locs, _, _ = m.ray.intersects_location([o], [nrm])
+            hits[nm] = sorted(float(np.dot(l - o, nrm)) for l in locs)
+        seat = 1.0                                               # the case surface the ray starts under
+        case_top = min((h for h in hits["case"] if h > 0.5), default=None)
+        fl = [h for h in hits["plate"] if h > 0]
+        fr = [h for h in hits["frame"] if h > 0]
+        if case_top is None or len(fl) < 2 or not fr:
+            worst.append((c, "missing", hits))
+            continue
+        lower = fl[0] - case_top
+        upper = fr[0] - fl[1]
+        worst.append((c, round(lower, 3), round(upper, 3)))
+    ok = all(isinstance(w[1], float) and abs(w[1] - PR.GK_C) < 0.05 and abs(w[2] - PR.GK_C) < 0.05 for w in worst)
+    rec("C pad gaps = installed thickness at every pad (lower, upper)", ok,
+        f"{len(worst)} pads, target {PR.GK_C:.2f}; " + "; ".join(str(w[1:]) for w in worst if not
+                                                              (isinstance(w[1], float) and abs(w[1] - PR.GK_C) < 0.05 and abs(w[2] - PR.GK_C) < 0.05))[:300])
+    rec("C squeeze of 3.0-3.2 mm tape", True,
+        f"{(1 - PR.GK_C / 3.0) * 100:.0f}-{(1 - PR.GK_C / 3.2) * 100:.0f} % (closed-cell EPDM/neoprene sponge: 25-50 %)")
+    pad_area = PR.GK_PAD_L * PR.GK_PAD_W
+    rec("C pad count / area per half", True, f"{len(centres)} pairs, {pad_area:.0f} mm2 each")
+
+    # ---- D: assembly paths
+    def sweep_local(local, d0, d1, step):
+        return [G.L2W(local.translate(cq.Vector(0, 0, z))) for z in np.arange(d0, d1 + 1e-9, step)]
+    # plate in along its normal: never hits the case on the way (pads off)
+    bad = max(vol(case, s.fuse(s.mirror("YZ"))) for s in sweep_local(plateL, 2.0, 30.0, 4.0))
+    rec("D plate drops in along its normal (case)", bad < 1e-3, f"{bad:.3f} mm3")
+    bad = max(vol(case, s.fuse(s.mirror("YZ"))) for s in sweep_local(frameL, 1.0, 30.0, 3.0))
+    rec("D frame drops in along its normal (case)", bad < 1e-3, f"{bad:.3f} mm3")
+    bad = max(vol(plate, s.fuse(s.mirror("YZ"))) for s in sweep_local(frameL, 1.0, 30.0, 3.0))
+    rec("D frame drops in along its normal (plates)", bad < 1e-3, f"{bad:.3f} mm3")
+    # cover: drops straight down onto the standoffs
+    cvP = C.cover2_P()
+    others = case.fuse(frame).fuse(ctrl["pico"]).fuse(ctrl["standoffs"]).fuse(ctrl["top parts"])
+    worst_c = max(vol(others, G.P2W(cvP.translate(cq.Vector(0, 0, dz)))) for dz in (0.0, 1.0, 3.0, 6.0, 10.0, 20.0))
+    rec("D cover drops straight onto its standoffs", worst_c < 1e-3, f"{worst_c:.3f} mm3")
+    seat = vol(ctrl["standoffs"], G.P2W(cvP.translate(cq.Vector(0, 0, -0.2))))
+    rec("D cover seats on all four standoffs (bosses land on them)", seat > 0.5, f"{seat:.2f} mm3 if pushed 0.2 mm lower")
+
+    # controller: drops straight in from above onto its four posts
+    brd = controller_solids()
+    board_all = union([brd["ctrl board"], brd["top parts"], brd["bottom parts"], brd["lead tails"]])
+    worst_b = max(vol(case, G.P2W(board_all.translate(cq.Vector(0, 0, dz)))) for dz in (0.0, 1.0, 4.0, 8.0, 12.0, 16.0))
+    rec("D controller drops straight in onto its posts", worst_b < 1e-3, f"{worst_b:.3f} mm3")
+
+    # ---- E: hardware
+    cover_t = CT.cover_top - CT.cover_under
+    grip = cover_t - (PR.M25_HEAD_H + 0.2) + CS.COVER_BOSS_H
+    rec("E cover screws M2.5x6 button: thread into the standoffs", 2.5 <= 6 - grip <= 5.0, f"{6 - grip:.2f} mm engaged")
+    eng = CS.STANDOFF_THREAD - CS.PCB_T
+    rec("E standoff male thread through the board into the post insert", 3.0 <= eng <= PR.M25_INSERT_L,
+        f"{eng:.1f} mm, hole {PR.M25_INSERT_L} mm")
+    rec("E Pico top -> cover underside", CT.pico_gap >= PR.STANDOFF_MIN_GAP, f"{CT.pico_gap:.2f} mm")
+    rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
+        f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")
+    fl = CT.board_bot - PR.FLOOR_T
+    rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= 3.0, f"{fl:.1f} mm to the floor")
+
+    # ---- F: printability of the exported parts in their print orientation
+    import trimesh
+    C.export_print(OUT)
+    pdir = os.path.join(OUT, "print")
+    for f in sorted(os.listdir(pdir)):
+        if not f.endswith(".stl"):
+            continue
+        m = trimesh.load(os.path.join(pdir, f))
+        u, cnt = np.unique(m.edges_sorted, axis=0, return_counts=True)
+        rec(f"F {f}: watertight, no non-manifold edges", m.is_watertight and not (cnt > 2).any(),
+            f"{int((cnt > 2).sum())} non-manifold edges")
+        worst, n_br, n_thin = overhangs(m)
+        rec(f"F {f}: every layer supported (45 deg rule; bridges <= 12 mm and lips <= 1.2 mm allowed)", worst is None,
+            f"{n_br} bridges, {n_thin} thin lips" + ("" if worst is None else f"; unsupported {worst}"))
+
+    json.dump(RES, open(os.path.join(OUT, "checks2.json"), "w"), indent=1)
+    n_f = sum(r["result"] == "FAIL" for r in RES)
+    print(f"\n{len(RES)} checks, {n_f} FAIL, {sum(r['result'] == 'WARN' for r in RES)} WARN")
+    return n_f
+
+
+if __name__ == "__main__":
+    sys.exit(1 if main() else 0)

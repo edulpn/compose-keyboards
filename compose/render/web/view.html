@@ -1,0 +1,23 @@
+<html><body style="margin:0;background:#2b2d31"><script type="module">
+import * as T from './three.module.js'; import {STLLoader} from './STLLoader.js'; import {mergeVertices} from './BufferGeometryUtils.js';
+const v=new URLSearchParams(location.search);
+const W=+(v.get('w')||1600),H=+(v.get('h')||1000);
+const r=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(W,H);r.setPixelRatio(1);
+r.outputColorSpace=T.SRGBColorSpace;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=1.05;
+document.body.appendChild(r.domElement);r.localClippingEnabled=true;
+const s=new T.Scene();s.background=new T.Color(v.get('bg')?+v.get('bg'):0x2b2d31);
+const cam=new T.PerspectiveCamera(+(v.get('fov')||28),W/H,1,3000);
+cam.position.set(...JSON.parse(v.get('cam')));cam.up.set(...JSON.parse(v.get('up')||'[0,0,1]'));cam.lookAt(...JSON.parse(v.get('la')));
+s.add(new T.HemisphereLight(0xffffff,0x40404a,0.9));
+const d1=new T.DirectionalLight(0xffffff,2.2);d1.position.set(-120,-160,260);s.add(d1);
+const d2=new T.DirectionalLight(0xdfe8ff,0.9);d2.position.set(200,120,140);s.add(d2);
+const d3=new T.DirectionalLight(0xffffff,1.3);d3.position.set(40,-120,-220);s.add(d3);
+const hide=(v.get('hide')||'').split(',');const ex=JSON.parse(v.get('explode')||'{}');const show=v.get('show')?v.get('show').split(','):null;const cl=v.get('clip')?JSON.parse(v.get('clip')):null;const clipPlanes=cl?[new T.Plane(new T.Vector3(cl[0],cl[1],cl[2]),cl[3])]:[];
+const man=await (await fetch(v.get('man')||'manifest.json')).json();const L=new STLLoader();
+for(const m of man){ if(hide.includes(m.name)) continue; if(show&&!show.includes(m.name)) continue;
+  let g=await new Promise(res=>L.load(m.file,res));
+  if(m.smooth){g.deleteAttribute('normal');g=mergeVertices(g,1e-3);g.computeVertexNormals();}
+  const mat=new T.MeshStandardMaterial({color:m.color,metalness:m.metal,roughness:m.rough,flatShading:!m.smooth,clippingPlanes:clipPlanes,side:cl?T.DoubleSide:T.FrontSide});
+  const mesh=new T.Mesh(g,mat); if(ex[m.name]!==undefined){const e=ex[m.name]; if(Array.isArray(e)) mesh.position.set(e[0],e[1],e[2]); else mesh.position.z=e;} s.add(mesh);}
+r.render(s,cam);window.done=1;
+</script></body></html>

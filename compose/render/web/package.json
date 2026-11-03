@@ -1,0 +1,9 @@
+{
+  "name": "compose-keyboards-render",
+  "private": true,
+  "description": "Node helpers for the renders and board previews (only needed for images)",
+  "dependencies": {
+    "pcb-stackup": "4.2.8",
+    "playwright": "1.64.1"
+  }
+}
