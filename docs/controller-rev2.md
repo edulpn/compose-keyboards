@@ -8,6 +8,10 @@ The shared controller board for every Compose split layout: one board, one conne
 |---|---|
 | ![top](images/controller_rev2_top.png) | ![bottom](images/controller_rev2_bottom.png) |
 
+![the controller's underside with every part fitted: 74HCT125, resistors, capacitors, polyfuse](images/controller_rev2_parts_underside.png)
+
+*Underside, fully fitted (render from `gasket-render`, parts placed from the routed board's footprints).*
+
 | command | what it does |
 |---|---|
 | `python3 -m compose controller out` | builds, routes and DRC-checks `out/pcb/controller_rev2.*` (KiCad board, JLCPCB Gerber zip, previews) |

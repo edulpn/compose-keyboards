@@ -100,7 +100,7 @@ C58_REV=2 python3 -m compose order-rev2 out_r2t      # every board's JLCPCB zip,
 C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
 C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
 C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
-C58_REV=2 python3 -m compose gasket-render out_r2t   # renders
+C58_REV=2 python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
 ```
 
 `sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).

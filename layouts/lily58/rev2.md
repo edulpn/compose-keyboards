@@ -24,7 +24,7 @@ All rev 2 commands need `C58_REV=2` (rev 1 is the default and is untouched).
 | `gasket-case out_r2t` | builds the printable parts into `out_r2t/print/` (`compose/case/gasket.py`) |
 | `gasket-checks out_r2t` | fit, gasket, assembly, jumper and printability checks |
 | `gasket-sections out_r2t` | cross-section drawings |
-| `gasket-render out_r2t` | renders |
+| `gasket-render out_r2t` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the jumpers as `flex-sim` settles them |
 
 ### Defaults
 
@@ -107,6 +107,12 @@ Everything prints without supports, in print orientation:
 
 ![the four rev 2 half boards, bottom face](images/rev2_half_boards.png)
 
+| boards in the case (plates off) | underside, case off: half boards on their plates, jumpers into the controller |
+|---|---|
+| ![half boards and controller in the case, plates and switches off](images/rev2_boards_in_case.png) | ![underside of the assembly with the case removed](images/rev2_assembly_underside.png) |
+
+*Renders from `gasket-render`: the boards wear their own Gerbers, and every part sits where its footprint is on the routed board.*
+
 | board | switches | LEDs |
 |---|---|---|
 | `half_rev2_hotswap` | Kailh MX hotswap sockets | none |
@@ -150,6 +156,14 @@ COL6 and ROW5 aren't used by this layout. The plain boards wire slot 3 straight 
 ### Flex jumpers
 
 ![flex jumper flat pattern](images/rev2_jumper_flat.png)
+
+| half end: into the Molex 200528 | controller end: down into the Molex 52610 |
+|---|---|
+| ![the jumper entering the half board's connector](images/rev2_jumper_half_end.png) | ![the jumper dropping into the controller's connector](images/rev2_jumper_controller_end.png) |
+
+![section through the left jumper: half board connector, climb, drop into the controller](images/rev2_jumper_section.png)
+
+*The jumper in these renders is the shape `flex-sim` settles it into, not the idealised design.*
 
 The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair. It ships flat and takes its bends by itself once both ends are plugged in: the clamped ends and its length leave it one easy shape, with nothing twisted and nothing hanging loose. `C58_REV=2 python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
 
