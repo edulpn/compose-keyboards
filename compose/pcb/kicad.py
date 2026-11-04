@@ -645,15 +645,24 @@ def drc(board, name):
     return errors, warnings, unc, rep
 
 
-def export(board_path, name):
+def export(board_path, name, layers=None, drill=True, rename=None):
+    """Gerbers (+ drill files) zipped for JLCPCB, and front/back SVG previews. A single-sided flex passes its own
+    `layers` and drill=False; `rename` maps a Gerber's file-name suffix to a clearer one in the zip."""
     gdir = os.path.join(PCB_OUT, name + "_gerbers")
     shutil.rmtree(gdir, ignore_errors=True)
     os.makedirs(gdir)
-    layers = "F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
+    layers = layers or "F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
     subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "--layers", layers, "--subtract-soldermask",
                     "--no-x2", "-o", gdir + "/", board_path], check=True, capture_output=True)
-    subprocess.run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
-                    "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", board_path], check=True, capture_output=True)
+    if drill:
+        subprocess.run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
+                        "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", board_path], check=True, capture_output=True)
+    for old, new in (rename or {}).items():
+        for f in os.listdir(gdir):
+            if f.endswith(old):
+                os.rename(os.path.join(gdir, f), os.path.join(gdir, f[:-len(old)] + new))
+            elif f.endswith(".gbrjob"):                  # it lists the old file names
+                os.remove(os.path.join(gdir, f))
     z = os.path.join(PCB_OUT, f"{name}_JLCPCB.zip")
     with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(os.listdir(gdir)):

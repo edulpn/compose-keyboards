@@ -401,7 +401,9 @@ def main(out=None):
         import re
         bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
         err -= bridges
-        z = PK.export(path, name)
+        # single-sided flex: copper, coverlay openings (mask), outline and the PI stiffener areas (User.1)
+        z = PK.export(path, name, layers="F.Cu,F.Mask,Edge.Cuts,User.1", drill=False,
+                      rename={"-User_1.gbr": "-Stiffener_PI_bottom.gbr"})
         bb = f["outline"].bounds
         print(f"{name}: {f['length']:.1f} mm long, outline {bb[2] - bb[0]:.1f} x {bb[3] - bb[1]:.1f} mm | "
               f"DRC {err} errors, {warn} warnings, {unc} unconnected (+{bridges} finger-field mask bridges, by design) | "
