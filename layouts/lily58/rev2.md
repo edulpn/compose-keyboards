@@ -56,6 +56,15 @@ The controller is the shared [controller rev 2](../../docs/controller-rev2.md).
 
 Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard; order five of the one you want (two per keyboard).
 
+> **The RGB boards are experimental.** They pass the same DRC and copper simulation as the plain boards, but nobody has built one yet, and a few things the checks can't catch rest on assumptions. Check these before you order:
+>
+> - **LED footprint and pinout.** The SK6812 MINI-E land pattern comes from the KiCad library (merge request !3331) with its pads shortened for the cutout; the pin corners, the reverse-mount orientation and the 3.6 × 3.2 mm cutout haven't been checked against the manufacturer's datasheet.
+> - **FFC connector.** The Molex 200528-0200 contact side, the cable insertion depth (4.0 mm) and the body height (2.0 mm) are assumed, not taken from its drawing. This applies to the plain boards too.
+> - **Power.** The firmware caps brightness at 32/255 (about 0.13 A per half). Without the cap, the 58 LEDs can draw well over 1 A: more than the controller's 0.5 A polyfuse allows, and more than the 5 V tracks and the FFC's contacts are meant for. Keep the cap.
+> - **Decoupling.** There's one 100 nF capacitor per three LEDs (to limit inrush when the keyboard is plugged in), not the one per LED the datasheet suggests. That's fine at the capped brightness.
+>
+> If you build one, please report what you find.
+
 ![rev 2 half board, hotswap, bottom face](images/rev2_half_hotswap_bottom.png)
 
 ![rev 2 half board, hotswap RGB, bottom face](images/rev2_half_hotswap_rgb_bottom.png)
