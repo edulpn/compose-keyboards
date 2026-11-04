@@ -12,11 +12,14 @@ java + tools/freerouting.jar.
 import os
 import re
 import sys
+import json
 import math
+import time
 import shutil
 import zipfile
 import subprocess
 import pcbnew
+from types import SimpleNamespace
 from compose import REPO_ROOT
 from compose import params as PR
 from compose import geom as G
@@ -31,6 +34,9 @@ MM = pcbnew.FromMM
 V = lambda x, y: pcbnew.VECTOR2I(MM(x), MM(y))
 DEG = lambda d: pcbnew.EDA_ANGLE(d, pcbnew.DEGREES_T)
 OX, OY = 40.0, 60.0            # half board: plate-local (x, y) -> KiCad (x + OX, OY - y)
+JOB_TIMEOUT_MIN = 8            # Freerouting job limit per attempt (minutes)
+STALL_PASSES = 40              # stop the router when its best unrouted count hasn't improved for this many passes
+ROUTER_JOBS = int(os.environ.get("ROUTER_JOBS", max(1, (os.cpu_count() or 2) // 2)))   # parallel router runs
 
 
 def K(p, ox=OX, oy=OY):
@@ -70,10 +76,10 @@ class Nets:
 
 
 def outline(board, poly, ox, oy):
-    """Edge.Cuts from a shapely polygon; returns the segments so they can be swapped."""
+    """Edge.Cuts from a shapely polygon (its holes become board cutouts); returns the segments."""
     segs = []
-    pts = list(poly.exterior.coords)
-    for a, c in zip(pts[:-1], pts[1:]):
+    rings = [list(poly.exterior.coords)] + [list(r.coords) for r in poly.interiors]
+    for a, c in ((a, c) for pts in rings for a, c in zip(pts[:-1], pts[1:])):
         s = pcbnew.PCB_SHAPE(board)
         s.SetShape(pcbnew.SHAPE_T_SEGMENT)
         s.SetStart(V(*K(a, ox, oy)))
@@ -430,11 +436,21 @@ def _find(node, key):
             yield x
 
 
+def _router_stats(log):
+    """The statistics Freerouting prints for the board it finished with (last JSON block of its log)."""
+    try:
+        t = open(log).read()
+        i = t.rfind("\n{\n")
+        return json.loads(t[i + 1:t.index("\n}\n", i) + 2]) if i >= 0 else None
+    except (OSError, ValueError):
+        return None
+
+
 def route(board, name, passes=40):
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
     poly, ox, oy = board.kb2_outline
-    edge = PR.CLEARANCE + 0.25                      # route inside the real edge by the edge clearance
+    edge = getattr(board, "kb2_route_edge", PR.CLEARANCE + 0.25)   # route inside the real edge by the edge clearance
     set_outline(board, poly.buffer(-edge, join_style="mitre"), ox, oy)
     # KiCad applies the edge clearance to unplated holes too; the router only knows
     # the copper clearance, so grow those holes by the difference while exporting
@@ -452,16 +468,78 @@ def route(board, name, passes=40):
     set_outline(board, poly, ox, oy)
     if os.path.exists(ses):
         os.remove(ses)
-    cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", str(passes),
-           "--gui.enabled=false", "--router.optimizer.max_passes=5", "--router.job_timeout=00:08:00",
-           "--usage_and_diagnostic_data.disable_analytics=true"]
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=720)
-    except subprocess.TimeoutExpired:
-        pass
-    if not os.path.exists(ses):
-        return None
-    tree = _sexp(open(ses).read())
+    fixed = len(re.findall(r"\(via [^\n]*\(type fix\)", open(dsn).read()))     # pre-placed, not in the .ses
+    base = os.path.splitext(ses)[0]
+    jobs = []
+    for i in range(ROUTER_JOBS):        # independent router runs side by side; the first good one wins
+        out = ses if ROUTER_JOBS == 1 else f"{base}_job{i + 1}.ses"
+        logf = (base if ROUTER_JOBS == 1 else f"{base}_job{i + 1}") + "_freerouting.log"
+        for f in (out, logf):
+            if os.path.exists(f):
+                os.remove(f)
+        cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", out, "-mp", str(passes),
+               "--gui.enabled=false", "--router.optimizer.max_passes=5",
+               "--router.automatic_neckdown=false",       # no tracks below the 0.2 mm minimum
+               f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
+               "--usage_and_diagnostic_data.disable_analytics=true"]
+        log = open(logf, "w")
+        jobs.append(SimpleNamespace(ses=out, logf=logf, log=log, best=None, best_pass=0, done=False,
+                                    proc=subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)))
+
+    def verdict(j):
+        """(ok, unrouted) for a finished job: ok = its .ses is the board the router finished with."""
+        if not os.path.exists(j.ses):
+            return False, None
+        stats = _router_stats(j.logf)
+        nv = open(j.ses).read().count("(via ")
+        if stats is None:                                # no statistics block (other Freerouting versions)
+            return True, None
+        if stats["items"]["via_count"] - fixed != nv:
+            # Freerouting 2.1 can "restore an earlier board" mid-run, keep routing, then write the
+            # restored board to the .ses instead of the one it finished with: reject that output
+            return False, stats["connections"]["incomplete_count"]
+        return True, stats["connections"]["incomplete_count"]
+    t0, winner, rejected = time.time(), None, 0
+    while any(not j.done for j in jobs) and winner is None:
+        time.sleep(2)
+        for j in jobs:
+            if j.done:
+                continue
+            if j.proc.poll() is not None:
+                j.done = True
+                ok, inc = verdict(j)
+                if ok and inc == 0:
+                    winner = j
+                    break
+                rejected += not ok
+                continue
+            if time.time() - t0 > JOB_TIMEOUT_MIN * 60 + 240:
+                j.proc.kill()
+                continue
+            seen = [(int(p_), int(u)) for p_, u in
+                    re.findall(r"Auto-rout(?:er|ing) pass #(\d+) .*?\((\d+) unrouted", open(j.logf).read())]
+            if seen:
+                p_, u = min(seen, key=lambda pu: (pu[1], pu[0]))
+                if j.best is None or u < j.best:
+                    j.best, j.best_pass = u, p_
+                if seen[-1][0] - j.best_pass >= STALL_PASSES:          # congested: more passes won't help
+                    j.proc.kill()
+    for j in jobs:
+        if j.proc.poll() is None:
+            j.proc.kill()
+        j.proc.wait()
+        j.log.close()
+    if winner is None:                  # none fully routed: take a sound one with the fewest open connections
+        sound = [(v[1] if v[1] is not None else 10 ** 6, k) for k, j in enumerate(jobs) for v in [verdict(j)] if v[0]]
+        if not sound:
+            print(f"  {name}: no usable router output ({rejected} of {len(jobs)} wrote an earlier board)")
+            return None
+        winner = jobs[min(sound)[1]]
+    if winner.ses != ses:
+        shutil.copy(winner.ses, ses)
+        shutil.copy(winner.logf, base + "_freerouting.log")
+    txt = open(ses).read()
+    tree = _sexp(txt)
     routes = next(_find(tree, "routes"))
     res = next(_find(routes, "resolution"))
     unit = {"um": 1e-3, "mm": 1.0, "mil": 0.0254, "inch": 25.4}[res[1]] / float(res[2])
@@ -470,6 +548,8 @@ def route(board, name, passes=40):
     netout = next(_find(routes, "network_out"))
     n_tracks = n_vias = 0
     for nn in _find(netout, "net"):
+        if nn[1] == "GNDFIX":                       # fixed GND fanout (rev 2 RGB boards): already on the board
+            continue
         ni = nets[nn[1]]
         for w in _find(nn, "wire"):
             for pth in _find(w, "path"):
@@ -498,24 +578,42 @@ def route(board, name, passes=40):
     return n_tracks, n_vias - remove_dangling(board)
 
 
+def _on_centreline(seg, p, tol=MM(0.005)):
+    """True if point p = (x, y) lies on segment seg = (ax, ay, cx, cy) within tol.
+    Not HitTest: that counts the track's whole width, so in a chain of short
+    collinear stubs each free end sits inside its neighbour's copper and the
+    chain never gets removed. Plain tuples: calling GetStart()/GetEnd() inside
+    the inner loop makes KiCad 7's SWIG start returning bare pointers."""
+    ax, ay, cx, cy = seg
+    dx, dy = cx - ax, cy - ay
+    L2 = dx * dx + dy * dy
+    u = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L2))
+    return math.hypot(ax + u * dx - p[0], ay + u * dy - p[1]) <= tol
+
+
 def remove_dangling(board):
     """Delete router leftovers: a track end that touches no pad, via or other
-    track of its net (T-junctions onto a segment's middle count as touching),
-    repeated until stable; then vias joined to fewer than two tracks.
-    Returns the number of vias removed."""
+    track of its net (an end on another segment's centreline, T-junctions
+    included, counts as touching), repeated until stable; then vias joined to
+    fewer than two tracks. Returns the number of vias removed."""
     removed_v = 0
+    # boards poured with GND after routing (rev 2 RGB): their GND copper is pre-placed fanout, joined by the pour
+    poured = board.GetNetsByName()["GND"].GetNetCode() if getattr(board, "kb2_gnd_pour", False) else None
     while True:
-        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA"]
-        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA" and t.GetNetCode() != poured]
+        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and t.GetNetCode() != poured]
         pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
-        by_net = {}
-        for t in tracks:
-            by_net.setdefault((t.GetNetCode(), t.GetLayer()), []).append(t)
+        by_net, seg = {}, {}
+        for i, t in enumerate(tracks):
+            by_net.setdefault((t.GetNetCode(), t.GetLayer()), []).append(i)
+            a, c = t.GetStart(), t.GetEnd()
+            seg[i] = (a.x, a.y, c.x, c.y)
         dead = []
-        for t in tracks:
+        for i, t in enumerate(tracks):
             same = by_net[(t.GetNetCode(), t.GetLayer())]
-            for e in (t.GetStart(), t.GetEnd()):
-                if any(o is not t and o.HitTest(e, 1) for o in same):
+            ax, ay, cx, cy = seg[i]
+            for e, xy in ((t.GetStart(), (ax, ay)), (t.GetEnd(), (cx, cy))):
+                if any(j != i and _on_centreline(seg[j], xy) for j in same):
                     continue
                 if any(v.GetNetCode() == t.GetNetCode() and v.HitTest(e, 1) for v in vias):
                     continue
@@ -531,8 +629,8 @@ def remove_dangling(board):
                 removed_v += 1
         if not dead:
             return removed_v
-        for t in set(dead):
-            board.Remove(t)
+        for t in set(dead):              # Delete, not Remove: a removed item is freed by Python's GC,
+            board.Delete(t)              #   which leaves KiCad 7's SWIG handing back bare pointers
 
 
 # ---------------------------------------------------------------- DRC + exports
@@ -590,6 +688,15 @@ def _make_once(name, board, passes):
         return 1, 1
     t, v = r
     path = os.path.join(PCB_OUT, name + ".kicad_pcb")
+    if hasattr(board, "kb2_after_route"):           # e.g. copper pours + stitching vias (rev 2 RGB half boards)
+        # on a reloaded board: one made with pcbnew.BOARD() has no project, and KiCad 7's ZONE_FILLER
+        # segfaults on it; the kb2_* attributes are Python-side, so carry them across
+        extra = {k: x for k, x in vars(board).items() if k.startswith("kb2_")}
+        pcbnew.SaveBoard(path, board)
+        board = pcbnew.LoadBoard(path)
+        for k, x in extra.items():
+            setattr(board, k, x)
+        board.kb2_after_route(board)
     pcbnew.SaveBoard(path, board)
     board = pcbnew.LoadBoard(path)
     err, warn, unc, rep = drc(board, name)
@@ -607,7 +714,7 @@ def _make_once(name, board, passes):
             ends = [(pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)) for e in (trk.GetStart(), trk.GetEnd())]
             if any(lay == sl and abs(ln - sln) < 2e-3 and any(math.dist(e, (sx, sy)) < 2e-3 for e in ends)
                    for sx, sy, sl, sln in stubs):
-                board.Remove(trk)
+                board.Delete(trk)
         pcbnew.SaveBoard(path, board)
         board = pcbnew.LoadBoard(path)
         err, warn, unc, rep = drc(board, name)

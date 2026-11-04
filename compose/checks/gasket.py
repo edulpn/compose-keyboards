@@ -119,6 +119,106 @@ def _controller_solids():
     return out
 
 
+# ---------------------------------------------------------------- rev 2 half board: underside parts, ribbon
+HALF_PART_H = {"sockets": PR.HS_HEIGHT, "diodes": PR.DIODE_BODY[1], "caps": 1.3, "ffc": 2.0, "heads": PR.M2_HEAD_H,
+               "pins": 2.0}
+
+
+def half_parts_local():
+    """Everything under a half board (left local frame), every variant at once: hotswap sockets, diode bodies,
+    capacitors, the cable connector, M2 screw heads, solder-in switch pins."""
+    from compose.pcb import rev2_half as H2
+    from compose.pcb import layout as PL
+    from shapely.geometry import LineString as LS
+    from shapely.ops import unary_union as uu
+    s = H2.plan("hotswap", True)
+    z0 = -PR.PCB_T
+    shapes = {
+        "sockets": s.socks,
+        "diodes": uu([LS([ks.cathode, ks.anode]).buffer(PR.DIODE_BODY[1] / 2) for ks in s.keys]),
+        "caps": uu([H2.cap_box(G.LAYOUT.keys[i], f).buffer(-0.5) for i in s.caps for f in ("B", "F")]),
+        "ffc": s.ffc.body,
+        "heads": uu([Point(p).buffer(PR.M2_HEAD_D / 2) for p in s.posts]),
+        "pins": uu([Point(PL.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
+                    for p_ in (PR.MX_PIN1, PR.MX_PIN2) for pp in (p_, PL.mirror_fp(p_))]),
+    }
+    sol = [poly_prism(g, z0 - HALF_PART_H[n], z0) for n, g in shapes.items() if not g.is_empty]
+    return union(sol)
+
+
+def _ribbon_ends():
+    """A: the controller connector's cable face (bridge frame x, z); B: the half connector's, its slot turned by
+    the splay (yaw, deg about +z) from the controller's; dir: B's cable direction (horizontal, unit)."""
+    from compose.pcb import rev2_half as H2
+    s = H2.plan()
+    xA, zA = -CS.W2 - 0.2, CT.board_top + CS.FFC_ENTRY_H
+    face_x = max(x for x, _ in s.ffc.body.exterior.coords)
+    B = G.apply(G.M_LP, (face_x + 0.2, s.ffc.c[1], -PR.PCB_T - CS.FFC_ENTRY_H))
+    R = G.M_LP[:3, :3]
+    sl = R @ np.array([0.0, 1.0, 0.0])                       # the half's slot direction in the bridge frame
+    yaw = math.degrees(math.atan2(-sl[0], sl[1]))
+    d = R @ np.array([-1.0, 0.0, 0.0])
+    dh = np.array([d[0], d[1]]) / math.hypot(d[0], d[1])     # into the half's connector, horizontal
+    return (xA, zA), B, yaw, dh
+
+
+R1 = R3 = 1.0              # quarter bends out of / into the connectors
+S0 = S_END = 0.5           # straight bits at the connector faces
+
+
+def ribbon_path(cable_l=None):
+    """The ribbon (left side), centre line: out of the controller's connector, a quarter turn down, a U-turn at
+    the bottom, up, a quarter turn into the half's connector. The rising leg twists by the splay about its own
+    length (the half's connector runs along the splayed board edge), which leaves its centre line where it is.
+    The slack (cable length less what the gap needs) sets how deep the U hangs.
+    Returns (points in the x-z plane of the untwisted part, y, U bottom z, up-leg x, yaw, B)."""
+    cable_l = cable_l or PR.FFC_CABLE_L
+    (xA, zA), B, yaw, dh = _ribbon_ends()
+    x2 = B[0] - dh[0] * (R3 + S_END)                         # up-leg centre line, so the top bend ends at B
+    zB = B[2]
+    r2 = (xA - S0 - R1 - x2) / 2
+    assert r2 >= 1.0, f"gap between the boards too small for the ribbon's U (r {r2:.2f})"
+    L_ = cable_l - 2 * CS.FFC_INSERT - 0.4
+    zb = (S0 + S_END + math.pi / 2 * (R1 + R3) + math.pi * r2 + zA - R1 - r2 + zB - R3 - r2 - L_) / 2
+    arc = lambda cx, cz, r, a0, a1: [(cx + r * math.cos(math.radians(a)), cz + r * math.sin(math.radians(a)))
+                                     for a in np.linspace(a0, a1, 10)]
+    pts = [(xA, zA), (xA - S0, zA)] + arc(xA - S0, zA - R1, R1, 90, 180)
+    x1 = xA - S0 - R1
+    pts += arc(x1 - r2, zb + r2, r2, 0, -180)
+    return pts, CT.y_pc - CS.FFC_Y0, zb, x2, yaw, B
+
+
+def ribbon_P(cable_l=None):
+    """Left ribbon as a solid (bridge frame): the untwisted part (controller, down, U) extruded across its
+    width, the twisted up-leg as a ruled loft, the top bend in the half connector's (yawed) plane."""
+    from shapely.geometry import LineString as LS
+    pts, y, zb, x2, yaw, B = ribbon_path(cable_l)
+    W, T = CS.FFC_W, CS.FFC_T
+
+    def slab(path2d):
+        band = LS(path2d).buffer(T / 2, cap_style=2, join_style=2)
+        q = list(band.exterior.coords)[:-1]
+        sol = cq.Workplane("XY").polyline(q).close().extrude(W).val()
+        sol = sol.rotate(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), 90)       # sketch (x, z) -> (x, z), along -y
+        bb = sol.BoundingBox()
+        return sol.translate(cq.Vector(0, y + W / 2 - bb.ymax, 0))
+    lower = slab(pts)
+    z0, z1 = pts[-1][1], B[2] - R3
+    wires = []
+    for t in np.linspace(0.0, 1.0, 7):
+        a = math.radians(yaw * t)
+        z = z0 + (z1 - z0) * t
+        c, s_ = math.cos(a), math.sin(a)
+        corners = [(-T / 2, -W / 2), (T / 2, -W / 2), (T / 2, W / 2), (-T / 2, W / 2)]
+        wp = [cq.Vector(x2 + u * c - v * s_, y + u * s_ + v * c, z) for u, v in corners]
+        wires.append(cq.Wire.makePolygon(wp + [wp[0]]))
+    leg = cq.Solid.makeLoft(wires, True)
+    top = slab([(x2, z1 - 0.01)] + [(x2 - R3 + R3 * math.cos(math.radians(a)), z1 + R3 * math.sin(math.radians(a)))
+                                    for a in np.linspace(0, 90, 10)] + [(x2 - R3 - S_END, z1 + R3)])
+    top = top.rotate(cq.Vector(x2, y, 0), cq.Vector(x2, y, 1), yaw)
+    return cq.Compound.makeCompound([lower, leg, top])      # (fusing along the shared, twisted faces drops pieces)
+
+
 # ---------------------------------------------------------------- gasket pads (installed thickness)
 def pads_local():
     """Lower and upper pads (left local frame) at their installed thickness."""
@@ -181,12 +281,15 @@ def main():
     frame = mirror_pair(frameL)
     cover = G.P2W(C.cover2_P())
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
-    half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0)
-                           .fuse(prism(list(hp.buffer(-1.0).exterior.coords)[:-1], -PR.PCB_T - PR.HS_HEIGHT, -PR.PCB_T)))
+    half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
+    half_parts = mirror_pair(half_parts_local())
+    rib = G.P2W(ribbon_P())
+    ribbons = cq.Compound.makeCompound([rib, rib.mirror("YZ")])
     ctrl = {k: G.P2W(v) for k, v in controller_solids().items()}
     lo, up = pads_local()
     pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
-    parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb}, **ctrl)
+    parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb, "half parts": half_parts,
+                 "ribbons": ribbons}, **ctrl)
 
     # ---- A: interference (volume of overlap, mm3)
     allowed = {("ctrl board", "standoffs"), ("ctrl board", "lead tails"), ("ctrl board", "pico"),
@@ -201,19 +304,21 @@ def main():
             v = vol(parts[a], parts[b_])
             rec(f"A no overlap: {a} / {b_}", v < 1e-3, f"{v:.3f} mm3")
     for nm, pd in (("lower pads", pads_lo), ("upper pads", pads_up)):
-        for a in ("case", "plate", "frame", "half pcb", "cover"):
+        for a in ("case", "plate", "frame", "half pcb", "half parts", "cover"):
             v = vol(pd, parts[a])
             rec(f"A no overlap: {nm} / {a}", v < 0.05, f"{v:.3f} mm3")
 
     # ---- B: clearances (mm)
-    no_posts = case.cut(G.P2W(union([cyl(x, y, PR.CTRL_BOSS_R + 0.5, CT.board_bot - 0.6, CT.board_bot + 5)
+    no_posts = case.cut(G.P2W(union([cyl(x, y, CS.POST_R + 0.5, CT.board_bot - 0.6, CT.board_bot + 5)
                                       for x, y in CT.mounts])))      # the board sits on the post tops
     parts_b = dict(parts, **{"case (posts excl.)": no_posts})
     for a, b_, lim in (("plate", "case", PR.FLOAT_GAP - 0.05), ("plate", "frame", 0.5), ("plate", "cover", 0.5),
                        ("cover", "frame", PR.FIT_GAP - 0.05), ("ctrl board", "case (posts excl.)", 0.2),
                        ("top parts", "case", 0.3), ("bottom parts", "case", 0.3), ("pico", "cover", 0.5),
                        ("pico", "case", 0.3), ("half pcb", "case", 0.3), ("standoffs", "case", 0.3),
-                       ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5)):
+                       ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5),
+                       ("half parts", "case", 0.3), ("ribbons", "case", 0.5), ("ribbons", "bottom parts", 0.5),
+                       ("ribbons", "standoffs", 0.5)):
         d = dist(parts_b[a], parts_b[b_])
         rec(f"B clearance {a} / {b_} >= {lim:.2f}", d >= lim, f"{d:.2f} mm")
 
@@ -278,15 +383,19 @@ def main():
 
     # ---- E: hardware
     cover_t = CT.cover_top - CT.cover_under
-    grip = cover_t - (PR.M25_HEAD_H + 0.2) + CS.COVER_BOSS_H
-    rec("E cover screws M2.5x6 button: thread into the standoffs", 2.5 <= 6 - grip <= 5.0, f"{6 - grip:.2f} mm engaged")
+    grip = cover_t - (PR.M3_HEAD_H + 0.2) + CS.COVER_BOSS_H
+    rec("E cover screws M3x6 button: thread into the standoffs", 2.5 <= 6 - grip <= 5.0, f"{6 - grip:.2f} mm engaged")
     eng = CS.STANDOFF_THREAD - CS.PCB_T
-    rec("E standoff male thread through the board into the post insert", 3.0 <= eng <= PR.M25_INSERT_L,
-        f"{eng:.1f} mm, hole {PR.M25_INSERT_L} mm")
+    rec("E standoff male thread through the board into the post insert", 3.0 <= eng <= PR.M3_INSERT_L,
+        f"{eng:.1f} mm, hole {PR.M3_INSERT_L} mm")
     rec("E Pico top -> cover underside", CT.pico_gap >= PR.STANDOFF_MIN_GAP, f"{CT.pico_gap:.2f} mm")
     rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
         f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")
     fl = CT.board_bot - PR.FLOOR_T
+    zb = ribbon_path(PR.FFC_CABLE_L)[2]
+    zbm = ribbon_path(PR.FFC_CABLE_L_MAX)[2]
+    rec(f"E ribbon: {PR.FFC_CABLE_L:.0f} mm type B cable hangs in a U, {PR.FFC_CABLE_L_MAX:.0f} mm still clears the floor",
+        zbm >= PR.FLOOR_T + 1.0, f"U bottom {zb:.1f} mm ({PR.FFC_CABLE_L:.0f} mm) / {zbm:.1f} mm ({PR.FFC_CABLE_L_MAX:.0f} mm), floor {PR.FLOOR_T}")
     rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= 3.0, f"{fl:.1f} mm to the floor")
 
     # ---- F: printability of the exported parts in their print orientation

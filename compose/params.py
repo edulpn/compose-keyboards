@@ -184,7 +184,7 @@ CONTROLLER = "rev2" if REV == 2 else "rev1"
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
 STANDOFF_LENGTHS = (10, 12, 15, 20, 25)   # stock M3 male-female hex standoffs
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
-CTRL_BOSS_R = 3.5                # case post under each standoff (M2.5 heat-set insert)
+CTRL_BOSS_R = 3.6                # case post under each standoff (M3 heat-set insert)
 
 # ---------------------------------------------------------------- rev 2: gasket mount (compose/case/gasket.py)
 # Local half frame: z = 0 plate underside, PLATE_T plate top. The plate's outer FLANGE_W is a thin flange
@@ -217,10 +217,9 @@ GK_TABS = 18                     # pad pairs per half (outer edges)
 INNER_SEATS_P = ((-3.0, -13.0), (-48.5, -58.5))   # inner-edge pad pairs: P-frame y spans (back, front)
 INNER_SEAT_IN = 4.5              # inner seat width under the flange, from the plate edge
 PCB_INSET = LEDGE_W + 0.5        # half board outline inside the plate outline
+FFC_CABLE_L = 50.0               # rev 2 controller <-> half ribbon (20-pin 1.0 mm type B): slack hangs in a U in the bay
+FFC_CABLE_L_MAX = 60.0           # longest that still hangs clear of the floor (checked)
 COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of it by this (it doesn't clamp)
-# middle (controller rev 2): the board drops onto four case posts and is clamped by four M2.5 male-female
-# standoffs; the cover drops onto the standoffs and takes four M2.5 screws (nothing slides or hooks)
-M25_INSERT_D = 3.6               # hole for M2.5 x 4 heat-set inserts
-M25_INSERT_L = 5.0
-M25_HEAD_H = 1.5                 # button head
-M25_CBORE_D = 5.4
+# middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
+# standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
+# Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).

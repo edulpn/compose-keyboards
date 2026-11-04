@@ -11,13 +11,17 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 | Revision | Case | Controller | Status | Files |
 |---|---|---|---|---|
 | **[rev 1](rev1.md)** | One-piece, screwed sandwich mount | rev 1: Pico + 12-pin PicoBlade cables | **Built.** Assembled and wired; the final cable test is pending | [Release `compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1) |
-| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin FFC, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover and controller designed and checked; half boards next | — |
+| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin FFC, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller and all four half boards designed and checked; not built yet | — |
+
+![the four Compose58 rev 2 half boards](images/rev2_half_boards.png)
+
+*Rev 2's half board in its four variants: hotswap or solder, with or without per-key RGB (experimental).*
 
 ## At a glance
 
 - **Keys:** 58. Per half: 6 × 4 column-staggered, a 4-key thumb arc with one 1.5u key, and one extra inner key.
 - **Shape:** one piece. The halves are splayed 10° and tented (6° on rev 1, 12° on rev 2), with the controller in a bridge between them.
-- **Boards:** one reversible half board for both halves, in hotswap or solder-in versions, plus the controller.
+- **Boards:** one reversible half board for both halves, in hotswap or solder-in versions (rev 2 adds optional per-key RGB), plus the controller.
 - **Firmware:** QMK on the RP2040. `keyboard.json` is generated with the boards.
 - **Printer:** the case is a single print of about 330 × 160 mm, sized for a 350 mm bed (a Voron Trident 350, for example).
 
@@ -27,7 +31,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
   - Connectors and cables, including what to buy and the 1:1 cable trap.
   - Assembly order, PCBs, the controller rev 1 interface.
   - What the checks verify, print orientation.
-- **[Rev 2](rev2.md):** the gasket-mount case, its checks and printability, and the design notes and ideas collected along the way.
+- **[Rev 2](rev2.md):** the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB), the checks and simulation, and the design notes and ideas collected along the way.
 - **[Controller rev 2](../../docs/controller-rev2.md):** the shared controller rev 2 uses.
 - **[Building from source](../../docs/building.md):** changing angles or parameters and regenerating everything.
 

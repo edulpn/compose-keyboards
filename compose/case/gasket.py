@@ -166,8 +166,12 @@ def plate2_local():
     cutters = [cut.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), k.rot).translate(cq.Vector(k.x, k.y, 0))
                for k in L.keys]
     plate = plate.cut(cq.Compound.makeCompound(cutters))
-    # the half board hangs from the plate on M2 screws into inserts (the posts of rev 1, now board-to-plate only)
-    plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in L.posts]))
+    # the half board (compose/pcb/rev2_half.py) hangs from the plate on four M2 screws into inserts, and the
+    # diodes' top-side solder joints sit in shallow pockets (one plan for all four board variants)
+    from compose.pcb import rev2_half as H2
+    hb = H2.plan()
+    plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in hb.posts]))
+    plate = plate.cut(poly_prism(hb.pockets, -1.0, PR.JOINT_POCKET_D))
     plate = plate.cut(union([cyl(x, y, PR.NOTCH_R, -1.0, TH + 1.0) for x, y in GL.screws_all]))
     return plate.clean()
 
@@ -312,7 +316,7 @@ def case2_world():
     cbL, cbR = _both(union(cb))
     body = body.cut(cbL).cut(cbR)
     _dbg('cb', body)
-    hp = [cyl(x, y, PR.M25_INSERT_D / 2, CT.board_bot - PR.M25_INSERT_L, CT.board_bot + 1) for x, y in CT.mounts]
+    hp = [cyl(x, y, PR.M3_INSERT_D / 2, CT.board_bot - PR.M3_INSERT_L, CT.board_bot + 1) for x, y in CT.mounts]
     usb_z = CT.pico_bot - PR.USB_NOTCH_BELOW_PCB
     hp.append(big_box(-PR.USB_NOTCH_W / 2, PR.USB_NOTCH_W / 2, -BW - 3.0, 3.0, usb_z, CT.cover_top + 10))
     # the controller's envelope stays clear (underside parts, everything above), except its posts; the
@@ -345,7 +349,7 @@ def case2_world():
 def cover2_P():
     """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like rev 1.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
-    standoffs, four M2.5 screws."""
+    standoffs, four M3 screws."""
     from compose.case import sandwich as PT
     z0 = CT.cover_under
     gap = PR.FLOAT_GAP + PR.FIT_GAP
@@ -359,10 +363,10 @@ def cover2_P():
     hw = PR.PICO_W / 2 - PR.WINDOW_EDGE_OVER_PCB
     body = body.cut(big_box(-hw, hw, CT.y_pc - PR.PICO_L / 2 - PR.WINDOW_FRONT_MARGIN, 20.0, z0 - 1, CT.cover_top + 1))
     from compose.controller import rev2_std as CS
-    bosses = union([cyl(x, y, CS.STANDOFF_AF / 2, z0 - CS.COVER_BOSS_H, z0 + 0.01) for x, y in cover_screws_P()])   # sits on the hex top
+    bosses = union([cyl(x, y, CS.COVER_BOSS_R, z0 - CS.COVER_BOSS_H, z0 + 0.01) for x, y in cover_screws_P()])   # sits on the hex top
     body = body.fuse(bosses)
     body = body.cut(union([cyl(x, y, CS.M_CLEAR / 2, z0 - 5, CT.cover_top + 1) for x, y in cover_screws_P()]))
-    body = body.cut(union([cyl(x, y, PR.M25_CBORE_D / 2, CT.cover_top - PR.M25_HEAD_H - 0.2, CT.cover_top + 1)
+    body = body.cut(union([cyl(x, y, PR.M3_CBORE_D / 2, CT.cover_top - PR.M3_HEAD_H - 0.2, CT.cover_top + 1)
                            for x, y in cover_screws_P()]))
     return body.clean()
 

@@ -70,11 +70,27 @@ class Copper:
                 a, c = t.GetStart(), t.GetEnd()
                 shp = LineString([(ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y))]).buffer(ToMM(t.GetWidth()) / 2)
                 self.items.append((shp, t.GetLayer(), "track"))
+        for z in self.b.Zones():                          # copper pours (filled), e.g. the rev 2 RGB boards' GND
+            if z.GetIsRuleArea():
+                continue
+            for lay in (pcbnew.F_Cu, pcbnew.B_Cu):
+                if not z.IsOnLayer(lay):
+                    continue
+                fp_ = z.GetFilledPolysList(lay)
+                for k in range(fp_.OutlineCount()):
+                    o = fp_.Outline(k)
+                    pts = [(ToMM(o.CPoint(i).x), ToMM(o.CPoint(i).y)) for i in range(o.PointCount())]
+                    holes = []
+                    for h in range(fp_.HoleCount(k)):
+                        hh = fp_.Hole(k, h)
+                        holes.append([(ToMM(hh.CPoint(i).x), ToMM(hh.CPoint(i).y)) for i in range(hh.PointCount())])
+                    if len(pts) >= 3:
+                        self.items.append((Polygon(pts, holes).buffer(0), lay, "zone"))
         # a PTH pad / via is one conductor on both layers: join its two layer entries
         self.parent = list(range(len(self.items)))
         key = {}
         for i, (s, lay, lab) in enumerate(self.items):
-            if lab != "track":
+            if lab not in ("track", "zone"):
                 k = (lab, round(s.centroid.x, 3), round(s.centroid.y, 3))
                 if k in key:
                     self.union(i, key[k])
@@ -100,7 +116,7 @@ class Copper:
     def node_at(self, xy, layer):
         """Conductor group of the copper covering point xy on a layer (None if bare)."""
         p = Point(xy)
-        hits = [i for i, (s, lay, lab) in enumerate(self.items) if lay == layer and lab != "track" and s.contains(p)]
+        hits = [i for i, (s, lay, lab) in enumerate(self.items) if lay == layer and lab not in ("track", "zone") and s.contains(p)]
         return self.find(hits[0]) if hits else None
 
 

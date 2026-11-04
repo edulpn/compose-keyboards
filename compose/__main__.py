@@ -28,6 +28,9 @@ COMMANDS = {
     "gasket-checks":    ("compose.checks.gasket",        "rev 2 fit, gasket, assembly and printability checks"),
     "gasket-sections":  ("compose.checks.gasket_sections", "rev 2 cross-section drawings"),
     "gasket-render":    ("compose.render.gasket",        "rev 2 renders"),
+    "firmware-rev2":    ("compose.firmware_rev2",         "rev 2 QMK keyboard.json (plain and RGB)"),
+    "sim-half-rev2":    ("compose.sim.half_rev2",         "rev 2 half boards + controller rev 2: copper-level simulation"),
+    "half-rev2":        ("compose.pcb.rev2_half",        "rev 2 half boards (hotswap/solder, +rgb): place, route, DRC, Gerbers (--plan: drawing only)"),
 }
 
 
