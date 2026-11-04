@@ -608,9 +608,16 @@ def _make_once(name, board, passes):
         print(f"  {name}: router gave no result")
         return 1, 1
     t, v = r
-    if hasattr(board, "kb2_after_route"):           # e.g. copper pours + stitching vias (rev 2 RGB half boards)
-        board.kb2_after_route(board)
     path = os.path.join(PCB_OUT, name + ".kicad_pcb")
+    if hasattr(board, "kb2_after_route"):           # e.g. copper pours + stitching vias (rev 2 RGB half boards)
+        # on a reloaded board: one made with pcbnew.BOARD() has no project, and KiCad 7's ZONE_FILLER
+        # segfaults on it; the kb2_* attributes are Python-side, so carry them across
+        extra = {k: x for k, x in vars(board).items() if k.startswith("kb2_")}
+        pcbnew.SaveBoard(path, board)
+        board = pcbnew.LoadBoard(path)
+        for k, x in extra.items():
+            setattr(board, k, x)
+        board.kb2_after_route(board)
     pcbnew.SaveBoard(path, board)
     board = pcbnew.LoadBoard(path)
     err, warn, unc, rep = drc(board, name)

@@ -563,7 +563,7 @@ def gnd_pour(b):
     for fp in b.GetFootprints():
         for p in fp.Pads():
             q = p.GetPosition()
-            r = max(ToMM(p.GetSize().x), ToMM(p.GetSize().y)) / 2
+            r = math.hypot(ToMM(p.GetSize().x), ToMM(p.GetSize().y)) / 2   # half the diagonal: covers square pads' corners
             obst.append(P_(ToMM(q.x), ToMM(q.y)).buffer(r))
     for t in b.GetTracks():
         if t.GetClass() == "PCB_VIA":
