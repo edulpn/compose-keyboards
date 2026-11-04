@@ -632,7 +632,7 @@ def gnd_pour(b):
                                    (tr.GetStart() == q or tr.GetEnd() == q) for tr in b.GetTracks()):
                 dead.append(t)
     for t in dead:
-        b.Remove(t)
+        b.Delete(t)                     # see kicad.remove_dangling
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     print(f"  GND pour on F and B, {n - len(dead)} stitching vias")
 

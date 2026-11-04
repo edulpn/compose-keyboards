@@ -457,8 +457,9 @@ def route(board, name, passes=40):
            "--gui.enabled=false", "--router.optimizer.max_passes=5",
            f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
            "--usage_and_diagnostic_data.disable_analytics=true"]
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=JOB_TIMEOUT_MIN * 60 + 240)
+    try:                                    # router output kept beside the .ses: per-pass unrouted counts
+        with open(os.path.splitext(ses)[0] + "_freerouting.log", "w") as log:
+            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, timeout=JOB_TIMEOUT_MIN * 60 + 240)
     except subprocess.TimeoutExpired:
         pass
     if not os.path.exists(ses):
@@ -500,24 +501,40 @@ def route(board, name, passes=40):
     return n_tracks, n_vias - remove_dangling(board)
 
 
+def _on_centreline(seg, p, tol=MM(0.005)):
+    """True if point p = (x, y) lies on segment seg = (ax, ay, cx, cy) within tol.
+    Not HitTest: that counts the track's whole width, so in a chain of short
+    collinear stubs each free end sits inside its neighbour's copper and the
+    chain never gets removed. Plain tuples: calling GetStart()/GetEnd() inside
+    the inner loop makes KiCad 7's SWIG start returning bare pointers."""
+    ax, ay, cx, cy = seg
+    dx, dy = cx - ax, cy - ay
+    L2 = dx * dx + dy * dy
+    u = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L2))
+    return math.hypot(ax + u * dx - p[0], ay + u * dy - p[1]) <= tol
+
+
 def remove_dangling(board):
     """Delete router leftovers: a track end that touches no pad, via or other
-    track of its net (T-junctions onto a segment's middle count as touching),
-    repeated until stable; then vias joined to fewer than two tracks.
-    Returns the number of vias removed."""
+    track of its net (an end on another segment's centreline, T-junctions
+    included, counts as touching), repeated until stable; then vias joined to
+    fewer than two tracks. Returns the number of vias removed."""
     removed_v = 0
     while True:
         tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA"]
         vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
         pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
-        by_net = {}
-        for t in tracks:
-            by_net.setdefault((t.GetNetCode(), t.GetLayer()), []).append(t)
+        by_net, seg = {}, {}
+        for i, t in enumerate(tracks):
+            by_net.setdefault((t.GetNetCode(), t.GetLayer()), []).append(i)
+            a, c = t.GetStart(), t.GetEnd()
+            seg[i] = (a.x, a.y, c.x, c.y)
         dead = []
-        for t in tracks:
+        for i, t in enumerate(tracks):
             same = by_net[(t.GetNetCode(), t.GetLayer())]
-            for e in (t.GetStart(), t.GetEnd()):
-                if any(o is not t and o.HitTest(e, 1) for o in same):
+            ax, ay, cx, cy = seg[i]
+            for e, xy in ((t.GetStart(), (ax, ay)), (t.GetEnd(), (cx, cy))):
+                if any(j != i and _on_centreline(seg[j], xy) for j in same):
                     continue
                 if any(v.GetNetCode() == t.GetNetCode() and v.HitTest(e, 1) for v in vias):
                     continue
@@ -533,8 +550,8 @@ def remove_dangling(board):
                 removed_v += 1
         if not dead:
             return removed_v
-        for t in set(dead):
-            board.Remove(t)
+        for t in set(dead):              # Delete, not Remove: a removed item is freed by Python's GC,
+            board.Delete(t)              #   which leaves KiCad 7's SWIG handing back bare pointers
 
 
 # ---------------------------------------------------------------- DRC + exports
@@ -611,7 +628,7 @@ def _make_once(name, board, passes):
             ends = [(pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)) for e in (trk.GetStart(), trk.GetEnd())]
             if any(lay == sl and abs(ln - sln) < 2e-3 and any(math.dist(e, (sx, sy)) < 2e-3 for e in ends)
                    for sx, sy, sl, sln in stubs):
-                board.Remove(trk)
+                board.Delete(trk)
         pcbnew.SaveBoard(path, board)
         board = pcbnew.LoadBoard(path)
         err, warn, unc, rep = drc(board, name)
