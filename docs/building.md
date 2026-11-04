@@ -12,6 +12,8 @@ You only need this to change the design. Ready-made files for each layout's reco
 - **ngspice:** only for the controller simulation.
 - **Node 18+:** only for renders and board previews. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`.
 
+A `Dockerfile` at the repo root sets up the whole stack (Ubuntu 24.04, KiCad 7.0.11, Python packages, Java + Freerouting, ngspice, Node): `docker build -t compose .`, then run commands inside it with the repo mounted.
+
 ## Commands
 
 Everything runs from the repo root as `python3 -m compose <command> [outdir]`; `python3 -m compose --help` lists the commands.
