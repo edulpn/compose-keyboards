@@ -10,7 +10,7 @@ You only need this to change the design. Ready-made files for each layout's reco
 - **KiCad 7** (developed on 7.0.11). Its `pcbnew` Python module must be importable from that Python. The generators use the KiCad 7 Python API, parts of which KiCad 8 and 9 removed (see [Porting to KiCad 8/9](#porting-to-kicad-89)).
 - **Java 17+** and [Freerouting](https://github.com/freerouting/freerouting/releases) (developed on 2.1.0). Point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`.
 - **ngspice:** only for the controller simulation.
-- **Node 18+:** only for renders and board previews. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`.
+- **Node 20+:** only for renders and board previews (Playwright needs 20; Ubuntu 24.04's apt Node is 18). Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`.
 
 ## Setting up
 
@@ -21,7 +21,7 @@ The safest route is the stack everything was developed on: Ubuntu 24.04 with apt
 ```sh
 sudo apt update
 sudo apt install -y kicad kicad-footprints kicad-symbols python3-pip python3-dev \
-    openjdk-21-jre-headless ngspice nodejs npm fonts-dejavu-core git curl zip unzip
+    openjdk-21-jre-headless ngspice fonts-dejavu-core git curl zip unzip
 kicad-cli version                       # expect 7.0.11
 
 git clone https://github.com/edulpn/compose-keyboards.git && cd compose-keyboards
@@ -29,7 +29,8 @@ mkdir -p ../tools
 curl -fsSL -o ../tools/freerouting.jar \
     https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
 pip3 install --break-system-packages -r requirements.txt cairosvg pillow
-(cd compose/render/web && npm install && npx playwright install --with-deps chromium)   # renders only
+# renders only: Node 20+ (e.g. Node 22 from nodejs.org or NodeSource), then
+(cd compose/render/web && npm install && npx playwright install --with-deps chromium)
 ```
 
 **Docker (macOS, or anywhere):** the repo's `Dockerfile` builds the same stack. On macOS this is the easy route: KiCad's macOS app bundles its own Python, and its `pcbnew` only loads in that interpreter.
@@ -39,7 +40,7 @@ docker build -t compose .               # give Docker all CPU cores and >= 8 GB 
 docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards compose
 ```
 
-`FREEROUTING` and `NODE_PATH` are set inside the image. It builds natively on arm64.
+`FREEROUTING` and `NODE_PATH` are set inside the image. It builds natively on arm64 (Apple silicon).
 
 **Smoke test:**
 

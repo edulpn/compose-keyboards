@@ -1,6 +1,6 @@
 # Compose build environment: the same stack the boards and checks were developed on.
 #   Ubuntu 24.04, KiCad 7.0.11 (apt), Python 3.12 + requirements.txt, OpenJDK 21 + Freerouting 2.1.0,
-#   ngspice, Node (renders).
+#   ngspice, Node 22 (renders; Ubuntu's apt Node 18 is too old for Playwright).
 #
 #   docker build -t compose .
 #   docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards compose
@@ -15,9 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         kicad kicad-footprints kicad-symbols \
         python3 python3-pip python3-dev \
         openjdk-21-jre-headless ngspice \
-        nodejs npm \
-        fonts-dejavu-core git curl ca-certificates zip unzip \
+        fonts-dejavu-core git curl ca-certificates xz-utils zip unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Node (render helpers): Playwright needs Node 20+, Ubuntu 24.04's apt has 18
+ARG NODE_VERSION=22.12.0
+RUN arch=$(dpkg --print-architecture | sed 's/amd64/x64/') \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${arch}.tar.xz" \
+       | tar -xJ -C /usr/local --strip-components=1 \
+    && node --version
 
 # Freerouting (the autorouter); compose/pcb/kicad.py reads FREEROUTING
 ARG FREEROUTING_VERSION=2.1.0
