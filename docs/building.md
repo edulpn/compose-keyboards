@@ -132,12 +132,14 @@ compose/            the platform (Python package)
   params.py           every dimension: angles, thicknesses, gaps, pads, hardware
   geom.py, layout.py  frames and transforms; the Layout/Key types
   case/               sandwich.py (rev 1 case), gasket.py (rev 2 case), build, coupons, tilt risers
-  pcb/                rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py), board art
+  pcb/                rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py),
+                      the rev 2 flex jumper (jumper.py), board art
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
-  checks/             fit, assembly, gasket and printability checks
+  checks/             fit, assembly, gasket and printability checks; the flex jumper as an elastic strip (flex_sim.py)
   sim/                copper-level and ngspice simulations
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
+  order_rev2.py       the rev 2 order folder (out_order/)
 layouts/<name>/     one folder per layout: its key list and hardware positions
 docs/               platform docs (this wiki), images
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
@@ -176,7 +178,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards; `flex-sim` passes. A change to the half's connector position (`JUMPER_ROW_Y`) or the case moves the jumper: rebuild it (`flex-jumper`) before `sim-half-rev2`, which reads its copper.
+- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards; `flex-sim` passes. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
 
 ## Notes for working on the code
 
@@ -205,6 +207,7 @@ The calls live in:
 
 - `compose/pcb/kicad.py`: `add_pad`, `silk_poly`, `drc`;
 - `compose/pcb/rev2_half.py`: `led_fp`, `gnd_pour`, `gnd_fanout`;
+- `compose/pcb/jumper.py`: `build_board`;
 - `compose/controller/rev2.py`, `compose/checks/gasket.py`, `compose/render/model.py`, `compose/sim/controller_copper.py`.
 
 After porting, every DRC, simulation and the rev 1 byte-identical check must still pass.

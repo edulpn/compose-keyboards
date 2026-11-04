@@ -9,7 +9,7 @@
 | **Case** | one-piece tub, gasket-mounted plates, bevelled frames, lift-off middle cover |
 | **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, a 20-pin vertical connector per half) |
 | **Half boards** | one reversible board for both halves, in four variants: hotswap or solder, with or without per-key RGB |
-| **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.4 mm, bent to shape |
+| **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.6 mm, bent by hand as it's plugged in |
 | **Angles** | splay 10°, tent 12°, tilt 0° (provisional) |
 | **Hardware** | M3 screws and heat-set inserts; M2 for board to plate |
 
@@ -114,7 +114,7 @@ Everything prints without supports, in print orientation:
 | `half_rev2_hotswap_rgb` | Kailh MX hotswap sockets | SK6812 MINI-E under every switch |
 | `half_rev2_solder_rgb` | soldered | SK6812 MINI-E under every switch |
 
-Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Order five of the one you want (two per keyboard).
+Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Order five of the one you want (two per keyboard). An RGB board works without its LEDs and capacitors fitted (the matrix doesn't touch them), so it also keeps the option open: they go on the bottom face, clear of everything else, and can be added later with the board out of the case.
 
 > **The RGB boards are experimental.** They pass the same DRC and copper simulation as the plain boards, but nobody has built one yet. Before you order:
 >
@@ -134,7 +134,7 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 
 ### Jumper connector
 
-- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, right angle, bottom contact, 1.9 mm tall) on the bottom face along the inner edge. Its pads stay at least 0.6 mm from every other part's pads on the same face (the same gap as between its own contacts; both are hand-soldered), which puts its cable side 0.1 mm proud of the board edge; `sim-half-rev2` checks the gap on the routed copper. Its contact row sits where the straight jumper needs the least skew in its bends: `jumper_row_y()` in `compose/pcb/rev2_half.py` derives it from the case (0.72 mm behind the controller's Pico centre here), so new angles need no hand-tuning. Checked against Molex's drawing: contact side, 4 mm insertion depth, slot about 1.0 mm above the board, 21 mm width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while the jumper goes in, so plug the jumpers in before the board goes into the case. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
+- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, right angle, bottom contact, 1.9 mm tall) on the bottom face along the inner edge. Its pads stay at least 0.6 mm from every other part's pads on the same face (the same gap as between its own contacts; both are hand-soldered), which puts its cable side 0.1 mm proud of the board edge; `sim-half-rev2` checks the gap on the routed copper. Its contact row sits where the straight jumper needs the least skew in its bends: `jumper_row_y()` in `compose/pcb/rev2_half.py` derives it from the case (0.72 mm forward of the controller's Pico centre here), so new angles need no hand-tuning. Checked against Molex's drawing: contact side, 4 mm insertion depth, slot about 1.0 mm above the board, 21 mm width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while the jumper goes in, so plug the jumpers in before the board goes into the case. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
 
 | slots | signal |
 |---|---|
@@ -151,7 +151,7 @@ COL6 and ROW5 aren't used by this layout. The plain boards wire slot 3 straight 
 
 ![flex jumper flat pattern](images/rev2_jumper_flat.png)
 
-The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair, bent to a fixed shape so it never twists or hangs slack. `C58_REV=2 python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
+The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair. It ships flat and takes its bends by itself once both ends are plugged in: the clamped ends and its length leave it one easy shape, with nothing twisted and nothing hanging loose. `C58_REV=2 python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
 
 **One part for both halves**, like the half boards: the flat strip is straight and symmetric. On the left it's bent one way, on the right as the mirror image, so there's one design to order. Its conductors are straight across, so each one joins the same physical slot at both ends whichever side it's on: slot 1 on the left jumper is slot 20 on the right one, and that doesn't matter.
 
@@ -166,7 +166,7 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 | stiffeners | polyimide on the back of each end, 5.0 mm at the half end and 5.1 mm at the controller end; both connectors take 0.3 ± 0.05 mm at the fingers |
 | DRC | 0 errors, 0 warnings, 0 unconnected (the open finger fields' solder-mask bridges are by design and reported apart) |
 
-**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. `C58_REV=2 python3 -m compose order-rev2 out_r2t` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out_order/` with an ORDER.md of these settings. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper.
+**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper. `C58_REV=2 python3 -m compose order-rev2 out_r2t` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out_order/` with an ORDER.md of these settings.
 
 | field | choose | why |
 |---|---|---|
@@ -192,7 +192,7 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 | rare excursions, 0.5–1.0 mm | settles every time; copper strain up to 0.71 % (low-cycle) |
 | clearances, seated, over the travel and ±0.5 mm of length | plate ≥ 1.72 mm, cover ≥ 0.86, half board 0.90, controller board ≥ 2.20; no overlap with either connector or anything else |
 
-Plug the jumper into the half's connector first (fingers toward the half board, then close the actuator), then set the board in and drop the other end straight down into the controller's connector with its slider open, then close the slider. Molex's application spec: insert the cable straight and keep it free of tension; the solved shape does both.
+**Fitting:** plug the jumper into the half's connector first (fingers toward the half board, then close the actuator), then set the board in. With the cover off, open the controller connector's slider, curl the free end up and over and push it straight down into the slot, then close the slider. Don't pre-bend or crease it: the curves form by themselves once both ends are in. Molex's application spec asks for straight insertion and no tension; the length and shape give both.
 
 ### RGB boards
 
