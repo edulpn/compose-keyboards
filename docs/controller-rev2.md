@@ -2,7 +2,7 @@
 
 [Home](../README.md) › Docs › Controller rev 2
 
-The shared controller board for every Compose split layout: one board, one cable standard and one firmware pin map, so any layout's half boards plug into the same controller.
+The shared controller board for every Compose split layout: one board, one connector standard and one firmware pin map, so any layout's half boards plug into the same controller. Nothing on it depends on a layout's angles: each layout's flex jumpers take those up.
 
 | top | bottom |
 |---|---|
@@ -17,17 +17,19 @@ The shared controller board for every Compose split layout: one board, one cable
 
 It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
-**On this page:** [Board](#board) · [Cable and slot order](#cable-and-slot-order) · [Pins](#pins) · [Front connectors](#front-connectors) · [Optional RGB](#optional-rgb) · [BOM](#bom) · [Simulation](#simulation)
+**On this page:** [Board](#board) · [Jumper connectors and slot order](#jumper-connectors-and-slot-order) · [Pins](#pins) · [Front connectors](#front-connectors) · [Optional RGB](#optional-rgb) · [BOM](#bom) · [Simulation](#simulation)
 
 ## Board
 
 | | |
 |---|---|
-| size | 43 × 56 mm, Pico centred, USB at the back. Behind the cable connectors it narrows to 33.2 mm (\|x\| ≤ 16.6) to clear the plates' inner gasket seats. |
+| size | 43 × 56 mm, Pico centred, USB at the back. Behind the jumper connectors it narrows to 33.2 mm (\|x\| ≤ 16.6) to clear the plates' inner gasket seats. |
 | standard | outline, holes, heights and keep-outs live in `compose/controller/rev2_std.py`; cases read them from there |
-| top face | only the Pico sockets, the two cable connectors and the front connector row |
+| top face | only the Pico sockets, the two jumper connectors and the front connector row |
 | bottom face | every passive and the optional RGB buffer (through-hole, soldered from the top), so nothing is limited by the Pico's 8.5 mm socket height; the rev 2 case leaves 24 mm under the board |
-| parts | all through-hole except the two FFC connectors and the Qwiic connector |
+| parts | all through-hole except the two jumper connectors and the Qwiic connector |
+
+**Placement checks** (asserted on every build): courtyards inside the board and apart on each face; no part's body over a through-hole pin or solder joint from the other face (the pad's copper against the courtyard, so a bottom part's top-side joint can't lift a top connector); top connectors clear of the Pico; standoffs and posts clear of everything; nothing in the jumpers' path.
 
 **Mounting (part of the standard):**
 
@@ -39,21 +41,22 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 **Silkscreen:**
 
 - Rev 1's art font (DejaVu Sans). The ∘ ring and "Compose" title stand up the left strip beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
-- Every label sits against what it names: `lhs` / `rhs` along each cable connector's contact row with "1" beside slot 1's contact; pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
+- Every label sits against what it names: `lhs` / `rhs` along each jumper connector's contact row with "1" beside slot 1's contact; pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
 
-## Cable and slot order
+## Jumper connectors and slot order
 
-- **Connectors:** two Molex 200528-0200 (20 positions, 1.0 mm pitch, bottom contact) on the top face, centred 1.6 mm forward of the Pico centre, cable side flush with the left and right edges. On a half board the connector goes on the bottom face.
-- **Cable:** 20-pin 1.0 mm FFC with contacts on opposite sides ("type B / reverse"), the same for both halves. The case sets the length: 50 mm for Compose58 rev 2.
+- **Connectors:** two Molex 52610-2072 (Easy-On, 20 positions, 1.0 mm pitch, vertical, slider latch) on the top face, square to the side edges. Slot plane at 14.8 mm either side of the Pico centre, centred 2.6 mm forward of it, contact face toward the Pico. Footprint from Molex's recommended pattern: two tails per contact, one either side of the body. The title moved behind the connectors to make room.
+- **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout sets only where its halves' connectors sit; its jumper's shape does the rest.
+- **Jumpers:** a custom single-sided flex per half, 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. Compose58 rev 2's: [flex jumpers](../layouts/lily58/rev2.md#flex-jumpers).
 - **Slot order:** slot 1 is the back-most contact. Both connectors use the same physical order, so the right connector is turned 180° and its pad numbers run backwards.
 
 | slot | 1 | 2 | 3 | 4 | 5–11 | 12–17 | 18 | 19 | 20 |
 |---|---|---|---|---|---|---|---|---|---|
 | line | GND | 5 V LED | RGB data to the half | GND | COL0–6 | ROW0–5 | RGB data back | 5 V LED | GND |
 
-**Reversal-safe:** a cable fitted flipped (slot k meets 21 − k) puts 5 V on 5 V, GND on GND and the two RGB data lines on each other through the 330 Ω; rows and columns just scramble. The RGB line into the half sits between 5 V and GND.
+**Reversal-safe:** should slot k ever meet 21 − k (a jumper made the wrong way round), 5 V lands on 5 V, GND on GND and the two RGB data lines on each other through the 330 Ω; rows and columns just scramble. The RGB line into the half sits between 5 V and GND.
 
-> Never set `MATRIX_UNSELECT_DRIVE_HIGH`: on a flipped cable, slot 4's GND would meet ROW5.
+> Never set `MATRIX_UNSELECT_DRIVE_HIGH`: with the slots reversed, slot 4's GND would meet ROW5.
 
 ## Pins
 
@@ -83,14 +86,14 @@ Modules mount in the bridge cover and plug in with short cables.
 
 ## Optional RGB
 
-Outlined "RGB" on the bottom silkscreen. Leave it empty for no RGB: firmware RGB off, and the cables' 5 V lines stay dead. **Fit the whole group or none of it** (a buffer without the fuse is back-fed through its input).
+Outlined "RGB" on the bottom silkscreen. Leave it empty for no RGB: firmware RGB off, and the jumpers' 5 V lines stay dead. **Fit the whole group or none of it** (a buffer without the fuse is back-fed through its input).
 
 | part | role |
 |---|---|
 | U2 74HCT125 (DIP-14) + C1 100 nF | buffer, 3.3 → 5 V data |
 | R3 330 Ω | series resistor on the data line out |
 | R4 100 kΩ | pull-down: keeps the data low before the Pico boots, so the LEDs don't latch noise at plug-in |
-| U2's second gate, R5 220 Ω in, R6 100 kΩ pull-down, R7 330 Ω out | re-drives the chain on its way from the left half to the right half. Wired straight through, the two cable runs ring too much (see the simulation). R5 limits clamp current. |
+| U2's second gate, R5 220 Ω in, R6 100 kΩ pull-down, R7 330 Ω out | re-drives the chain on its way from the left half to the right half. Wired straight through, the two jumper runs ring too much (see the simulation). R5 limits clamp current. |
 | F1 Bourns MF-RHT050 | polyfuse, VBUS → LED 5 V; stands on the bottom face beside the Pico, back right |
 | C2 10 µF | bulk capacitor (with 100 µF the hot-plug dip on the USB port would be 1.7× a spec-limit device instead of 1.4×) |
 
@@ -104,8 +107,8 @@ All of the RGB group except F1 sits in the box under the Pico on the bottom face
 | ref | part | qty |
 |---|---|---|
 | U1 | Raspberry Pi Pico / Pico W / Pico 2 (W) or pin-compatible, on 2 × 1×20 female headers (8.5 mm) | 1 |
-| JL, JR | Molex 200528-0200 FFC connector, 20 pos, 1.0 mm, bottom contact | 2 |
-| — | FFC cable, 20 pin, 1.0 mm pitch, 0.3 mm, opposite-side contacts (type B) | 2 |
+| JL, JR | Molex 52610-2072 FFC/FPC connector, 20 pos, 1.0 mm, vertical, slider latch | 2 |
+| — | flex jumpers, one per half, made for the layout (Compose58 rev 2: `jumper_rev2_L` and `_R`) | 2 |
 | J4 | 1×4 2.54 mm header (OLED / I2C) | 1 |
 | J6 | 1×6 2.54 mm header (AUX) | 1 |
 | J5 | JST BM04B-SRSS-TB (Qwiic, top entry) | 1 |
@@ -123,14 +126,14 @@ Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controll
 
 | what | result |
 |---|---|
-| netlist | rebuilt from the routed copper, it matches an independent pin-level spec (Pico, FFC slots, DIP pin 1 and its pin order as seen from the face the chip sits on, polarised C2, headers, Qwiic); silkscreen pin labels match the copper |
+| netlist | rebuilt from the routed copper, it matches an independent pin-level spec (Pico, jumper connector slots with both tails of each 52610 terminal joined and the contact face toward the Pico, DIP pin 1 and its pin order as seen from the face the chip sits on, polarised C2, headers, Qwiic); silkscreen pin labels match the copper |
 | optional RGB group | behaves correctly fitted and empty |
-| key scan | QMK COL2ROW through two cables into model halves: all 84 keys, 1000 random chords, no ghosting (including across the shared rows); a cable fitted flipped is harmless |
+| key scan | QMK COL2ROW through two model jumpers (slot k to slot k) into model halves: all 84 keys, 1000 random chords, no ghosting (including across the shared rows); slots reversed are harmless |
 | negative controls | swapped firmware pin, unrotated right connector, reversed diodes, injected short, cut track: all caught |
-| RGB data (192 corners: drive strengths, cable 50–250 mm and 100–180 Ω, LED rail down to 4.3 V) | clean single edges at the LED; '0' 337–366 ns and '1' 887–916 ns (spec 250–550 / 650–950); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
-| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 7 mA. Wired straight through it failed half the corners (0.95 V overshoot). |
+| RGB data (192 corners: drive strengths, jumper 20–100 mm and 100–180 Ω, LED rail down to 4.3 V) | clean single edges at the LED; '0' 340–363 ns and '1' 890–913 ns (spec 250–550 / 650–950); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
+| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 6.2 mA. Wired straight through it failed half the corners (0.96 V overshoot). |
 | I2C | 400 kHz with up to 60 pF of bus on the board's pull-ups, 100 kHz to 100 pF; modules with their own 2.2–10 k pull-ups stay in spec |
-| power | the far LED stays ≥ 3.85 V at 450 mA, even with a tripped-and-recovered fuse. Hot-plug dip with RGB fitted is 1.4× a USB spec-limit device, mostly from the halves' LED decoupling (warning). |
-| matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 66 ns (QMK samples at ~250 ns) and recovers in 4.1 µs (QMK waits 30 µs); worst cable/board crosstalk leaves idle lines ≥ 2.39 V (limit 2.0 V) |
+| power | the far LED stays ≥ 3.76 V at 450 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and the thinnest flex copper (1/3 oz, 100 mm). Hot-plug dip with RGB fitted is 1.4× a USB spec-limit device, mostly from the halves' LED decoupling (warning). |
+| matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 53 ns (QMK samples at ~250 ns) and recovers in 3.3 µs (QMK waits 30 µs); worst jumper/board crosstalk leaves idle lines ≥ 2.75 V (limit 2.0 V) |
 | PS/2 stick | fine from 3.3 V; a 5 V stick with its own pull-ups would exceed the RP2040's 3.8 V limit (warning) |
-| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/lily58/rev2.md#the-half-boards)); the 50 mm cable is inside the 50–250 mm the RGB data sweep covers |
+| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/lily58/rev2.md#the-half-boards)); through the real flex jumpers' copper; their 26 mm is inside the 20–100 mm the circuit simulation covers |

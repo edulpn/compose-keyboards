@@ -311,7 +311,7 @@ def build():
     f1 = add(b, "Fuse", "Fuse_Bourns_MF-RHT050", "F1", "MF-RHT050")
     put(f1, C(0, 0), angle=90)
     x0, y0, x1, y1 = crt(f1)
-    f1.Move(V(13.0 - (x0 + x1) / 2, -13.6 - (y0 + y1) / 2))
+    f1.Move(V(13.0 - (x0 + x1) / 2, -14.6 - (y0 + y1) / 2))         # its top-side joints clear of JR
     setnets(f1, {"1": "VBUS", "2": "+5V_LED"}, net)
     keep(f1)
 
@@ -365,15 +365,17 @@ def check_layout(fps):
             ov = boxes[a].intersection(boxes[c]).area
             assert ov < 1e-6, f"courtyards {a} / {c} overlap ({ov:.2f} mm2)"
 
-    def pth(fp):
-        return [(pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY)
+    def pth(fp, r=False):
+        return [((pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY),
+                 pcbnew.ToMM(max(p.GetSize().x, p.GetSize().y)) / 2) if r else
+                (pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY)
                 for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
     for a in refs:                                             # a part's body never sits on another face's pin tails
-        for c in refs:
+        for c in refs:                                         # or solder joints (the pad's copper on a's face)
             if (a in bottom) == (c in bottom):
                 continue
-            for q in pth(fps[c]):
-                assert not boxes[a].buffer(-0.05).contains(Point(q)), f"{a} body over {c}'s pin at {q}"
+            for q, r in pth(fps[c], r=True):
+                assert not boxes[a].intersects(Point(q).buffer(r - 1e-3)), f"{a} courtyard over {c}'s joint at {q}"
     pico = box(-10.5, -25.5, 10.5, 25.5)
     for ref in ("J4", "J5", "J6", "JL", "JR"):
         assert boxes[ref].intersection(pico).area < 1e-6, f"{ref} is under the Pico"

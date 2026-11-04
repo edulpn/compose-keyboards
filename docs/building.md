@@ -93,10 +93,11 @@ python3 -m compose spice-controller out # ngspice simulation
 # Compose58 rev 2 (layouts/lily58/rev2.md): set C58_REV=2
 C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
 C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
-C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + controller rev 2, copper level (after both are routed)
+C58_REV=2 python3 -m compose flex-jumper out_r2t     # the two flex jumpers: shape solved from the case, DRC, Gerbers, flat drawing
+C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
 C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
 C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
-C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, ribbon and printability checks
+C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
 C58_REV=2 python3 -m compose gasket-render out_r2t   # renders
 ```
 
@@ -173,7 +174,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board DRC ends at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards.
+- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards. A change to the half's connector position (`JUMPER_ROW_Y`) or the case moves the jumper: rebuild it (`flex-jumper`) before `sim-half-rev2`, which reads its copper.
 
 ## Notes for working on the code
 

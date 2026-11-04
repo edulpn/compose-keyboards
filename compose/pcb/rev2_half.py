@@ -12,10 +12,10 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
   - Outline: the plate outline less PCB_INSET (inside the gasket pads). No case screws go through it: the
     board hangs from the plate on four M2 screws into heat-set inserts in the plate (posts solved here).
   - Matrix: the layout's (row, col), COL2ROW, a through-hole diode per key in the same spot at every key.
-  - Cable: Molex 200528-0200 FFC connector (20 pos, 1.0 mm, bottom contact) on the bottom face along the
-    inner edge, centred on the controller connector's row (bridge-frame y). The ribbon hangs in a slack U
-    between the two boards. Contacts get their nets by physical position: the back-most contact is slot 1,
-    as on the controller (type B cable, same physical order at both ends).
+  - Jumper connector: Molex 200528-0200 (20 pos, 1.0 mm, right angle, bottom contact) on the bottom face along
+    the inner edge, its contact row on bridge-frame y = the controller's Pico centre - JUMPER_ROW_Y (a layout
+    choice: where the flex jumper lands with a gentle climb, see compose.pcb.jumper). Contacts get their nets
+    by physical position: the back-most contact is slot 1, as on the controller (the jumper keeps the order).
   - Slots: 1 GND, 2 5V, 3 RGB in, 4 GND, 5-11 COL0-6, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/layout.py.
@@ -120,13 +120,12 @@ def ffc_frame():
     """Contact-row direction u (toward the back) and the cable-side normal n (toward the bridge), unit vectors
     in the board plane (plate-local xy). The row runs along the board's inner edge: turned to the bridge
     frame's y axis instead (the splay, 10 deg) its 25 mm body would sweep into the inner column's sockets.
-    The ribbon hangs in a slack U between the boards, and its two vertical runs take the splay up with a
-    slight twist."""
+    The flex jumper's flat top turns by the splay in plan, so the controller's connectors stay square."""
     return np.array([0.0, 1.0]), np.array([1.0, 0.0])
 
 
 def ffc_row_y_P():
-    """The controller's contact row (bridge-frame y)."""
+    """The connector's contact row (bridge-frame y), set from the controller's Pico centre by JUMPER_ROW_Y."""
     from compose.case import gasket as C
     return C.CT.y_pc - JUMPER_ROW_Y
 

@@ -339,6 +339,44 @@ def build_board(side="L", g=None):
     return b, f
 
 
+def plot_flat(path, g=None):
+    """Drawing of both flat patterns (conductor side up), as cut, with fingers, stiffeners and slot numbers."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon as MP
+    g = g or solve()
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
+    for ax, side in zip(axs, ("L", "R")):
+        f = flat(g, side)
+        ax.add_patch(MP(list(f["outline"].exterior.coords), fc="#e9b44c", ec="#7a5200", lw=1.0, alpha=0.55))
+        for poly in f["stiff"]:
+            ax.add_patch(MP(list(poly.exterior.coords), fc="none", ec="#555", lw=0.8, ls="--", hatch="///"))
+        for k, pts in f["cond"].items():
+            sel = [q for q, sv in zip(pts, f["s"]) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+            xs, ys = zip(*[(q[0], q[1]) for q in sel])
+            ax.plot(xs, ys, color="#b5651d", lw=1.4, solid_capstyle="butt")
+        for k, (a, b) in f["fingers"].items():
+            for poly in (a, b):
+                ax.add_patch(MP(list(poly.exterior.coords), fc="#d4af37", ec="#8a6d00", lw=0.5))
+        for k in (1, 20):
+            w = conductor_w(k, side)
+            ax.annotate(str(k), (-0.6, w), ha="right", va="center", fontsize=7)
+        pe, he = f["centre"][-1][0], f["centre"][-1][1]
+        ax.annotate("half end\n(Molex 200528)", (FINGER_L / 2, -PR.JUMPER_W / 2 - 1.2), ha="center", va="top", fontsize=8)
+        ax.annotate("controller end\n(Molex 52610)", (pe[0] - he[0] * FINGER_L / 2, pe[1] - he[1] * FINGER_L / 2 - PR.JUMPER_W / 2 - 1.2),
+                    ha="center", va="top", fontsize=8)
+        bb = f["outline"].bounds
+        ax.set_xlim(bb[0] - 3, bb[2] + 3); ax.set_ylim(bb[1] - 5, bb[3] + 2)
+        ax.set_aspect("equal"); ax.axis("off")
+        ax.set_title(f"jumper_rev2_{side}: {f['length']:.1f} mm, flat, conductor side up", fontsize=9)
+    fig.text(0.5, 0.06, "hatched: polyimide stiffener on the back (0.3 mm total at the fingers); "
+             f"bends r {g.r:.0f} mm, climb {g.rise_deg:.0f} deg, flat top turns {math.degrees(g.turn):.0f} deg in plan",
+             ha="center", fontsize=8)
+    fig.savefig(path, dpi=160, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
 def main(out=None):
     import os
     import sys
@@ -348,7 +386,7 @@ def main(out=None):
     PK.PCB_OUT = os.path.join(out, "pcb")
     os.makedirs(PK.PCB_OUT, exist_ok=True)
     g = solve()
-    print(f"jumper path: climb {g.rise_deg:.0f} deg, flat top at z {g.z_top:.2f} (turn {math.degrees(g.turn):.1f} deg, "
+    print(f"jumper path: climb {g.rise_deg:.0f} deg, flat top at z {g.z_top:.2f} mm (turn {math.degrees(g.turn):.1f} deg, "
           f"jog {math.degrees(g.jog):.1f}), bends r {g.r}")
     for side in ("L", "R"):
         name = f"jumper_rev2_{side}"
@@ -368,6 +406,10 @@ def main(out=None):
         print(f"{name}: {f['length']:.1f} mm long, outline {bb[2] - bb[0]:.1f} x {bb[3] - bb[1]:.1f} mm | "
               f"DRC {err} errors, {warn} warnings, {unc} unconnected (+{bridges} finger-field mask bridges, by design) | "
               f"{os.path.basename(z)}")
+    png = os.path.join(out, "png")
+    os.makedirs(png, exist_ok=True)
+    plot_flat(os.path.join(png, "jumper_rev2_flat.png"), g)
+    print(f"flat patterns: {os.path.join(png, 'jumper_rev2_flat.png')}")
 
 
 if __name__ == "__main__":

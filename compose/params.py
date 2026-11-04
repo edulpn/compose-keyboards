@@ -217,10 +217,7 @@ GK_TABS = 18                     # pad pairs per half (outer edges)
 INNER_SEATS_P = ((-3.0, -13.0), (-48.5, -58.5))   # inner-edge pad pairs: P-frame y spans (back, front)
 INNER_SEAT_IN = 4.5              # inner seat width under the flange, from the plate edge
 PCB_INSET = LEDGE_W + 0.5        # half board outline inside the plate outline
-FFC_CABLE_L = 50.0               # rev 2 controller <-> half ribbon (20-pin 1.0 mm type B): slack hangs in a U in the bay
-FFC_CABLE_L_MAX = 60.0           # longest that still hangs clear of the floor (checked)
-JUMPER_W = 21.0                  # flex jumper width (20 x 1.0 mm pitch + 1 mm margins: both connectors' N+1)
-FFC_STIFFENER = 5.0              # rigid stiffener at each cable end: >= 5 mm (Molex 200528 drawing); 4 mm goes in
+JUMPER_W = 21.0                  # rev 2 flex jumper width (20 x 1.0 mm pitch + 1 mm margins: both connectors' N+1)
 COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of it by this (it doesn't clamp)
 # middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
 # standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
