@@ -827,7 +827,7 @@ def main(which=None):
             continue
         rgb = BOARDS[nm][1]
         PK.JOB_TIMEOUT_MIN = 45 if rgb else 8                     # ceiling; stalls are stopped much sooner
-        res[nm] = PK.make(nm, lambda nm=nm: build(nm), passes=100 if rgb else 60, attempts=12 if rgb else 10)
+        res[nm] = PK.make(nm, lambda nm=nm: build(nm), passes=100 if rgb else 60, attempts=30 if rgb else 10)
     return res
 
 

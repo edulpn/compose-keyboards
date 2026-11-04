@@ -83,7 +83,11 @@ C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, ri
 C58_REV=2 python3 -m compose gasket-render out_r2t   # renders
 ```
 
-`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that). Board builds keep Freerouting's output as `<outdir>/pcb/<board>_freerouting.log` (per-pass unrouted counts) and retry until DRC is clean. An attempt is abandoned early when the router stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with: Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one.
+`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
+
+Routing: each attempt runs `ROUTER_JOBS` Freerouting jobs side by side (default: half the CPU cores; each takes 3–4 GB) and keeps the first whose `.ses` is sound and fully routed. A job is dropped when it stalls (best unrouted count unchanged for 40 passes) or when its `.ses` isn't the board it finished with: Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one, which happens in most runs on the RGB boards. Attempts retry until DRC is clean. The router's output is kept as `<outdir>/pcb/<board>_freerouting.log`. On a 2-core machine set `ROUTER_JOBS=1` and expect the RGB boards to need many attempts.
+
+Stay on Freerouting 2.1.0. 2.5.0 has no restore problem and routes much faster, but it is deterministic and can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included.
 
 Outputs go to `out*/`, which is not committed: releases carry them.
 
@@ -142,11 +146,13 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
 ## Notes for working on the code
 
-- Freerouting is randomized; the board builders retry until DRC is clean. Freerouting 2.1 logs `NullPointerException` / `ArrayIndexOutOfBounds` in `maze_search_algo` on every board, including ones that route clean: that's noise. Its "MB memory" figure is cumulative allocation, not resident memory. If the unrouted count stays flat over passes, the board is congested: more time won't help, reduce the load.
+- Freerouting 2.1 is randomized; the board builders retry until DRC is clean. It logs `NullPointerException` / `ArrayIndexOutOfBounds` in `maze_search_algo` on every board, including ones that route clean: that's noise. Its "MB memory" figure is cumulative allocation, not resident memory. If the unrouted count stays flat over passes, the board is congested: more time won't help, reduce the load.
 - SWIG pad objects don't compare equal (`p in list` is always false): compare by number, shape or position.
 - `pcbnew.FromMM` rejects numpy floats: convert to `float` first.
 - KiCad's `Flip(pos, True)` mirrors left-right **and** rotates 180°: rotate relative to that afterwards.
-- Zones must be filled (`pcbnew.ZONE_FILLER(board).Fill(board.Zones())`) before saving for DRC; the copper simulation reads the filled polygons.
+- Zones must be filled (`pcbnew.ZONE_FILLER(board).Fill(board.Zones())`) before saving for DRC; the copper simulation reads the filled polygons. The filler segfaults on a board made with `pcbnew.BOARD()` (no project): fill a board that was saved and loaded back.
+- Delete board items with `board.Delete(item)`, not `Remove`: a removed item's Python wrapper owns it, the garbage collector frees it, and KiCad 7's SWIG then starts returning bare `VECTOR2<int>*` pointers (even `GetTracks()` fails).
+- Calling `GetStart()` / `GetEnd()` in tight inner loops is slow and fragile: read each track's ends once into tuples.
 - A CadQuery `fuse` of pieces meeting along a twisted (lofted) face can silently drop a piece: keep a compound when the result is only for interference checks.
 - `art.widest_box` searches near fixed anchors tuned for the Lily58; other layouts may need their own.
 

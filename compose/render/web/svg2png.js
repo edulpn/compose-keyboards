@@ -2,7 +2,7 @@
 const {chromium} = require('playwright');
 const [inp, out, w] = process.argv.slice(2);
 (async () => {
-  const b = await chromium.launch({executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium'});
+  const b = await chromium.launch({executablePath: process.env.CHROMIUM || undefined});
   const p = await b.newPage({viewport: {width: +(w || 1400), height: 1000}, deviceScaleFactor: 1});
   const svg = require('fs').readFileSync(inp, 'utf8');
   await p.setContent(`<html><body style="margin:0;background:#26282c;display:flex;justify-content:center;align-items:center;height:100vh">
