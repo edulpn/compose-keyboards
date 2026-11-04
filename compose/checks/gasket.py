@@ -120,13 +120,16 @@ def _controller_solids():
 
 
 # ---------------------------------------------------------------- rev 2 half board: underside parts, ribbon
-HALF_PART_H = {"sockets": PR.HS_HEIGHT, "diodes": PR.DIODE_BODY[1], "caps": 1.3, "ffc": 2.0, "heads": PR.M2_HEAD_H,
+HALF_PART_H = {"sockets": PR.HS_HEIGHT, "diodes": PR.DIODE_BODY[1], "caps": 1.3,
+               "ffc": 2.1,       # Molex 200528: 1.9 +/- 0.2 mm (drawing)
+               "leds": 1.0,      # SK6812 MINI-E: 1.78 body - 0.84 above the leads = 0.94 below the pads, + solder
+               "heads": PR.M2_HEAD_H,
                "pins": 2.0}
 
 
 def half_parts_local():
     """Everything under a half board (left local frame), every variant at once: hotswap sockets, diode bodies,
-    capacitors, the cable connector, M2 screw heads, solder-in switch pins."""
+    capacitors, LEDs, the cable connector, M2 screw heads, solder-in switch pins."""
     from compose.pcb import rev2_half as H2
     from compose.pcb import layout as PL
     from shapely.geometry import LineString as LS
@@ -138,6 +141,7 @@ def half_parts_local():
         "diodes": uu([LS([ks.cathode, ks.anode]).buffer(PR.DIODE_BODY[1] / 2) for ks in s.keys]),
         "caps": uu([H2.cap_box(G.LAYOUT.keys[i], f).buffer(-0.5) for i in s.caps for f in ("B", "F")]),
         "ffc": s.ffc.body,
+        "leds": uu(s.ledcut),            # reverse-mount MINI-E: the body (3.2 x 2.8) within its cutout
         "heads": uu([Point(p).buffer(PR.M2_HEAD_D / 2) for p in s.posts]),
         "pins": uu([Point(PL.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
                     for p_ in (PR.MX_PIN1, PR.MX_PIN2) for pp in (p_, PL.mirror_fp(p_))]),
@@ -163,7 +167,19 @@ def _ribbon_ends():
 
 
 R1 = R3 = 1.0              # quarter bends out of / into the connectors
-S0 = S_END = 0.5           # straight bits at the connector faces
+# straight bits at the connector faces: the stiffener sticks out rigid past the 4 mm that go in (Molex 200528
+# drawing: stiffener 5 mm min, insertion depth 4); never less than 0.5
+S0 = S_END = max(0.5, PR.FFC_STIFFENER - CS.FFC_INSERT)
+U_MIN_R = 1.0              # the U at the bottom: tightest bend allowed for the 0.3 mm cable
+
+
+def ribbon_fit():
+    """(U radius, ok): how much room the gap between the controller and the half leaves for the ribbon's U
+    once both stiffened ends and both quarter bends are taken off."""
+    (xA, zA), B, yaw, dh = _ribbon_ends()
+    x2 = B[0] - dh[0] * (R3 + S_END)
+    r2 = (xA - S0 - R1 - x2) / 2
+    return r2, r2 >= U_MIN_R
 
 
 def ribbon_path(cable_l=None):
@@ -177,7 +193,7 @@ def ribbon_path(cable_l=None):
     x2 = B[0] - dh[0] * (R3 + S_END)                         # up-leg centre line, so the top bend ends at B
     zB = B[2]
     r2 = (xA - S0 - R1 - x2) / 2
-    assert r2 >= 1.0, f"gap between the boards too small for the ribbon's U (r {r2:.2f})"
+    assert r2 >= U_MIN_R, f"gap between the boards too small for the ribbon's U (r {r2:.2f})"
     L_ = cable_l - 2 * CS.FFC_INSERT - 0.4
     zb = (S0 + S_END + math.pi / 2 * (R1 + R3) + math.pi * r2 + zA - R1 - r2 + zB - R3 - r2 - L_) / 2
     arc = lambda cx, cz, r, a0, a1: [(cx + r * math.cos(math.radians(a)), cz + r * math.sin(math.radians(a)))
@@ -283,13 +299,15 @@ def main():
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
     half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
     half_parts = mirror_pair(half_parts_local())
-    rib = G.P2W(ribbon_P())
-    ribbons = cq.Compound.makeCompound([rib, rib.mirror("YZ")])
+    rib_r, rib_ok = ribbon_fit()
     ctrl = {k: G.P2W(v) for k, v in controller_solids().items()}
     lo, up = pads_local()
     pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
-    parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb, "half parts": half_parts,
-                 "ribbons": ribbons}, **ctrl)
+    parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb, "half parts": half_parts},
+                 **ctrl)
+    if rib_ok:                     # no room for the U: no ribbon solids, their checks are skipped (E reports why)
+        rib = G.P2W(ribbon_P())
+        parts["ribbons"] = cq.Compound.makeCompound([rib, rib.mirror("YZ")])
 
     # ---- A: interference (volume of overlap, mm3)
     allowed = {("ctrl board", "standoffs"), ("ctrl board", "lead tails"), ("ctrl board", "pico"),
@@ -319,6 +337,8 @@ def main():
                        ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5),
                        ("half parts", "case", 0.3), ("ribbons", "case", 0.5), ("ribbons", "bottom parts", 0.5),
                        ("ribbons", "standoffs", 0.5)):
+        if a not in parts_b or b_ not in parts_b:
+            continue
         d = dist(parts_b[a], parts_b[b_])
         rec(f"B clearance {a} / {b_} >= {lim:.2f}", d >= lim, f"{d:.2f} mm")
 
@@ -392,10 +412,13 @@ def main():
     rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
         f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")
     fl = CT.board_bot - PR.FLOOR_T
-    zb = ribbon_path(PR.FFC_CABLE_L)[2]
-    zbm = ribbon_path(PR.FFC_CABLE_L_MAX)[2]
-    rec(f"E ribbon: {PR.FFC_CABLE_L:.0f} mm type B cable hangs in a U, {PR.FFC_CABLE_L_MAX:.0f} mm still clears the floor",
-        zbm >= PR.FLOOR_T + 1.0, f"U bottom {zb:.1f} mm ({PR.FFC_CABLE_L:.0f} mm) / {zbm:.1f} mm ({PR.FFC_CABLE_L_MAX:.0f} mm), floor {PR.FLOOR_T}")
+    rec(f"E ribbon fits between the boards ({PR.FFC_STIFFENER:.0f} mm stiffeners, {S0:.1f} mm rigid past each connector)",
+        rib_ok, f"U radius {rib_r:.2f} mm (min {U_MIN_R})")
+    if rib_ok:
+        zb = ribbon_path(PR.FFC_CABLE_L)[2]
+        zbm = ribbon_path(PR.FFC_CABLE_L_MAX)[2]
+        rec(f"E ribbon: {PR.FFC_CABLE_L:.0f} mm type B cable hangs in a U, {PR.FFC_CABLE_L_MAX:.0f} mm still clears the floor",
+            zbm >= PR.FLOOR_T + 1.0, f"U bottom {zb:.1f} mm ({PR.FFC_CABLE_L:.0f} mm) / {zbm:.1f} mm ({PR.FFC_CABLE_L_MAX:.0f} mm), floor {PR.FLOOR_T}")
     rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= 3.0, f"{fl:.1f} mm to the floor")
 
     # ---- F: printability of the exported parts in their print orientation

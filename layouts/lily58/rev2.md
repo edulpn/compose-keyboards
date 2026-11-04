@@ -116,11 +116,10 @@ Everything prints without supports, in print orientation:
 
 Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Order five of the one you want (two per keyboard).
 
-> **The RGB boards are experimental.** They pass the same DRC and copper simulation as the plain boards, but nobody has built one yet, and a few things the checks can't catch rest on assumptions. Check these before you order:
+> **The RGB boards are experimental.** They pass the same DRC and copper simulation as the plain boards, but nobody has built one yet. Before you order:
 >
-> - **LED footprint and pinout.** The SK6812 MINI-E land pattern comes from the KiCad library (merge request !3331) with its pads shortened for the cutout; the pin corners, the reverse-mount orientation and the 3.6 × 3.2 mm cutout haven't been checked against the manufacturer's datasheet.
-> - **FFC connector.** The Molex 200528-0200 contact side, the cable insertion depth (4.0 mm) and the body height (2.0 mm) are assumed, not taken from its drawing. This applies to the plain boards too.
-> - **Power.** The firmware caps brightness at 32/255 (about 0.13 A per half). Without the cap, the 58 LEDs can draw well over 1 A: more than the controller's 0.5 A polyfuse allows, and more than the 5 V tracks and the FFC's contacts are meant for. Keep the cap.
+> - **LED footprint.** Checked against the OPSCO SK6812MINI-E datasheet (rev 04): the pinout, the pin corners for reverse mounting, the 3.2 × 2.8 mm body and the pad pitch all match. The pads are 1.2 mm long instead of the recommended 1.8 (they stay 0.45 mm from the cutout, for the copper-to-edge rule), so each lead sits on 0.69 mm of pad. The cutout has no orientation chamfer: orient each LED by the pin 1 mark on the silkscreen.
+> - **Power.** The firmware caps brightness at 32/255 (about 0.13 A per half). Without the cap, each half's 29 LEDs can draw about 1 A at full white (36 mA each): more than the controller's 0.5 A polyfuse and USB's 0.5 A allow, and too much for the signal-width 5 V tracks. (The FFC's contacts are rated 1.0 A each, two per rail.) Keep the cap.
 > - **Decoupling.** There's one 100 nF capacitor per three LEDs (to limit inrush when the keyboard is plugged in), not the one per LED the datasheet suggests. That's fine at the capped brightness.
 >
 > If you build one, please report what you find.
@@ -135,7 +134,7 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 
 ### Cable connector and cable
 
-- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, bottom contact) on the bottom face, flush with the inner edge and centred on the controller's connector. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
+- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, bottom contact, 1.9 mm tall) on the bottom face, flush with the inner edge and centred on the controller's connector. Checked against Molex's drawing: contact side, 4 mm cable insertion depth, cable slot about 1.0 mm above the board, 21 mm cable width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while a cable goes in, so plug the cables in before the board goes into the case. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
 
 | slots | signal |
 |---|---|
