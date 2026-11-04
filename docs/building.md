@@ -7,12 +7,49 @@ You only need this to change the design. Ready-made files for each layout's reco
 ## Requirements
 
 - **Python 3.11+** with the packages in `requirements.txt`: CadQuery, trimesh, manifold3d, shapely, numpy, scipy, matplotlib, networkx, rtree.
-- **KiCad 7+.** Its `pcbnew` Python module must be importable from that Python.
-- **Java 17+** and [Freerouting](https://github.com/freerouting/freerouting/releases). Point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`.
+- **KiCad 7** (developed on 7.0.11). Its `pcbnew` Python module must be importable from that Python. The generators use the KiCad 7 Python API, parts of which KiCad 8 and 9 removed (see [Porting to KiCad 8/9](#porting-to-kicad-89)).
+- **Java 17+** and [Freerouting](https://github.com/freerouting/freerouting/releases) (developed on 2.1.0). Point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`.
 - **ngspice:** only for the controller simulation.
 - **Node 18+:** only for renders and board previews. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`.
 
-A `Dockerfile` at the repo root sets up the whole stack (Ubuntu 24.04, KiCad 7.0.11, Python packages, Java + Freerouting, ngspice, Node): `docker build -t compose .`, then run commands inside it with the repo mounted.
+## Setting up
+
+The safest route is the stack everything was developed on: Ubuntu 24.04 with apt's KiCad 7.0.11 and its Python 3.12, OpenJDK 21, Freerouting 2.1.0.
+
+**Ubuntu 24.04, natively or in WSL2** (on Windows: `wsl --install -d Ubuntu-24.04` first, and keep the repo inside the WSL filesystem, not under `/mnt/c`, where file access is slow):
+
+```sh
+sudo apt update
+sudo apt install -y kicad kicad-footprints kicad-symbols python3-pip python3-dev \
+    openjdk-21-jre-headless ngspice nodejs npm fonts-dejavu-core git curl zip unzip
+kicad-cli version                       # expect 7.0.11
+
+git clone https://github.com/edulpn/compose-keyboards.git && cd compose-keyboards
+mkdir -p ../tools
+curl -fsSL -o ../tools/freerouting.jar \
+    https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
+pip3 install --break-system-packages -r requirements.txt cairosvg pillow
+(cd compose/render/web && npm install && npx playwright install --with-deps chromium)   # renders only
+```
+
+**Docker (macOS, or anywhere):** the repo's `Dockerfile` builds the same stack. On macOS this is the easy route: KiCad's macOS app bundles its own Python, and its `pcbnew` only loads in that interpreter.
+
+```sh
+docker build -t compose .               # give Docker all CPU cores and >= 8 GB of memory
+docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards compose
+```
+
+`FREEROUTING` and `NODE_PATH` are set inside the image. It builds natively on arm64.
+
+**Smoke test:**
+
+```sh
+python3 -c "import pcbnew, cadquery; print(pcbnew.Version())"      # 7.0.11
+C58_REV=2 python3 -m compose half-rev2 out_r2t --plan                # placement drawing, about a minute
+python3 -m compose build /tmp/r1 && python3 -m compose model /tmp/r1 && python3 -m compose checks /tmp/r1   # ALL CHECKS PASSED
+```
+
+Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release: they should be byte-identical, which confirms your environment reproduces the released design.
 
 ## Commands
 
@@ -82,3 +119,34 @@ docs/               platform docs (this wiki), images
   - screws too close to the edge.
 
 After a change, re-run the build, then the checks. The checks are what tell you the change still fits and prints.
+
+## Checking a change
+
+Every design change goes through the existing checks (case checks, DRC, the copper simulations) rather than being judged by eye. When a new kind of part or constraint appears, add a check for it.
+
+- **Released revisions must not change.** Code shared between revisions (`kicad.py`, `art.py`, `params.py`, `geom.py`, `sim/matrix.py`) must leave rev 1's outputs byte-identical: build STLs, BOM and `keyboard.json`. Compare against a build of the unchanged code:
+
+  ```sh
+  git stash; python3 -m compose build /tmp/r1a; python3 -m compose firmware /tmp/r1a; git stash pop
+  python3 -m compose build /tmp/r1b && python3 -m compose firmware /tmp/r1b && python3 -m compose model /tmp/r1b && python3 -m compose checks /tmp/r1b
+  for f in /tmp/r1a/print/*.stl; do cmp $f /tmp/r1b/print/$(basename $f); done
+  cmp /tmp/r1a/bom.txt /tmp/r1b/bom.txt; cmp /tmp/r1a/firmware/keyboard.json /tmp/r1b/firmware/keyboard.json
+  ```
+
+  Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
+- **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
+- **Rev 2:** `gasket-checks` all pass; half-board DRC ends at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards.
+
+## Notes for working on the code
+
+- Freerouting is randomized; the board builders retry until DRC is clean. Freerouting 2.1 logs `NullPointerException` / `ArrayIndexOutOfBounds` in `maze_search_algo` on every board, including ones that route clean: that's noise. Its "MB memory" figure is cumulative allocation, not resident memory. If the unrouted count stays flat over passes, the board is congested: more time won't help, reduce the load.
+- SWIG pad objects don't compare equal (`p in list` is always false): compare by number, shape or position.
+- `pcbnew.FromMM` rejects numpy floats: convert to `float` first.
+- KiCad's `Flip(pos, True)` mirrors left-right **and** rotates 180°: rotate relative to that afterwards.
+- Zones must be filled (`pcbnew.ZONE_FILLER(board).Fill(board.Zones())`) before saving for DRC; the copper simulation reads the filled polygons.
+- A CadQuery `fuse` of pieces meeting along a twisted (lofted) face can silently drop a piece: keep a compound when the result is only for interference checks.
+- `art.widest_box` searches near fixed anchors tuned for the Lily58; other layouts may need their own.
+
+## Porting to KiCad 8/9
+
+Only needed if KiCad 7 isn't an option. `FP_SHAPE` became `PCB_SHAPE` inside footprints; `SetPos0`, `SetStart0`, `SetEnd0` and `SetDrawCoord` are gone (set positions in board coordinates); `EDA_UNITS_MILLIMETRES` was renamed; some zone and pad setters changed. The calls live in `compose/pcb/kicad.py` (`add_pad`, `silk_poly`, `drc`), `compose/pcb/rev2_half.py` (`led_fp`, `gnd_pour`), `compose/controller/rev2.py`, `compose/checks/gasket.py`, `compose/render/model.py` and `compose/sim/controller_copper.py`. After porting, every DRC, simulation and the rev 1 byte-identical check must still pass.
