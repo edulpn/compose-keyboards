@@ -19,6 +19,7 @@ import shutil
 import zipfile
 import subprocess
 import pcbnew
+from types import SimpleNamespace
 from compose import REPO_ROOT
 from compose import params as PR
 from compose import geom as G
@@ -35,6 +36,7 @@ DEG = lambda d: pcbnew.EDA_ANGLE(d, pcbnew.DEGREES_T)
 OX, OY = 40.0, 60.0            # half board: plate-local (x, y) -> KiCad (x + OX, OY - y)
 JOB_TIMEOUT_MIN = 8            # Freerouting job limit per attempt (minutes)
 STALL_PASSES = 40              # stop the router when its best unrouted count hasn't improved for this many passes
+ROUTER_JOBS = int(os.environ.get("ROUTER_JOBS", max(1, (os.cpu_count() or 2) // 2)))   # parallel router runs
 
 
 def K(p, ox=OX, oy=OY):
@@ -448,7 +450,7 @@ def route(board, name, passes=40):
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
     poly, ox, oy = board.kb2_outline
-    edge = PR.CLEARANCE + 0.25                      # route inside the real edge by the edge clearance
+    edge = getattr(board, "kb2_route_edge", PR.CLEARANCE + 0.25)   # route inside the real edge by the edge clearance
     set_outline(board, poly.buffer(-edge, join_style="mitre"), ox, oy)
     # KiCad applies the edge clearance to unplated holes too; the router only knows
     # the copper clearance, so grow those holes by the difference while exporting
@@ -466,40 +468,77 @@ def route(board, name, passes=40):
     set_outline(board, poly, ox, oy)
     if os.path.exists(ses):
         os.remove(ses)
-    cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", str(passes),
-           "--gui.enabled=false", "--router.optimizer.max_passes=5",
-           f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
-           "--usage_and_diagnostic_data.disable_analytics=true"]
-    logf = os.path.splitext(ses)[0] + "_freerouting.log"    # router output kept beside the .ses
-    with open(logf, "w") as log:
-        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
-        t0, best, best_pass = time.time(), None, 0
-        while proc.poll() is None:
-            time.sleep(2)
-            if time.time() - t0 > JOB_TIMEOUT_MIN * 60 + 240:
-                proc.kill()
-                break
-            passes_seen = [(int(p), int(u)) for p, u in
-                           re.findall(r"Auto-router pass #(\d+) .*?\((\d+) unrouted\)", open(logf).read())]
-            if passes_seen:
-                p, u = min(passes_seen, key=lambda pu: (pu[1], pu[0]))
-                if best is None or u < best:
-                    best, best_pass = u, p
-                if passes_seen[-1][0] - best_pass >= STALL_PASSES:     # congested: more passes won't help
-                    proc.kill()
-                    print(f"  {name}: router stalled at {best} unrouted for {STALL_PASSES} passes, stopped")
+    fixed = len(re.findall(r"\(via [^\n]*\(type fix\)", open(dsn).read()))     # pre-placed, not in the .ses
+    base = os.path.splitext(ses)[0]
+    jobs = []
+    for i in range(ROUTER_JOBS):        # independent router runs side by side; the first good one wins
+        out = ses if ROUTER_JOBS == 1 else f"{base}_job{i + 1}.ses"
+        logf = (base if ROUTER_JOBS == 1 else f"{base}_job{i + 1}") + "_freerouting.log"
+        for f in (out, logf):
+            if os.path.exists(f):
+                os.remove(f)
+        cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", out, "-mp", str(passes),
+               "--gui.enabled=false", "--router.optimizer.max_passes=5",
+               "--router.automatic_neckdown=false",       # no tracks below the 0.2 mm minimum
+               f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
+               "--usage_and_diagnostic_data.disable_analytics=true"]
+        log = open(logf, "w")
+        jobs.append(SimpleNamespace(ses=out, logf=logf, log=log, best=None, best_pass=0, done=False,
+                                    proc=subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)))
+
+    def verdict(j):
+        """(ok, unrouted) for a finished job: ok = its .ses is the board the router finished with."""
+        if not os.path.exists(j.ses):
+            return False, None
+        stats = _router_stats(j.logf)
+        nv = open(j.ses).read().count("(via ")
+        if stats is None:                                # no statistics block (other Freerouting versions)
+            return True, None
+        if stats["items"]["via_count"] - fixed != nv:
+            # Freerouting 2.1 can "restore an earlier board" mid-run, keep routing, then write the
+            # restored board to the .ses instead of the one it finished with: reject that output
+            return False, stats["connections"]["incomplete_count"]
+        return True, stats["connections"]["incomplete_count"]
+    t0, winner, rejected = time.time(), None, 0
+    while any(not j.done for j in jobs) and winner is None:
+        time.sleep(2)
+        for j in jobs:
+            if j.done:
+                continue
+            if j.proc.poll() is not None:
+                j.done = True
+                ok, inc = verdict(j)
+                if ok and inc == 0:
+                    winner = j
                     break
-        proc.wait()
-    if not os.path.exists(ses):
-        return None
+                rejected += not ok
+                continue
+            if time.time() - t0 > JOB_TIMEOUT_MIN * 60 + 240:
+                j.proc.kill()
+                continue
+            seen = [(int(p_), int(u)) for p_, u in
+                    re.findall(r"Auto-rout(?:er|ing) pass #(\d+) .*?\((\d+) unrouted", open(j.logf).read())]
+            if seen:
+                p_, u = min(seen, key=lambda pu: (pu[1], pu[0]))
+                if j.best is None or u < j.best:
+                    j.best, j.best_pass = u, p_
+                if seen[-1][0] - j.best_pass >= STALL_PASSES:          # congested: more passes won't help
+                    j.proc.kill()
+    for j in jobs:
+        if j.proc.poll() is None:
+            j.proc.kill()
+        j.proc.wait()
+        j.log.close()
+    if winner is None:                  # none fully routed: take a sound one with the fewest open connections
+        sound = [(v[1] if v[1] is not None else 10 ** 6, k) for k, j in enumerate(jobs) for v in [verdict(j)] if v[0]]
+        if not sound:
+            print(f"  {name}: no usable router output ({rejected} of {len(jobs)} wrote an earlier board)")
+            return None
+        winner = jobs[min(sound)[1]]
+    if winner.ses != ses:
+        shutil.copy(winner.ses, ses)
+        shutil.copy(winner.logf, base + "_freerouting.log")
     txt = open(ses).read()
-    stats = _router_stats(os.path.splitext(ses)[0] + "_freerouting.log")
-    if stats and stats["items"]["via_count"] != txt.count("(via "):
-        # Freerouting 2.1 can "restore an earlier board" mid-run, keep routing, then write the
-        # restored board to the .ses instead of the one it finished with: reject that output
-        print(f"  {name}: .ses has {txt.count('(via ')} vias, the router finished with "
-              f"{stats['items']['via_count']}: it wrote an earlier board, rejected")
-        return None
     tree = _sexp(txt)
     routes = next(_find(tree, "routes"))
     res = next(_find(routes, "resolution"))
@@ -509,6 +548,8 @@ def route(board, name, passes=40):
     netout = next(_find(routes, "network_out"))
     n_tracks = n_vias = 0
     for nn in _find(netout, "net"):
+        if nn[1] == "GNDFIX":                       # fixed GND fanout (rev 2 RGB boards): already on the board
+            continue
         ni = nets[nn[1]]
         for w in _find(nn, "wire"):
             for pth in _find(w, "path"):
@@ -556,9 +597,11 @@ def remove_dangling(board):
     included, counts as touching), repeated until stable; then vias joined to
     fewer than two tracks. Returns the number of vias removed."""
     removed_v = 0
+    # boards poured with GND after routing (rev 2 RGB): their GND copper is pre-placed fanout, joined by the pour
+    poured = board.GetNetsByName()["GND"].GetNetCode() if getattr(board, "kb2_gnd_pour", False) else None
     while True:
-        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA"]
-        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA" and t.GetNetCode() != poured]
+        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and t.GetNetCode() != poured]
         pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
         by_net, seg = {}, {}
         for i, t in enumerate(tracks):

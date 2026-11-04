@@ -410,6 +410,9 @@ def build(name):
     if rgb:
         b.kb2_gnd_pour = True
         b.kb2_after_route = gnd_pour
+        # the router keeps its own 0.2 mm clearance to the boundary as well: 0.25 more makes the 0.4 mm copper-edge
+        # clearance (DRC-checked); the default 0.45 crowds the 29 LED cutouts
+        b.kb2_route_edge = PR.CLEARANCE + 0.05
     if rgb and POWER_W > PR.TRACE_W:
         pw = pcbnew.NETCLASS("Power")
         pw.SetTrackWidth(MM(POWER_W))
@@ -539,7 +542,132 @@ def build(name):
         PK.text(b, "1", K(tuple(float(t) for t in p1 + u * 1.3 - n * 1.6)), lay, 1.0, mirror=mir)
         pl = np.array(s.ffc.pads[-1])                            # past the body's front end, mid-depth
         PK.text(b, nm, K(tuple(float(t) for t in pl - u * 5.0 + n * 2.4)), lay, 1.0, mirror=mir, angle=90)
+    if rgb:
+        _clear_switch_silk(b)
+        gnd_fanout(b)
     return b
+
+
+def _clear_switch_silk(b):
+    """RGB boards: drop the switch footprints' silkscreen segments that land on an LED or capacitor pad (the
+    solder footprint's outline marks cross the capacitors; DRC: silkscreen clipped by solder mask)."""
+    pcbnew, PK = _pc()
+    pads = [p.GetBoundingBox() for fp in b.GetFootprints() if fp.GetReference()[:2] in ("LB", "LF") or
+            fp.GetReference().startswith("C") for p in fp.Pads()]
+    for bb in pads:
+        bb.Inflate(PK.MM(0.15))
+    for fp in b.GetFootprints():
+        if not fp.GetReference().startswith("SW"):
+            continue
+        for g in list(fp.GraphicalItems()):
+            if g.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS) and any(g.GetBoundingBox().Intersects(bb) for bb in pads):
+                fp.Delete(g)                        # Delete, not Remove: see kicad.remove_dangling
+
+
+FANOUT_R = (0.9, 2.6, 0.1)           # via centre distance from its pad's centre: min, max, step (mm)
+
+
+def gnd_fanout(b):
+    """Before routing (RGB boards): every SMD GND pad gets its own via on a short stub, so it reaches the GND
+    pours on both faces whatever the router does around it. Without this, the pour couldn't reach ~30 pads
+    (mostly LED GND pads boxed in by the tracks round the LED cutouts). Each via takes the closest spot
+    clear of every other pad, hole, art, edge and via; the stub runs on the pad's own face."""
+    pcbnew, PK = _pc()
+    from shapely.geometry import Point as P_, LineString as LS_, Polygon as Pg_
+    from shapely.ops import unary_union as uu
+    ToMM, MM = pcbnew.ToMM, PK.MM
+    gnd = b.GetNetsByName()["GND"]
+    lay_of = {pcbnew.F_Cu: "F", pcbnew.B_Cu: "B"}
+    clr, edge_clr = PR.CLEARANCE + 0.15, ToMM(b.GetDesignSettings().m_CopperEdgeClearance) + 0.05   # the router
+    #   measures via-to-pad clearance a little more conservatively than KiCad: keep 0.15 mm extra
+    vr, tw = PR.VIA_D / 2, PR.TRACE_W
+
+    def poly(p, lay):
+        ps = pcbnew.SHAPE_POLY_SET()
+        p.TransformShapeToPolygon(ps, lay, 0, MM(0.005))
+        o = ps.Outline(0)
+        return Pg_([(ToMM(o.CPoint(i).x), ToMM(o.CPoint(i).y)) for i in range(o.PointCount())])
+    obst = {"F": [], "B": []}                 # (shape, is GND pad) per copper face, KiCad mm (y down)
+    gpads = []
+    for fp in b.GetFootprints():
+        for p in fp.Pads():
+            q = p.GetPosition()
+            if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
+                h = P_(ToMM(q.x), ToMM(q.y)).buffer(ToMM(p.GetDrillSize().x) / 2 + edge_clr - clr)
+                obst["F"].append((h, False)); obst["B"].append((h, False))
+                continue
+            for lay, f in lay_of.items():
+                if p.IsOnLayer(lay):
+                    sh = poly(p, lay)
+                    if abs(fp.GetOrientationDegrees()) % 90 > 1e-6:   # odd angles (thumb arc): the router models
+                        sh = sh.envelope                              #   these pads bigger; keep to their box
+                    isg = p.GetNetCode() == gnd.GetNetCode()
+                    obst[f].append((sh, isg))
+                    if isg and p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD:
+                        gpads.append((fp.GetReference(), p.GetNumber(), f, lay, sh))
+    for d in b.GetDrawings():                                    # exposed-copper art
+        f = lay_of.get(d.GetLayer())
+        if f:
+            bb = d.GetBoundingBox()
+            obst[f].append((Pg_([(ToMM(bb.GetLeft()), ToMM(bb.GetTop())), (ToMM(bb.GetRight()), ToMM(bb.GetTop())),
+                                 (ToMM(bb.GetRight()), ToMM(bb.GetBottom())), (ToMM(bb.GetLeft()), ToMM(bb.GetBottom()))]), False))
+    rules = list(b.Zones()) + [z for fp in b.GetFootprints() for z in fp.Zones()]
+    for z in rules:                                              # keep-out areas (board art, footprints)
+        if z.GetIsRuleArea() and (z.GetDoNotAllowVias() or z.GetDoNotAllowTracks()):
+            o = z.Outline()
+            for i in range(o.OutlineCount()):
+                ln = o.Outline(i)
+                ka = Pg_([(ToMM(ln.CPoint(j).x), ToMM(ln.CPoint(j).y)) for j in range(ln.PointCount())]).buffer(0)
+                for f in obst:
+                    obst[f].append((ka.buffer(0.05), False))
+    ol, ox, oy = b.kb2_outline                                   # plate-local, LED cutouts already holes
+    inner = Pg_([PK.K(p, ox, oy) for p in ol.exterior.coords], [[PK.K(p, ox, oy) for p in r.coords] for r in ol.interiors])
+    via_inner = inner.buffer(-(PR.CLEARANCE + 0.25 + PR.CLEARANCE + 0.05))   # the router sees the edges and LED
+    inner = inner.buffer(-edge_clr)                                         #   cutouts 0.45 mm in (kicad.route)
+    allp = {f: uu([s for s, _ in obst[f]]) for f in obst}
+    other = {f: uu([s for s, g in obst[f] if not g]) for f in obst}
+    vias, n, missed = [], 0, []
+    for ref, num, f, lay, pad in sorted(gpads):
+        c = pad.centroid
+        best = None
+        r = FANOUT_R[0]
+        while r <= FANOUT_R[1] + 1e-9 and best is None:
+            for a in range(0, 360, 15):
+                v = P_(c.x + r * math.cos(math.radians(a)), c.y + r * math.sin(math.radians(a)))
+                disk = v.buffer(vr + clr)
+                if not via_inner.contains(v.buffer(vr * 1.1)) or disk.intersects(allp["F"]) or disk.intersects(allp["B"]):
+                    continue                                     # no via in any pad, its own included
+                if any(v.distance(w) < PR.VIA_D + 0.3 for w in vias):
+                    continue
+                stub = LS_([(c.x, c.y), (v.x, v.y)])
+                band = stub.buffer(tw / 2 + clr)
+                if band.intersects(other[f]) or not inner.contains(stub.buffer(tw / 2)):
+                    continue
+                if any(band.intersects(w.buffer(vr)) for w in vias):
+                    continue
+                best = v
+                break
+            r += FANOUT_R[2]
+        if best is None:
+            missed.append(f"{ref}.{num}")
+            continue
+        vias.append(best)
+        t = pcbnew.PCB_TRACK(b)
+        t.SetStart(pcbnew.VECTOR2I(MM(c.x), MM(c.y)))
+        t.SetEnd(pcbnew.VECTOR2I(MM(best.x), MM(best.y)))
+        t.SetWidth(MM(tw))
+        t.SetLayer(lay)
+        t.SetNet(gnd)
+        b.Add(t)
+        v = pcbnew.PCB_VIA(b)
+        v.SetPosition(pcbnew.VECTOR2I(MM(best.x), MM(best.y)))
+        v.SetWidth(MM(PR.VIA_D))
+        v.SetDrill(MM(PR.VIA_DRILL))
+        v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        v.SetNet(gnd)
+        b.Add(v)
+        n += 1
+    print(f"  GND fanout: {n} of {len(gpads)} GND pads given a via" + (f"; no room at {', '.join(missed)}" if missed else ""))
 
 
 GND_POUR_CLEAR = 0.3
@@ -647,9 +775,34 @@ def _export_dsn_power(board, path):
     okx = _export_dsn(board, path)
     t = open(path).read()
     if getattr(board, "kb2_gnd_pour", False):            # GND is poured after routing: not the router's job
-        t = re.sub(r"\(net GND\s*\(pins[^)]*\)\s*\)", "", t, count=1)
-        i = t.index("(network")
-        t = t[:i] + re.sub(r'(?<=[\s(])"?GND"?(?=[\s)])', "", t[i:])
+        t = re.sub(r"\(net GND\s*\(pins[^)]*\)\s*\)", "(net GNDFIX)", t, count=1)
+        i, j = t.index("(network"), t.find("(wiring")
+        j = len(t) if j < 0 else j
+        # the GND fanout (gnd_fanout): its vias stay in as fixed wiring of a placeholder net with no pins,
+        # obstacles the router keeps clear of but never routes (route() skips GNDFIX on import); its stubs,
+        # which touch their (now netless) pads, become keepouts on their layer instead of fixed wires
+        wiring = t[j:].replace("(net GND)(type route)", "(net GNDFIX)(type fix)")
+        keep = []
+        vxy = [(float(a), float(c)) for a, c in re.findall(r'\(via "[^"]*"\s+(-?[\d.]+)\s+(-?[\d.]+)\s*\(net GNDFIX\)', wiring)]
+        cut = (PR.VIA_D / 2 * 1.1 + PR.CLEARANCE + 0.05) * 1000     # DSN units are um: stop at the via's
+        #   (octagonal in the router: 1.1 x its radius)
+        for m in re.finditer(r"\s*\(wire \(path (\S+) ([\d.]+)\s+(-?[\d.]+) (-?[\d.]+)\s+(-?[\d.]+) (-?[\d.]+)\)"
+                             r"\(net GNDFIX\)\(type fix\)\)", wiring):
+            lay, w = m.group(1), float(m.group(2))
+            (x1, y1), (x2, y2) = (float(m.group(3)), float(m.group(4))), (float(m.group(5)), float(m.group(6)))
+            if min(math.dist((x1, y1), v) for v in vxy) < min(math.dist((x2, y2), v) for v in vxy):
+                (x1, y1), (x2, y2) = (x2, y2), (x1, y1)               # (x2, y2) = the via end
+            L_ = math.dist((x1, y1), (x2, y2))                         #   clearance ring, not its centre
+            f_ = max(0.0, (L_ - cut) / L_)
+            x2, y2 = x1 + (x2 - x1) * f_, y1 + (y2 - y1) * f_
+            band = LineString([(x1, y1), (x2, y2)]).buffer(w / 2 + 20, cap_style=2)     # +0.02 mm
+            keep.append(f'    (keepout "" (polygon {lay} 0 ' +
+                        " ".join(f"{x:.1f} {y:.1f}" for x, y in band.exterior.coords) + "))\n")
+        wiring = re.sub(r"\s*\(wire \(path [^)]*\)\(net GNDFIX\)\(type fix\)\)", "", wiring)
+        t = t[:i] + re.sub(r'(?<=[\s(])"?GND"?(?=[\s)])', "", t[i:j]) + wiring
+        st = t.index("(structure")                          # after the layers and the boundary
+        k = min(x for x in (t.find("\n    (keepout", st), t.find("\n    (via ", st)) if x > 0) + 1
+        t = t[:k] + "".join(keep) + t[k:]
         open(path, "w").write(t)
     m = re.search(r"\(class kicad_default ([^(]*)", t)
     if m and "(class Power" in t:
