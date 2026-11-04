@@ -50,7 +50,9 @@ C58_REV=2 python3 -m compose half-rev2 out_r2t --plan                # placement
 python3 -m compose build /tmp/r1 && python3 -m compose model /tmp/r1 && python3 -m compose checks /tmp/r1   # ALL CHECKS PASSED
 ```
 
-Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release: they should be byte-identical, which confirms your environment reproduces the released design.
+Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release. On x86_64, five of the six are byte-identical (`case.stl` differs by a few triangles: library versions). On arm64 (Apple silicon) all six differ at tessellation level only: same bounds, volumes within 0.02 mm³. Either way, check changes against a build of the unchanged code on the same machine (see [Checking a change](#checking-a-change)), never against the release files.
+
+Memory: rev 1's `checks` peaks at about 42 GB, and `gasket-checks` at 2.4 GB. Under Docker on macOS give the VM 48 GB if you have 64 (with Colima: `colima start --cpu 14 --memory 48`); Colima shares only your home folder with containers, so keep the repo under it.
 
 ## Commands
 
