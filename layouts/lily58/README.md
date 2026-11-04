@@ -11,7 +11,11 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 | Revision | Case | Controller | Status | Files |
 |---|---|---|---|---|
 | **[rev 1](rev1.md)** | One-piece, screwed sandwich mount | rev 1: Pico + 12-pin PicoBlade cables | **Built.** Assembled and wired; the final cable test is pending | [Release `compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1) |
-| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin FFC, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller and half boards designed and checked; not built yet | — |
+| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin FFC, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller and all four half boards designed and checked; not built yet | — |
+
+![the four Compose58 rev 2 half boards](images/rev2_half_boards.png)
+
+*Rev 2's half board in its four variants: hotswap or solder, with or without per-key RGB (experimental).*
 
 ## At a glance
 

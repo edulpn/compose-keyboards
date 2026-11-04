@@ -6,7 +6,9 @@ Unibody, tented and splayed split keyboards, generated entirely from Python, by 
 
 Compose is a platform: one case generator, one controller board standard and one set of checks, shared by every layout. A layout is just a key list; everything else is generated around it.
 
-![Compose58 rev 1](layouts/lily58/images/rev1_hero.png)
+| Compose58 rev 1 (built) | Compose58 rev 2 (in progress) |
+|---|---|
+| ![Compose58 rev 1](layouts/lily58/images/rev1_hero.png) | ![Compose58 rev 2](layouts/lily58/images/rev2_hero.png) |
 
 ## Layouts
 
@@ -23,7 +25,7 @@ Each layout has its own pages: revisions, build guides, status and releases.
 ## What the platform does
 
 - **One-piece tented, splayed cases** for 350 mm-class printers. Splay, tent and tilt are parameters.
-- **Reversible half PCBs.** One board serves both halves, in hotswap or solder-in versions, with QMK firmware generated alongside.
+- **Reversible half PCBs.** One board serves both halves, in hotswap or solder-in versions (rev 2 adds optional per-key RGB, experimental), with QMK firmware generated alongside.
 - **A shared controller standard** ([rev 2](docs/controller-rev2.md)): socketed Raspberry Pi Pico, a reversal-safe cable pinout, optional RGB, I2C/OLED, Qwiic and AUX.
 - **Gasket mount:** plates float on pads cut from ordinary foam weatherstrip tape. The squeeze is set by geometry, not screw torque.
 - **Verified, not just drawn.** Every revision ships with its checks:
