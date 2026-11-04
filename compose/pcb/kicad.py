@@ -12,7 +12,9 @@ java + tools/freerouting.jar.
 import os
 import re
 import sys
+import json
 import math
+import time
 import shutil
 import zipfile
 import subprocess
@@ -32,6 +34,7 @@ V = lambda x, y: pcbnew.VECTOR2I(MM(x), MM(y))
 DEG = lambda d: pcbnew.EDA_ANGLE(d, pcbnew.DEGREES_T)
 OX, OY = 40.0, 60.0            # half board: plate-local (x, y) -> KiCad (x + OX, OY - y)
 JOB_TIMEOUT_MIN = 8            # Freerouting job limit per attempt (minutes)
+STALL_PASSES = 40              # stop the router when its best unrouted count hasn't improved for this many passes
 
 
 def K(p, ox=OX, oy=OY):
@@ -431,6 +434,16 @@ def _find(node, key):
             yield x
 
 
+def _router_stats(log):
+    """The statistics Freerouting prints for the board it finished with (last JSON block of its log)."""
+    try:
+        t = open(log).read()
+        i = t.rfind("\n{\n")
+        return json.loads(t[i + 1:t.index("\n}\n", i) + 2]) if i >= 0 else None
+    except (OSError, ValueError):
+        return None
+
+
 def route(board, name, passes=40):
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
@@ -457,14 +470,37 @@ def route(board, name, passes=40):
            "--gui.enabled=false", "--router.optimizer.max_passes=5",
            f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
            "--usage_and_diagnostic_data.disable_analytics=true"]
-    try:                                    # router output kept beside the .ses: per-pass unrouted counts
-        with open(os.path.splitext(ses)[0] + "_freerouting.log", "w") as log:
-            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, timeout=JOB_TIMEOUT_MIN * 60 + 240)
-    except subprocess.TimeoutExpired:
-        pass
+    logf = os.path.splitext(ses)[0] + "_freerouting.log"    # router output kept beside the .ses
+    with open(logf, "w") as log:
+        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+        t0, best, best_pass = time.time(), None, 0
+        while proc.poll() is None:
+            time.sleep(2)
+            if time.time() - t0 > JOB_TIMEOUT_MIN * 60 + 240:
+                proc.kill()
+                break
+            passes_seen = [(int(p), int(u)) for p, u in
+                           re.findall(r"Auto-router pass #(\d+) .*?\((\d+) unrouted\)", open(logf).read())]
+            if passes_seen:
+                p, u = min(passes_seen, key=lambda pu: (pu[1], pu[0]))
+                if best is None or u < best:
+                    best, best_pass = u, p
+                if passes_seen[-1][0] - best_pass >= STALL_PASSES:     # congested: more passes won't help
+                    proc.kill()
+                    print(f"  {name}: router stalled at {best} unrouted for {STALL_PASSES} passes, stopped")
+                    break
+        proc.wait()
     if not os.path.exists(ses):
         return None
-    tree = _sexp(open(ses).read())
+    txt = open(ses).read()
+    stats = _router_stats(os.path.splitext(ses)[0] + "_freerouting.log")
+    if stats and stats["items"]["via_count"] != txt.count("(via "):
+        # Freerouting 2.1 can "restore an earlier board" mid-run, keep routing, then write the
+        # restored board to the .ses instead of the one it finished with: reject that output
+        print(f"  {name}: .ses has {txt.count('(via ')} vias, the router finished with "
+              f"{stats['items']['via_count']}: it wrote an earlier board, rejected")
+        return None
+    tree = _sexp(txt)
     routes = next(_find(tree, "routes"))
     res = next(_find(routes, "resolution"))
     unit = {"um": 1e-3, "mm": 1.0, "mil": 0.0254, "inch": 25.4}[res[1]] / float(res[2])

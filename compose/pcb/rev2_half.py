@@ -673,8 +673,8 @@ def main(which=None):
         if which and nm not in which:
             continue
         rgb = BOARDS[nm][1]
-        PK.JOB_TIMEOUT_MIN = 45 if rgb else 8                     # 160 footprints take the router a while
-        res[nm] = PK.make(nm, lambda nm=nm: build(nm), passes=100 if rgb else 60, attempts=3 if rgb else 10)
+        PK.JOB_TIMEOUT_MIN = 45 if rgb else 8                     # ceiling; stalls are stopped much sooner
+        res[nm] = PK.make(nm, lambda nm=nm: build(nm), passes=100 if rgb else 60, attempts=12 if rgb else 10)
     return res
 
 

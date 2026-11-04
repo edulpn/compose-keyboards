@@ -50,9 +50,9 @@ C58_REV=2 python3 -m compose half-rev2 out_r2t --plan                # placement
 python3 -m compose build /tmp/r1 && python3 -m compose model /tmp/r1 && python3 -m compose checks /tmp/r1   # ALL CHECKS PASSED
 ```
 
-Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release. On x86_64, five of the six are byte-identical (`case.stl` differs by a few triangles: library versions). On arm64 (Apple silicon) all six differ at tessellation level only: same bounds, volumes within 0.02 mm³. Either way, check changes against a build of the unchanged code on the same machine (see [Checking a change](#checking-a-change)), never against the release files.
+Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release. They were built on x86_64 with Python 3.13 and cadquery 2.8.0, cadquery-ocp 7.9.3.1.1, numpy 2.5.3, trimesh 5.1.1, manifold3d 3.5.4, shapely 2.2.0 and scipy 1.18.1; that environment rebuilds them byte for byte. The Docker image (Python 3.12) on x86_64 matches five of the six (`case.stl` differs by a few triangles). On arm64 (Apple silicon) all six differ at tessellation level only: same bounds, volumes within 0.02 mm³. So a mismatch doesn't mean the geometry changed: compare the meshes (volume, bounds, symmetric difference), and check your own changes against a build of the unchanged code on the same machine (see [Checking a change](#checking-a-change)).
 
-Memory: rev 1's `checks` peaks at about 42 GB, and `gasket-checks` at 2.4 GB. Under Docker on macOS give the VM 48 GB if you have 64 (with Colima: `colima start --cpu 14 --memory 48`); Colima shares only your home folder with containers, so keep the repo under it.
+Memory: on x86_64, rev 1's `checks` runs in 8 GB. Under Docker on Apple silicon it peaks at about 42 GB (not tied to the core count or to the trimesh and numpy versions), so give the VM 48 GB if you have 64 (with Colima: `colima start --cpu 14 --memory 48`). `gasket-checks` peaks at 2.4 GB. Colima shares only your home folder with containers, so keep the repo under it.
 
 ## Commands
 
@@ -83,7 +83,7 @@ C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, ri
 C58_REV=2 python3 -m compose gasket-render out_r2t   # renders
 ```
 
-`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that). The RGB half boards take the router a while: up to 45 minutes per attempt.
+`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that). Board builds keep Freerouting's output as `<outdir>/pcb/<board>_freerouting.log` (per-pass unrouted counts) and retry until DRC is clean. An attempt is abandoned early when the router stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with: Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one.
 
 Outputs go to `out*/`, which is not committed: releases carry them.
 
