@@ -224,8 +224,9 @@ def mirror_pair(local):
     return w.fuse(w.mirror("YZ"))
 
 
-def main():
-    print("building parts ...", flush=True)
+def parts_world(jumpers=True):
+    """Every part of the assembled keyboard (world frame) as the checks use them: {name: solid}, plus the gasket
+    pads (lower, upper)."""
     case = C.case2_world()
     plateL = C.plate2_local()
     frameL = C.frame2_local()
@@ -235,14 +236,24 @@ def main():
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
     half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
     half_parts = mirror_pair(half_parts_local())
-    from compose.pcb import jumper as J
-    jg = J.solve()                                       # the jumper path (raises if there's none)
     ctrl = {k: G.P2W(v) for k, v in controller_solids().items()}
     lo, up = pads_local()
     pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
     parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb, "half parts": half_parts},
                  **ctrl)
-    parts["jumpers"] = G.P2W(jumpers_P())
+    if jumpers:
+        parts["jumpers"] = G.P2W(jumpers_P())
+    return parts, case, pads_lo, pads_up
+
+
+def main():
+    print("building parts ...", flush=True)
+    from compose.pcb import jumper as J
+    jg = J.solve()                                       # the jumper path (raises if there's none)
+    parts, case, pads_lo, pads_up = parts_world()
+    plateL, frameL = C.plate2_local(), C.frame2_local()
+    plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
+    ctrl = {k: parts[k] for k in controller_solids()}
 
     # ---- A: interference (volume of overlap, mm3)
     allowed = {("ctrl board", "standoffs"), ("ctrl board", "lead tails"), ("ctrl board", "pico"),

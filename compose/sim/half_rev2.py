@@ -102,6 +102,27 @@ class Half:
         return {k + 1: self.cu.node_at((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)), self.bottom)
                 for k, p in enumerate(pads)}
 
+    def connector_gap(self):
+        """(distance, part) from the fitted connector's pads to the nearest other pad on the same face."""
+        from shapely.geometry import Polygon as SP_
+        ref = "J1B" if self.side == "L" else "J1F"
+
+        def poly(p):
+            o = p.GetEffectivePolygon().Outline(0)
+            return SP_([(ToMM(o.CPoint(i).x), ToMM(o.CPoint(i).y)) for i in range(o.PointCount())])
+        mine = [poly(p) for p in self.fp[ref].Pads() if p.IsOnLayer(self.bottom)]
+        best = (1e9, None)
+        for r, f in self.fp.items():
+            if r.startswith("J1"):
+                continue
+            for p in f.Pads():
+                if p.IsOnLayer(self.bottom):
+                    q = poly(p)
+                    d = min(q.distance(m) for m in mine)
+                    if d < best[0]:
+                        best = (d, f"{r} pad {p.GetNumber()}")
+        return best
+
     def keys(self):
         """[(key index, row, col, switch contact a, contact b, diode anode, diode cathode)] as copper groups."""
         out = []
@@ -149,6 +170,9 @@ def board_checks(h):
     print(f"\n== {name}")
     sl = h.slots()
     ok(all(v is not None for v in sl.values()), "every connector contact is on copper")
+    gap = h.connector_gap()
+    ok(gap[0] >= 0.6 - 1e-3, f"jumper connector's pads >= 0.6 mm from every other part's pad on its face "
+                             f"(both hand-soldered): {gap[0]:.2f} mm, nearest {gap[1]}")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
     col = {c: sl[5 + c] for c in range(7)}

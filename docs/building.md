@@ -95,6 +95,8 @@ C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: pla
 C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
 C58_REV=2 python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
 C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
+C58_REV=2 python3 -m compose flex-sim out_r2t        # the jumper as an elastic strip: seated, insertion, gasket travel, length
+C58_REV=2 python3 -m compose order-rev2 out_r2t      # every board's JLCPCB zip, checked against its board, in out_order/ + ORDER.md
 C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
 C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
 C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
@@ -174,7 +176,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards. A change to the half's connector position (`JUMPER_ROW_Y`) or the case moves the jumper: rebuild it (`flex-jumper`) before `sim-half-rev2`, which reads its copper.
+- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected; `sim-half-rev2` passes for all four boards; `flex-sim` passes. A change to the half's connector position (`JUMPER_ROW_Y`) or the case moves the jumper: rebuild it (`flex-jumper`) before `sim-half-rev2`, which reads its copper.
 
 ## Notes for working on the code
 

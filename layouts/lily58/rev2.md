@@ -88,7 +88,7 @@ Everything prints without supports, in print orientation:
 | pad gap | 2.10 mm at every pad, top and bottom, measured on the solids along the plate normal |
 | assembly paths | plates and frames drop in along the plate normal; the controller and the cover drop straight down |
 | hardware | cover screws 2.95 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover |
-| jumpers | the bent shape solved from the case: plate 1.42 mm away (≥ 1.0 for the gasket's travel), half board 0.85, cover 1.68, standoffs 3.37, Pico 4.43; the controller end slides 4.1 mm straight down into its connector with the cover off |
+| jumpers | the bent shape solved from the case: plate 1.53 mm away (≥ 1.0 for the gasket's travel), half board 0.90, cover 1.71, standoffs 3.37, Pico 4.44; the controller end slides 4.1 mm straight down into its connector with the cover off |
 | printability | every part sliced at 0.2 mm in print orientation; each layer rests on the one below within 45° (short bridges over hole ceilings and lips up to 1.2 mm allowed). A plate with the flange halfway up its edge, the earlier design, fails this. |
 
 ### Hardware (case)
@@ -134,7 +134,7 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 
 ### Jumper connector
 
-- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, right angle, bottom contact, 1.9 mm tall) on the bottom face, flush with the inner edge. Its contact row sits on a line set from the controller (`JUMPER_ROW_Y` in `compose/pcb/rev2_half.py`, a layout choice) where the jumper lands with a gentle climb. Checked against Molex's drawing: contact side, 4 mm insertion depth, slot about 1.0 mm above the board, 21 mm width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while the jumper goes in, so plug the jumpers in before the board goes into the case. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
+- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, right angle, bottom contact, 1.9 mm tall) on the bottom face along the inner edge. Its pads stay at least 0.6 mm from every other part's pads on the same face (the same gap as between its own contacts; both are hand-soldered), which puts its cable side 0.1 mm proud of the board edge; `sim-half-rev2` checks the gap on the routed copper. Its contact row sits where the straight jumper needs the least skew in its bends: `jumper_row_y()` in `compose/pcb/rev2_half.py` derives it from the case (0.72 mm behind the controller's Pico centre here), so new angles need no hand-tuning. Checked against Molex's drawing: contact side, 4 mm insertion depth, slot about 1.0 mm above the board, 21 mm width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while the jumper goes in, so plug the jumpers in before the board goes into the case. Contacts follow the [controller rev 2](../../docs/controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
 
 | slots | signal |
 |---|---|
@@ -157,18 +157,16 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 
 | | |
 |---|---|
-| path, from the half | 1 mm of stiffener out of the connector, a bend up into a 58° climb, a bend over, a short straight, a bend down into a short drop, 1 mm of stiffener above the controller's slot |
-| bends | three, r 2 mm, each a plain cylindrical bend. Their bend lines cross the strip 4.7°, 6.9° and 5.2° off square: that's what turns it by the splay, so nothing twists and the flat strip needs no curve. The straights between them are long enough that neighbouring bend lines never meet. |
-| size | 27.4 × 21 mm (22.1 mm across the half end's retention ears) |
+| path, from the half | 1 mm of stiffener out of the connector, a bend up into a 60° climb, a bend over, a short straight, a bend down into a short drop, 1 mm of stiffener above the controller's slot |
+| bends | three, r 2 mm, each a plain cylindrical bend. Their bend lines cross the strip 4.6°, 6.4° and 5.1° off square: that's what turns it by the splay, so nothing twists and the flat strip needs no curve. The straights between them are long enough that neighbouring bend lines never meet. |
+| size | 27.6 × 21 mm (22.1 mm across the half end's retention ears): the solved path plus 0.5 mm of slack, which eases the bends while the controller end goes in (see the simulation below) |
 | conductors | 20, 0.5 mm wide at 1.0 mm pitch, one side only |
 | half end (200528) | 0.7 mm gold fingers, 3.5 mm exposed, retention ears 0.55 mm proud between 1.5 and 2.2 mm from the tip; conductors face up |
 | controller end (52610) | 0.7 mm gold fingers, 3.5 mm exposed, two C0.3 chamfers; conductors face inboard, toward the Pico |
 | stiffeners | polyimide on the back of each end, 5.0 mm at the half end and 5.1 mm at the controller end; both connectors take 0.3 ± 0.05 mm at the fingers |
 | DRC | 0 errors, 0 warnings, 0 unconnected (the open finger fields' solder-mask bridges are by design and reported apart) |
 
-The half's connector sits where this path needs the least skew (`JUMPER_ROW_Y` in `compose/pcb/rev2_half.py`; `solve(free_shift=True)` in `jumper.py` finds it for another layout).
-
-**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper.
+**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. `C58_REV=2 python3 -m compose order-rev2 out_r2t` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out_order/` with an ORDER.md of these settings. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper.
 
 | field | choose | why |
 |---|---|---|
@@ -176,13 +174,23 @@ The half's connector sits where this path needs the least skew (`JUMPER_ROW_Y` i
 | Substrate | 25 µm dielectric | |
 | PCB thickness | 0.11 mm | with the 0.20 mm stiffener, about 0.3 mm at the fingers |
 | Coverlay | yellow, PI 12.5 µm / AD 15 µm | |
-| Copper type | electro-deposited is fine; rolled annealed if it costs about the same | the bends are formed once, at assembly |
+| Copper type | rolled annealed | the half end rides on the gasket mount, so the jumper flexes a little with every keystroke, and its copper stretches ~2.3 % for a moment while it's plugged in: RA copper takes both better |
 | Surface finish | ENIG, 1 U″ gold | Molex asks for gold over nickel; the jumper is plugged a handful of times |
 | Gold fingers | No | that option is hard gold for card-edge connectors; ENIG covers these contacts |
 | EDA software | Other | |
 | Stiffener | Polyimide, 0.20 mm | areas in `jumper_rev2-Stiffener_PI_bottom.gbr` (JLC reviews them by hand when the design isn't from EasyEDA) |
 | Confirm production file | Yes | to check the stiffener areas and the finger thickness before they build |
 | Remark | "PI stiffener 0.20 mm on the bottom side, areas in the Stiffener_PI_bottom file (one under each finger field). Finished thickness at the fingers 0.30 ± 0.05 mm (FPC connectors Molex 200528 and 52610). Bottom copper is intentionally empty." | |
+
+**Will the real strip take that shape?** `C58_REV=2 python3 -m compose flex-sim out_r2t` (`compose/checks/flex_sim.py`) lets it find its own. The strip is modelled as a sheet that can't stretch, folded along straight lines across it: the exact structure of a bent flex, so it bends and twists the way a real one does. It's clamped by the two connectors and settles into the shape of least bending, which is then checked against the case model. Strain is judged at the copper (the outermost conductors' outer edges); the bare polyimide edge takes far tighter bends.
+
+| scenario | result |
+|---|---|
+| seated | settles within 1.2 mm of the designed path, with half its bending energy (it spreads the bends out); tightest bend at the copper 1.44 mm, strain 1.04 % (limit 1.5 %) |
+| insertion: the controller end lifted 4.1 mm to go into its slot | reaches it; copper strain 2.28 % for that moment (limit 2.5 %: half of rolled-annealed copper's ~5 % minimum elongation). The 0.5 mm of slack is what brings it there (3.0 % without). |
+| gasket travel: the half end moving with the plate, ±0.2 mm per keystroke (a generous bound by the inner-edge pads) | every signal conductor flexes ≤ 0.13 % (fatigue limit 0.2 %, ≥ 10⁷ cycles). Only the outermost GND (slot 1, 0.33 %) and 5 V (slot 2, 0.21 %) go past it, at the corner where the drop meets the controller-end stiffener; each has a twin well under (GND 4 and 20, 5 V 19). |
+| rare excursions, 0.5–1.0 mm | settles every time; copper strain up to 0.71 % (low-cycle) |
+| clearances, seated, over the travel and ±0.5 mm of length | plate ≥ 1.72 mm, cover ≥ 0.86, half board 0.90, controller board ≥ 2.20; no overlap with either connector or anything else |
 
 Plug the jumper into the half's connector first (fingers toward the half board, then close the actuator), then set the board in and drop the other end straight down into the controller's connector with its slider open, then close the slider. Molex's application spec: insert the cable straight and keep it free of tension; the solved shape does both.
 
@@ -219,6 +227,8 @@ Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own 
 | DRC, all four boards | 0 errors, 0 warnings, 0 unconnected (the unconnected count also proves the GND pour reaches every GND pad) |
 | `sim-half-rev2`, all four boards | passing |
 | case checks | the real underside parts of every variant at once, and the jumpers |
+| connector gap | the jumper connector's pads ≥ 0.6 mm from every other part's pads on its face, both halves (0.61 mm at the nearest socket tab) |
+| `flex-sim` | the jumper as an elastic strip: seated, insertion, gasket travel and length all pass (see [flex jumpers](#flex-jumpers)) |
 | plate | its M2 inserts and diode pockets come from the shared placement, so one plate fits all four boards |
 
 `C58_REV=2 python3 -m compose sim-half-rev2 out_r2t` rebuilds each board's netlist from its copper alone and fits the parts as a builder would, the left half one way up and the right half flipped. For each board and both halves it checks:

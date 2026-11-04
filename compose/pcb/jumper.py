@@ -24,6 +24,8 @@ STIFF_OUT = 1.0          # rigid stiffener past each connector's entry
 BEND_R = 2.0             # every bend (centre line); flex static bends want >= ~1.4 mm for 2 layers
 RISE_DEG = 45.0          # gentlest climb tried (steeper ones up to vertical if that doesn't fit)
 DROP_MIN = 0.5           # shortest straight above the controller's stiffener
+SLACK = 0.5              # the strip is this much longer than the solved path: it eases the bends while the controller
+                         #   end is lifted 4.1 mm to go into its slot (flex-sim: copper strain 3.0 -> 2.3 %)
 SKEW_MAX = math.radians(12.0)   # bend lines at most this far off square across the strip
 Z = np.array([0.0, 0.0, 1.0])
 SIGNS = (1, -1, -1)             # the climb bends toward the conductor side, the other two away from it
@@ -161,7 +163,8 @@ def solve(rise_deg=None, r=BEND_R, s_out=STIFF_OUT, drop_min=DROP_MIN, free_shif
     _SOLVED[key] = SimpleNamespace(half=half, ctrl=ctrl, F0=F0, p0=start, Fe=Fe, e_top=e_top, bends=bends, Ls=Ls, r=r,
                            s_out=s_out, rise_deg=climb, skews=[b for _, b in bends], samples=samples,
                            shift=float(z[9]) if free_shift else 0.0, arcs=arcs,
-                           length=STIFF_HALF + sum(Ls) + sum(arcs) + STIFF_CTRL,
+                           path_length=STIFF_HALF + sum(Ls) + sum(arcs) + STIFF_CTRL,
+                           length=STIFF_HALF + sum(Ls) + sum(arcs) + STIFF_CTRL + SLACK,
                            z_max=float(max(q[2] for smp, _ in samples for q, _ in smp)),
                            left_half=F0[:, 1], left_ctrl=Fe[:, 1], a1=half.axis, a2=ctrl.axis)
     return _SOLVED[key]
@@ -375,11 +378,16 @@ def plot_flat(path, g=None):
     plt.close(fig)
 
 
+EXPORT = dict(layers="F.Cu,B.Cu,F.Mask,B.Mask,Edge.Cuts,User.1", drill=False,
+              rename={"-User_1.gbr": "-Stiffener_PI_bottom.gbr"})
+
+
 def describe(g):
     sk = " / ".join(f"{math.degrees(b):+.1f}" for b in g.skews)
     bd = " / ".join(f"{math.degrees(p):.0f}" for p, _ in g.bends)
     return (f"climb {g.rise_deg:.0f} deg; bends {bd} deg (r {g.r:.0f} mm), bend lines {sk} deg off square; "
-            f"straights {' / '.join(f'{v:.2f}' for v in g.Ls)} mm; {g.length:.1f} mm long; top at z {g.z_max:.2f}")
+            f"straights {' / '.join(f'{v:.2f}' for v in g.Ls)} mm; {g.length:.1f} mm long ({g.path_length:.1f} + "
+            f"{SLACK} slack); top at z {g.z_max:.2f}")
 
 
 def main(out=None):
@@ -407,8 +415,7 @@ def main(out=None):
     # conductors on one side; ordered as JLCPCB's 2-layer flex (much cheaper than 1-layer there): the back copper
     # is empty and its coverlay unbroken. Front copper, both coverlays (mask: the front one open over the finger
     # fields), outline and the PI stiffener areas (User.1)
-    z = PK.export(path, name, layers="F.Cu,B.Cu,F.Mask,B.Mask,Edge.Cuts,User.1", drill=False,
-                  rename={"-User_1.gbr": "-Stiffener_PI_bottom.gbr"})
+    z = PK.export(path, name, **EXPORT)
     bb = f["outline"].bounds
     print(f"{name}: {f['length']:.1f} mm long, outline {bb[2] - bb[0]:.1f} x {bb[3] - bb[1]:.1f} mm | "
           f"DRC {err} errors, {warn} warnings, {unc} unconnected (+{bridges} finger-field mask bridges, by design) | "
