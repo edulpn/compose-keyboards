@@ -51,7 +51,9 @@ FFC_LIB, FFC_NAME = "Connector_FFC-FPC", "Molex_200528-0200_1x20-1MP_P1.00mm_Hor
 FFC_BODY = (-12.65, 12.65, -0.5, 5.15)   # along the row (u) / toward the cable side (n), from the contact row
                                          #   (n from -0.5: the contacts' back ends)
 FFC_H = 2.0                          # body height under the board
-FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush, as on the controller)
+FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush)
+JUMPER_ROW_Y = 1.1                   # the connector's row centre, in the controller's frame (y): where the flex jumper
+                                     #   lands on the controller's slot with a gentle climb (compose/pcb/jumper.py)
 SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 4: "GND", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
 SLOT_NET.update({5 + c: f"COL{c}" for c in range(7)})
 SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
@@ -126,7 +128,7 @@ def ffc_frame():
 def ffc_row_y_P():
     """The controller's contact row (bridge-frame y)."""
     from compose.case import gasket as C
-    return C.CT.y_pc - CS.FFC_Y0
+    return C.CT.y_pc - JUMPER_ROW_Y
 
 
 def ffc_place(keep, ol):

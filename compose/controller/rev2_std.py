@@ -10,14 +10,21 @@ CORNER_R = 2.0
 PCB_T = 1.6
 PICO_X, PICO_Y = 8.89, 24.13               # socket rows at x = +-8.89, pins 1/20 at y = -+24.13
 PICO_HALF_L = 25.5                         # Pico board ends at y = -+25.5 (USB end at -25.5)
-FFC_DEPTH = 4.69 + 0.91                    # FFC pad row -> cable-side courtyard edge (Molex 200528)
-FFC_PAD_X = W2 - FFC_DEPTH                 # cable side flush with the side edges
-FFC_Y0 = 1.6                               # FFC connectors' centre (y): forward, so the narrowed back clears them
+# cable connectors: two Molex 52610-2072 (Easy-On, vertical, 20 pos, 1.0 mm, slider latch), top face, square to the
+# side edges at fixed positions, so the controller doesn't depend on any layout's angles (each layout's flex
+# jumpers take those up). The cable slot is 1.4 mm in from the body's contact face (the pin 1 notch side), which
+# faces the Pico; slot order by physical position, slot 1 at the back, as before.
+VFFC_SLOT_X = 14.8                         # |x| of the cable slot (the flex's plane)
+VFFC_Y0 = 2.6                              # connector centre (y): the body's front end keeps the front standoffs' 3.3 mm
+VFFC_L, VFFC_D = 26.6, 3.6                 # body length (along y) and depth (across)
+VFFC_SLOT_IN = 1.4                         # contact face -> slot (the flex's plane)
+VFFC_H, VFFC_H_OPEN = 5.75, 7.25           # height, slider latched / open
+VFFC_INSERT = 4.1                          # flex end inside the connector
+# the halves' connector (Molex 200528, right angle, on each half's bottom face)
 FFC_ENTRY_H = 1.0                          # cable slot height above the face the connector sits on (1.9 mm body; Molex drawing)
 FFC_INSERT = 4.0                           # cable length inside each connector (Molex drawing: insertion depth 4)
 FFC_W = 21.0                               # 20-way 1.0 mm cable width
 FFC_T = 0.3
-FFC_SPAN = 13.8                            # FFC courtyard half-length along y (centred on FFC_Y0)
 CLIP_X, CLIP_Y = 16.6, -14.3               # behind CLIP_Y the board is only 2 x CLIP_X wide (the plates' inner seats)
 # four M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four case posts,
 # clamping it; the cover drops onto them and takes four M3 x 6 screws (the same screws and inserts as the frames)
