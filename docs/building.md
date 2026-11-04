@@ -93,7 +93,7 @@ python3 -m compose spice-controller out # ngspice simulation
 # Compose58 rev 2 (layouts/lily58/rev2.md): set C58_REV=2
 C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
 C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
-C58_REV=2 python3 -m compose flex-jumper out_r2t     # the two flex jumpers: shape solved from the case, DRC, Gerbers, flat drawing
+C58_REV=2 python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
 C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
 C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
 C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts

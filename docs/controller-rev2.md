@@ -47,7 +47,7 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
 - **Connectors:** two Molex 52610-2072 (Easy-On, 20 positions, 1.0 mm pitch, vertical, slider latch) on the top face, square to the side edges. Slot plane at 14.8 mm either side of the Pico centre, centred 2.6 mm forward of it, contact face toward the Pico. Footprint from Molex's recommended pattern: two tails per contact, one either side of the body. The title moved behind the connectors to make room.
 - **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout sets only where its halves' connectors sit; its jumper's shape does the rest.
-- **Jumpers:** a custom single-sided flex per half, 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. Compose58 rev 2's: [flex jumpers](../layouts/lily58/rev2.md#flex-jumpers).
+- **Jumpers:** a custom flex per half (conductors on one side; one design can serve both halves), 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. Compose58 rev 2's: [flex jumpers](../layouts/lily58/rev2.md#flex-jumpers).
 - **Slot order:** slot 1 is the back-most contact. Both connectors use the same physical order, so the right connector is turned 180° and its pad numbers run backwards.
 
 | slot | 1 | 2 | 3 | 4 | 5–11 | 12–17 | 18 | 19 | 20 |
@@ -108,7 +108,7 @@ All of the RGB group except F1 sits in the box under the Pico on the bottom face
 |---|---|---|
 | U1 | Raspberry Pi Pico / Pico W / Pico 2 (W) or pin-compatible, on 2 × 1×20 female headers (8.5 mm) | 1 |
 | JL, JR | Molex 52610-2072 FFC/FPC connector, 20 pos, 1.0 mm, vertical, slider latch | 2 |
-| — | flex jumpers, one per half, made for the layout (Compose58 rev 2: `jumper_rev2_L` and `_R`) | 2 |
+| — | flex jumpers, one per half, made for the layout (Compose58 rev 2: `jumper_rev2`, the same part on both sides) | 2 |
 | J4 | 1×4 2.54 mm header (OLED / I2C) | 1 |
 | J6 | 1×6 2.54 mm header (AUX) | 1 |
 | J5 | JST BM04B-SRSS-TB (Qwiic, top entry) | 1 |
@@ -136,4 +136,4 @@ Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controll
 | power | the far LED stays ≥ 3.76 V at 450 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and the thinnest flex copper (1/3 oz, 100 mm). Hot-plug dip with RGB fitted is 1.4× a USB spec-limit device, mostly from the halves' LED decoupling (warning). |
 | matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 53 ns (QMK samples at ~250 ns) and recovers in 3.3 µs (QMK waits 30 µs); worst jumper/board crosstalk leaves idle lines ≥ 2.75 V (limit 2.0 V) |
 | PS/2 stick | fine from 3.3 V; a 5 V stick with its own pull-ups would exceed the RP2040's 3.8 V limit (warning) |
-| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/lily58/rev2.md#the-half-boards)); through the real flex jumpers' copper; their 26 mm is inside the 20–100 mm the circuit simulation covers |
+| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/lily58/rev2.md#the-half-boards)); through the real flex jumper's copper; its 27.4 mm is inside the 20–100 mm the circuit simulation covers |

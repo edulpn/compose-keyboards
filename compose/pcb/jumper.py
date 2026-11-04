@@ -3,13 +3,14 @@ Rev 2 flex jumpers: the custom flex PCB that joins each half board's cable conne
 right-angle, on the half's bottom face) to the controller's (Molex 52610, vertical, top face).
 
 The controller's connectors sit square to its edges at fixed positions (controller rev 2 standard), so the
-controller never depends on a layout's angles; the jumper absorbs them. Its centre line, from the half end:
+controller never depends on a layout's angles; the jumper absorbs them. It is one straight, symmetric strip,
+the same part on both sides: the right jumper is bent as the mirror image of the left. From the half end:
   1 mm of stiffener out of the half's connector (along the cable's own direction, tilted by the tent),
-  a bend up, a straight climb, a bend over to horizontal                    (rise: bends about the half's slot axis)
-  a flat top: straight, a flat ring segment that turns it in plan by the splay, straight
-  a bend down, a straight drop, 1 mm of stiffener above the controller's slot  (drop: bends about the controller's)
-Every piece is flat or bent about one axis, so the jumper is a flat cut-out bent into shape: nothing twists.
-The free lengths (the climb, the two flat-top straights, the drop) are solved so the path meets both ends.
+  a bend up, a straight climb, a bend over, a straight, a bend down, a straight drop,
+  1 mm of stiffener above the controller's slot.
+Each bend is a plain cylindrical bend whose bend line crosses the strip a few degrees off square: those
+skews turn the strip by the splay (10 deg in plan), so nothing twists and the flat strip needs no curve.
+The bends' angles and skews and the straights are solved so the path meets both ends.
 
 Frames: everything here is in the bridge frame P (compose.geom), left jumper; the right one is its mirror.
 """
@@ -23,8 +24,9 @@ STIFF_OUT = 1.0          # rigid stiffener past each connector's entry
 BEND_R = 2.0             # every bend (centre line); flex static bends want >= ~1.4 mm for 2 layers
 RISE_DEG = 45.0          # gentlest climb tried (steeper ones up to vertical if that doesn't fit)
 DROP_MIN = 0.5           # shortest straight above the controller's stiffener
-RING_EXTRA = 1.0         # flat top ring: inner edge radius (the ring's inner side turns about this)
+SKEW_MAX = math.radians(12.0)   # bend lines at most this far off square across the strip
 Z = np.array([0.0, 0.0, 1.0])
+SIGNS = (1, -1, -1)             # the climb bends toward the conductor side, the other two away from it
 
 
 def _unit(v):
@@ -51,149 +53,149 @@ def ends():
     return half, ctrl
 
 
-def _arc(p, hd, r, to, n=16):
-    """Points along an arc in a (u, z) plane from p at heading hd (deg) to heading `to`; left turn if to > hd."""
-    sg = 1.0 if to > hd else -1.0
-    c = p + sg * r * np.array([-math.sin(math.radians(hd)), math.cos(math.radians(hd))])
-    return [c - sg * r * np.array([-math.sin(math.radians(a)), math.cos(math.radians(a))])
-            for a in np.linspace(hd, to, n + 1)[1:]]
+def _rod(a, th):
+    a = _unit(a)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + math.sin(th) * K + (1 - math.cos(th)) * K @ K
 
 
-def solve(rise_deg=None, r=BEND_R, s_out=STIFF_OUT, drop_min=DROP_MIN):
-    """Solve the left jumper's centre line: the gentlest climb (RISE_DEG up to vertical, 1 deg steps) and the
-    smallest sideways jog that reach the controller's slot with every straight >= 0. Returns a namespace with
-    the pieces (for the solid and the flat pattern); ValueError if there's no such path."""
-    if rise_deg is None:                                     # the smallest jog wins, then the gentlest climb
-        sols, err = [], None
-        for a in np.arange(RISE_DEG, 90.01, 1.0):
-            try:
-                sols.append(solve(float(a), r, s_out, drop_min))
-            except ValueError as e:
-                err = e
-        if not sols:
-            raise err
-        return min(sols, key=lambda g: (round(abs(g.jog), 6), g.rise_deg))
+def _bend(p, F, phi, beta, sg, r, n=12):
+    """A cylindrical bend of a flat strip. F = columns (t along the strip, w across it, n the conductor side's
+    normal). The bend line crosses the strip at `beta` off square, i.e. the cylinder axis is
+    e = sin(beta) t + cos(beta) w; sg = +1 bends toward n. The centre line is a helix on the cylinder (radius r,
+    wrapped by phi). Returns the end point, the end frame and [(point, frame)] samples along the bend."""
+    t, w, nn = F.T
+    e = math.sin(beta) * t + math.cos(beta) * w
+    a, c = -sg * e, p + sg * r * nn
+    out = []
+    for th in np.linspace(0.0, phi, n + 1):
+        R = _rod(a, th)
+        out.append((c + R @ (p - c) + r * math.tan(beta) * th * e, R @ F))
+    return out[-1][0], out[-1][1], out
+
+
+def _walk3(p0, F0, bends, Ls, r, n=12):
+    """Straight Ls[0], bend 1, straight Ls[1], bend 2, straight Ls[2], bend 3, straight Ls[3].
+    bends = [(phi, beta)] * 3. Returns the end point, the end frame and the bends' samples."""
+    p, F, samples = np.array(p0, float), np.array(F0, float), []
+    for i, (phi, beta) in enumerate(bends):
+        p = p + Ls[i] * F[:, 0]
+        p, F, smp = _bend(p, F, phi, beta, SIGNS[i], r, n)
+        samples.append((smp, beta))
+    return p + Ls[3] * F[:, 0], F, samples
+
+
+def _frames(r=BEND_R, s_out=STIFF_OUT):
     half, ctrl = ends()
-    a1, a2 = half.axis, ctrl.axis
-    u1 = _unit(np.cross(a1, Z))                              # horizontal, perpendicular to the half's slot axis
-    if u1 @ (ctrl.top - half.face) < 0:
-        u1 = -u1                                             # ... pointing inward (toward the controller)
-    u2 = _unit(np.cross(a2, Z))
-    if u2 @ (ctrl.top - half.face) < 0:
-        u2 = -u2
-    p0 = half.face - half.ins * s_out                       # end of the half's stiffener (3D)
-    d0 = math.degrees(math.atan2(-half.ins @ Z, -half.ins @ u1))   # its heading in the rise plane (tent tilt)
+    t0 = -half.ins
+    w0 = _unit(half.axis - (half.axis @ t0) * t0)
+    F0 = np.column_stack([t0, w0, np.cross(t0, w0)])         # conductor side up (n has +z)
+    assert F0[2, 2] > 0
+    p0 = half.face - half.ins * s_out                        # end of the half's stiffener
     e_top = ctrl.top + Z * s_out                             # top of the controller's stiffener
-    z_top = e_top[2] + drop_min + r                          # flat top height (centre line)
-    # rise in the plane (u1, Z) from p0
-    A1 = _arc(np.zeros(2), d0, r, rise_deg)
-    A2s = _arc(np.zeros(2), rise_deg, r, 0.0)
-    L1 = (z_top - p0[2] - A1[-1][1] - A2s[-1][1]) / max(math.sin(math.radians(rise_deg)), 1e-9)
-    if L1 < 0:
-        raise ValueError(f"no climb: L1 {L1:.2f}")
-    pb = A1[-1] + L1 * np.array([math.cos(math.radians(rise_deg)), math.sin(math.radians(rise_deg))])
-    rise = [np.zeros(2)] + A1 + [pb] + [pb + q for q in A2s]
-    top0 = p0 + u1 * rise[-1][0] + Z * rise[-1][1]           # start of the flat top (3D)
-    # flat top in plan: Lb along u1, an S of two ring segments (turn + jog, then -jog: net = the in-plan turn
-    # between the two slot axes; the jog shifts the jumper sideways), La along u2, then the drop's bend (r)
-    turn = math.atan2(np.cross(u1, u2)[2], u1 @ u2)          # signed in-plan turn (+ = left)
-    Rc = PR.JUMPER_W / 2 + RING_EXTRA
-    best = None
-    for jog in sorted(np.radians(np.arange(-40.0, 40.01, 0.25)), key=abs):
-        rings = [(turn + jog, Rc), (-jog, Rc)]
-        pos, hd = np.zeros(3), u1.copy()
-        for ang, rad in rings:
-            if abs(ang) < 1e-9:
-                continue
-            side = math.copysign(1.0, ang)
-            left = np.cross(Z, hd)
-            pos = pos + rad * (math.sin(abs(ang)) * hd + (1 - math.cos(abs(ang))) * side * left)
-            c_, s_ = math.cos(ang), math.sin(ang)
-            hd = np.array([hd[0] * c_ - hd[1] * s_, hd[0] * s_ + hd[1] * c_, 0.0])
-        rhs = (e_top - top0 - pos - u2 * r)[:2]
-        Lb, La = np.linalg.solve(np.array([u1[:2], u2[:2]]).T, rhs)
-        if Lb >= -1e-6 and La >= -1e-6:
-            best = (jog, rings, max(Lb, 0.0), max(La, 0.0), pos)
-            break
-    if best is None:
-        raise ValueError("no flat top: the jumper can't reach the controller's slot from this half connector")
-    jog, rings, Lb, La, ring = best
-    top1 = top0 + u1 * Lb + ring + u2 * La                   # end of the flat top (3D), heading u2
-    D = _arc(np.zeros(2), 0.0, r, -90.0)
-    L2 = (top1[2] + D[-1][1]) - e_top[2]
-    drop = [np.zeros(2)] + D + [np.array([D[-1][0], D[-1][1] - L2])]
-    seg = lambda pts: float(sum(np.linalg.norm(np.diff(np.array(pts), axis=0), axis=1)))
-    return SimpleNamespace(half=half, ctrl=ctrl, u1=u1, u2=u2, a1=a1, a2=a2, p0=p0, top0=top0, top1=top1,
-                           rise=rise, drop=drop, Lb=float(Lb), La=float(La), L1=float(L1), L2=float(L2),
-                           turn=turn, jog=float(jog), rings=rings, Rc=Rc, r=r, s_out=s_out, z_top=float(top0[2]),
-                           rise_deg=float(rise_deg),
-                           len_rise=seg(rise), len_top=float(Lb + sum(abs(a) * rr for a, rr in rings) + La),
-                           len_drop=seg(drop))
+    return half, ctrl, F0, p0, e_top
+
+
+def solve(rise_deg=None, r=BEND_R, s_out=STIFF_OUT, drop_min=DROP_MIN, free_shift=False):
+    """Solve the left jumper: a straight strip from the half connector's stiffener to the controller's, bent
+    three times (up, over, down), each bend line at most SKEW_MAX off square. The skews take up the splay, so
+    the flat strip is straight and symmetric: the right jumper is the same part, bent as the mirror image.
+    rise_deg = the climb's angle above horizontal; None = the gentlest that works (90 down to RISE_DEG,
+    1 deg steps). The bends' angles and skews and the four straights are solved (least total skew), each
+    straight long enough that neighbouring bend lines never meet on the strip. free_shift: also slide the
+    half connector along its row (to find where a layout should put it); the shift is returned.
+    ValueError if there's no path."""
+    from scipy.optimize import minimize
+    half, ctrl, F0, p0, e_top = _frames(r, s_out)
+    key = (rise_deg, r, s_out, drop_min, free_shift, tuple(np.round(p0, 9)), tuple(np.round(e_top, 9)), tuple(np.round(F0, 9).ravel()))
+    if key in _SOLVED:
+        return _SOLVED[key]
+    W = PR.JUMPER_W
+    tilt = math.degrees(math.asin(F0[2, 0]))
+    sm = lambda b: math.sqrt(math.tan(b) ** 2 + 1e-10)
+
+    def attempt(climb, z0):
+        p1 = math.radians(climb - tilt)
+        bends = lambda z: [(p1, z[0]), (z[1], z[2]), (z[3], z[4])]
+        start = lambda z: p0 + (z[9] * F0[:, 1] if free_shift else 0.0)
+        end = lambda z: _walk3(start(z), F0, bends(z), z[5:9], r, n=2)
+        cons = [{"type": "eq", "fun": lambda z: np.array([end(z)[1][0, 0], end(z)[1][1, 0], end(z)[1][0, 1]])},
+                {"type": "eq", "fun": lambda z: end(z)[0] - e_top},
+                {"type": "ineq", "fun": lambda z: z[5] - W / 2 * sm(z[0])},
+                {"type": "ineq", "fun": lambda z: z[6] - W / 2 * (sm(z[0]) + sm(z[2]))},
+                {"type": "ineq", "fun": lambda z: z[7] - W / 2 * (sm(z[2]) + sm(z[4]))},
+                {"type": "ineq", "fun": lambda z: z[8] - W / 2 * sm(z[4]) - drop_min}]
+        bnd = [(-SKEW_MAX, SKEW_MAX), (0.0, 2.2), (-SKEW_MAX, SKEW_MAX), (0.3, 2.6), (-SKEW_MAX, SKEW_MAX)] \
+            + [(0.0, 40.0)] * 4 + [(-6.0, 6.0) if free_shift else (0.0, 0.0)]
+        res = minimize(lambda z: z[0] ** 2 + z[2] ** 2 + z[4] ** 2, z0, method="SLSQP", constraints=cons, bounds=bnd,
+                       options=dict(maxiter=600, ftol=1e-13))
+        z = res.x
+        pe, Fe, _ = end(z)
+        ok = (np.abs(pe - e_top).max() < 1e-6 and np.linalg.norm(Fe[:, 0] + Z) < 1e-6 and Fe[1, 1] > 0.999
+              and all(c_["fun"](z) >= -1e-7 for c_ in cons[2:]))
+        return (z, bends(z), start(z)) if ok else None
+
+    climbs = [float(rise_deg)] if rise_deg is not None else [float(a) for a in np.arange(90.0, RISE_DEG - 0.01, -1.0)]
+    seeds = [np.radians([-3.0, 80.0, 3.0, 100.0, -4.0]).tolist() + [1.3, 2.6, 4.3, 1.3, 0.0],
+             np.radians([3.0, 80.0, -3.0, 100.0, 4.0]).tolist() + [1.3, 2.6, 4.3, 1.3, 0.0]]
+    found, prev = None, None
+    for climb in climbs:                                     # continuation: each solve starts from the last one
+        got = None
+        for z0 in ([prev] if prev is not None else []) + seeds:
+            z0 = np.array(z0, float)
+            z0[1] = math.radians(climb) if prev is None else z0[1]
+            got = attempt(climb, z0)
+            if got:
+                break
+        if got is None:
+            if found is not None:
+                break                                        # gentler climbs than this don't fit either
+            continue
+        found, prev = (climb, got), got[0]
+    if found is None:
+        raise ValueError("no jumper path: no straight strip reaches the controller's slot from this half connector")
+    climb, (z, bends, start) = found
+    Ls = [float(v) for v in z[5:9]]
+    pe, Fe, samples = _walk3(start, F0, bends, Ls, r)
+    arcs = [phi * r / math.cos(beta) for phi, beta in bends]
+    _SOLVED[key] = SimpleNamespace(half=half, ctrl=ctrl, F0=F0, p0=start, Fe=Fe, e_top=e_top, bends=bends, Ls=Ls, r=r,
+                           s_out=s_out, rise_deg=climb, skews=[b for _, b in bends], samples=samples,
+                           shift=float(z[9]) if free_shift else 0.0, arcs=arcs,
+                           length=STIFF_HALF + sum(Ls) + sum(arcs) + STIFF_CTRL,
+                           z_max=float(max(q[2] for smp, _ in samples for q, _ in smp)),
+                           left_half=F0[:, 1], left_ctrl=Fe[:, 1], a1=half.axis, a2=ctrl.axis)
+    return _SOLVED[key]
+
+
+_SOLVED = {}
 
 
 # ---------------------------------------------------------------- the jumper as a solid (case checks)
 T_SOLID = 0.3                                                # modelled at the stiffened thickness everywhere
 
 
-def _band(pts, t):
-    from shapely.geometry import LineString
-    return list(LineString([tuple(p) for p in pts]).buffer(t / 2, cap_style=2, join_style=2).exterior.coords)[:-1]
-
-
 def solid_P(g=None):
-    """The left jumper as a cadquery compound, bridge frame P: half stiffener out of its connector, rise, flat
-    top, drop, controller stiffener down to its slot opening. The parts inside the connectors are left out."""
+    """The left jumper as a cadquery solid, bridge frame P, from the half connector's face down to the
+    controller's slot opening (the parts inside the connectors are left out). The strip is ruled: in a bend
+    the straight lines across it run along the bend line (the cylinder's axis), so it's lofted through thin
+    rectangles along those lines; the flat pieces between them are planar."""
     import cadquery as cq
     g = g or solve()
     W, T = PR.JUMPER_W, T_SOLID
 
-    def slab(origin, udir, wdir, pts2d):
-        q = _band(pts2d, T)
-        to3 = lambda uz, off: origin + udir * uz[0] + Z * uz[1] + wdir * off
-        ws = [cq.Wire.makePolygon([cq.Vector(*to3(p, o)) for p in q] + [cq.Vector(*to3(q[0], o))]) for o in (-W / 2, W / 2)]
-        return cq.Solid.makeLoft(ws, True)
-    d0 = np.array([-g.half.ins @ g.u1, -g.half.ins @ Z])
-    rise = [-d0 * g.s_out] + g.rise                          # from the half connector's face
-    pieces = [slab(g.p0, g.u1, g.a1, rise)]
-    plan = flat_top_plan(g)
-    ring = [tuple(p[:2]) for p in plan["left"]] + [tuple(p[:2]) for p in plan["right"][::-1]]
-    wire = cq.Wire.makePolygon([cq.Vector(x, y, g.z_top - T / 2) for x, y in ring] +
-                               [cq.Vector(ring[0][0], ring[0][1], g.z_top - T / 2)])
-    pieces.append(cq.Solid.extrudeLinear(cq.Face.makeFromWires(wire), cq.Vector(0, 0, T)))
-    drop = g.drop + [g.drop[-1] + np.array([0.0, -g.s_out])]  # down to the slot opening
-    pieces.append(slab(g.top1, g.u2, g.a2, drop))
-    return cq.Compound.makeCompound(pieces)
-
-
-def flat_top_plan(g, n=12):
-    """Plan polylines (3D points at the flat top's height) of the flat top's centre line and both edges,
-    from top0 (heading u1) to top1 (heading u2)."""
-    W = PR.JUMPER_W
-    pts, hd = [g.top0.copy()], g.u1.copy()
-    pos = g.top0.copy()
-    pos = pos + hd * g.Lb
-    pts.append(pos.copy())
-    for ang, rad in g.rings:
-        if abs(ang) < 1e-9:
-            continue
-        side = math.copysign(1.0, ang)
-        c = pos + side * rad * np.cross(Z, hd)
-        v0 = pos - c
-        for k in range(1, n + 1):
-            a = ang * k / n
-            ca, sa = math.cos(a), math.sin(a)
-            pts.append(c + np.array([v0[0] * ca - v0[1] * sa, v0[0] * sa + v0[1] * ca, 0.0]))
-        pos = pts[-1].copy()
-        ca, sa = math.cos(ang), math.sin(ang)
-        hd = np.array([hd[0] * ca - hd[1] * sa, hd[0] * sa + hd[1] * ca, 0.0])
-    pts.append(pos + hd * g.La)
-    # edges: offset along the local left normal; headings from the polyline
-    left, right = [], []
-    for i, p in enumerate(pts):
-        a = pts[max(i - 1, 0)]; b = pts[min(i + 1, len(pts) - 1)]
-        t = _unit(b - a); nl = np.cross(Z, t)
-        left.append(p + nl * W / 2); right.append(p - nl * W / 2)
-    return dict(centre=pts, left=left, right=right)
+    def section(p, along, nrm, half_len):
+        q = [p + a * half_len * along + b * T / 2 * nrm for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        return cq.Wire.makePolygon([cq.Vector(*v) for v in q] + [cq.Vector(*q[0])])
+    F0 = g.F0
+    secs = [section(g.half.face, F0[:, 1], F0[:, 2], W / 2)]
+    for smp, beta in g.samples:
+        for q, F in smp:
+            e = math.sin(beta) * F[:, 0] + math.cos(beta) * F[:, 1]
+            secs.append(section(q, e, F[:, 2], W / 2 / math.cos(beta)))
+    Fe = g.Fe
+    secs.append(section(g.e_top, Fe[:, 1], Fe[:, 2], W / 2))
+    secs.append(section(g.ctrl.top, Fe[:, 1], Fe[:, 2], W / 2))
+    return cq.Solid.makeLoft(secs, True)
 
 
 # ---------------------------------------------------------------- the flat pattern and the flex board
@@ -207,13 +209,9 @@ STIFF_HALF, STIFF_CTRL = INS_HALF + STIFF_OUT, INS_CTRL + STIFF_OUT
 
 
 def flat_segments(g, side="L"):
-    """The flat pattern's centre line as turtle steps from the half end's tip: ("S", length) or
-    ("A", angle (rad, + = left seen from the conductor side), radius). Right jumper: the mirror (angles negated)."""
-    sg = 1.0 if side == "L" else -1.0
-    segs = [("S", STIFF_HALF + g.len_rise + g.Lb)]
-    segs += [("A", sg * a, rr) for a, rr in g.rings if abs(a) > 1e-9]
-    segs += [("S", g.La + g.len_drop + STIFF_CTRL)]
-    return segs
+    """The flat pattern's centre line as turtle steps from the half end's tip: one straight (the strip is straight
+    and the same for both sides)."""
+    return [("S", g.length)]
 
 
 def _walk(segs, step=0.25):
@@ -244,7 +242,8 @@ def _walk(segs, step=0.25):
 
 def conductor_w(k, side="L"):
     """Offset across the flex (+ = left of the centre line seen from the conductor side) of slot k's conductor.
-    Left jumper: left = the back (slot 1); right jumper: left = the front."""
+    Left jumper: left = the back (slot 1); right jumper (the same part, bent as the mirror image): left = the
+    front, so conductor k carries slot k on the left and slot 21 - k on the right."""
     w = 9.5 - (k - 1)
     return w if side == "L" else -w
 
@@ -289,12 +288,12 @@ def flat(g=None, side="L"):
                 cover_open=cover_open, side=side)
 
 
-def build_board(side="L", g=None):
-    """KiCad board of one jumper: single-sided (F.Cu), fingers as pads, traces as tracks; User.1 = the PI
+def build_board(g=None):
+    """KiCad board of the jumper (one part for both sides; conductors numbered as on the left jumper): single-sided (F.Cu), fingers as pads, traces as tracks; User.1 = the PI
     stiffener areas (on the back, under the fingers: 0.3 mm total there); F.Mask = the coverlay openings."""
     import pcbnew
     from compose.pcb import kicad as PK
-    f = flat(g, side)
+    f = flat(g, "L")
     b = PK.new_board()
     ds = b.GetDesignSettings()
     ds.m_CopperEdgeClearance = PK.MM(FINGER_PULLBACK - 0.05)
@@ -303,8 +302,8 @@ def build_board(side="L", g=None):
     ox, oy = 50.0, 50.0
     PK.outline(b, f["outline"], ox, oy)
     fp = pcbnew.FOOTPRINT(b)
-    fp.SetFPID(pcbnew.LIB_ID("compose", f"FlexJumper_{side}"))
-    fp.SetReference(f"JMP{side}")
+    fp.SetFPID(pcbnew.LIB_ID("compose", "FlexJumper"))
+    fp.SetReference("JMP")
     fp.Reference().SetVisible(False)
     fp.Value().SetVisible(False)
     for k, ends_ in f["fingers"].items():
@@ -321,7 +320,7 @@ def build_board(side="L", g=None):
             X, Y = PK.K((cx, cy), ox, oy)
             PK.add_pad(fp, f"{k}{'H' if e == 0 else 'C'}", "smd", "rect", (X, Y), (ln, wd), angle=a,
                        layers=pcbnew.LSET(pcbnew.F_Cu).AddLayer(pcbnew.F_Mask) if hasattr(pcbnew.LSET(pcbnew.F_Cu), "AddLayer") else None,
-                       net=net(f"S{k}"))
+                       net=net(f"C{k}"))
     b.Add(fp)
     for k, pts in f["cond"].items():
         s = f["s"]
@@ -330,7 +329,7 @@ def build_board(side="L", g=None):
             t = pcbnew.PCB_TRACK(b)
             t.SetStart(PK.V(*PK.K((float(a[0]), float(a[1])), ox, oy)))   # pcbnew.FromMM rejects numpy floats
             t.SetEnd(PK.V(*PK.K((float(c[0]), float(c[1])), ox, oy)))
-            t.SetWidth(PK.MM(TRACE_W)); t.SetLayer(pcbnew.F_Cu); t.SetNet(net(f"S{k}"))
+            t.SetWidth(PK.MM(TRACE_W)); t.SetLayer(pcbnew.F_Cu); t.SetNet(net(f"C{k}"))
             b.Add(t)
     for poly in f["cover_open"]:
         PK.add_poly(b, poly.intersection(f["outline"].buffer(0.05)), pcbnew.F_Mask, ox, oy)
@@ -340,41 +339,47 @@ def build_board(side="L", g=None):
 
 
 def plot_flat(path, g=None):
-    """Drawing of both flat patterns (conductor side up), as cut, with fingers, stiffeners and slot numbers."""
+    """Drawing of the flat pattern (conductor side up), as cut, with fingers, stiffeners and slot numbers."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon as MP
     g = g or solve()
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
-    for ax, side in zip(axs, ("L", "R")):
-        f = flat(g, side)
-        ax.add_patch(MP(list(f["outline"].exterior.coords), fc="#e9b44c", ec="#7a5200", lw=1.0, alpha=0.55))
-        for poly in f["stiff"]:
-            ax.add_patch(MP(list(poly.exterior.coords), fc="none", ec="#555", lw=0.8, ls="--", hatch="///"))
-        for k, pts in f["cond"].items():
-            sel = [q for q, sv in zip(pts, f["s"]) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
-            xs, ys = zip(*[(q[0], q[1]) for q in sel])
-            ax.plot(xs, ys, color="#b5651d", lw=1.4, solid_capstyle="butt")
-        for k, (a, b) in f["fingers"].items():
-            for poly in (a, b):
-                ax.add_patch(MP(list(poly.exterior.coords), fc="#d4af37", ec="#8a6d00", lw=0.5))
-        for k in (1, 20):
-            w = conductor_w(k, side)
-            ax.annotate(str(k), (-0.6, w), ha="right", va="center", fontsize=7)
-        pe, he = f["centre"][-1][0], f["centre"][-1][1]
-        ax.annotate("half end\n(Molex 200528)", (FINGER_L / 2, -PR.JUMPER_W / 2 - 1.2), ha="center", va="top", fontsize=8)
-        ax.annotate("controller end\n(Molex 52610)", (pe[0] - he[0] * FINGER_L / 2, pe[1] - he[1] * FINGER_L / 2 - PR.JUMPER_W / 2 - 1.2),
-                    ha="center", va="top", fontsize=8)
-        bb = f["outline"].bounds
-        ax.set_xlim(bb[0] - 3, bb[2] + 3); ax.set_ylim(bb[1] - 5, bb[3] + 2)
-        ax.set_aspect("equal"); ax.axis("off")
-        ax.set_title(f"jumper_rev2_{side}: {f['length']:.1f} mm, flat, conductor side up", fontsize=9)
-    fig.text(0.5, 0.06, "hatched: polyimide stiffener on the back (0.3 mm total at the fingers); "
-             f"bends r {g.r:.0f} mm, climb {g.rise_deg:.0f} deg, flat top turns {math.degrees(g.turn):.0f} deg in plan",
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
+    f = flat(g, "L")
+    ax.add_patch(MP(list(f["outline"].exterior.coords), fc="#e9b44c", ec="#7a5200", lw=1.0, alpha=0.55))
+    for poly in f["stiff"]:
+        ax.add_patch(MP(list(poly.exterior.coords), fc="none", ec="#555", lw=0.8, ls="--", hatch="///"))
+    for k, pts in f["cond"].items():
+        sel = [q for q, sv in zip(pts, f["s"]) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+        xs, ys = zip(*[(q[0], q[1]) for q in sel])
+        ax.plot(xs, ys, color="#b5651d", lw=1.4, solid_capstyle="butt")
+    for k, (a, b) in f["fingers"].items():
+        for poly in (a, b):
+            ax.add_patch(MP(list(poly.exterior.coords), fc="#d4af37", ec="#8a6d00", lw=0.5))
+    for k, txt in ((1, "slot 1 on the left jumper, 20 on the right"), (20, "slot 20 on the left jumper, 1 on the right")):
+        ax.annotate(txt, (f["length"] / 2, (PR.JUMPER_W / 2 + 0.5) * (1 if k == 1 else -1)), ha="center",
+                    va="bottom" if k == 1 else "top", fontsize=7)
+    W = PR.JUMPER_W
+    ax.annotate("half end\n(Molex 200528)", (FINGER_L / 2, -W / 2 - 1.2), ha="center", va="top", fontsize=8)
+    ax.annotate("controller end\n(Molex 52610)", (f["length"] - FINGER_L / 2, -W / 2 - 1.2), ha="center", va="top", fontsize=8)
+    bb = f["outline"].bounds
+    ax.set_xlim(bb[0] - 3, bb[2] + 3); ax.set_ylim(bb[1] - 5, bb[3] + 2.5)
+    ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title(f"jumper_rev2: {f['length']:.1f} x {W:.0f} mm, flat, conductor side up (one part, both sides)", fontsize=9)
+    sk = ", ".join(f"{abs(math.degrees(b)):.1f}" for b in g.skews)
+    fig.text(0.5, 0.04, "hatched: polyimide stiffener on the back (0.3 mm total at the fingers)\n"
+             f"bent: climb {g.rise_deg:.0f} deg, three bends r {g.r:.0f} mm with their bend lines {sk} deg off square",
              ha="center", fontsize=8)
     fig.savefig(path, dpi=160, bbox_inches="tight", facecolor="white")
     plt.close(fig)
+
+
+def describe(g):
+    sk = " / ".join(f"{math.degrees(b):+.1f}" for b in g.skews)
+    bd = " / ".join(f"{math.degrees(p):.0f}" for p, _ in g.bends)
+    return (f"climb {g.rise_deg:.0f} deg; bends {bd} deg (r {g.r:.0f} mm), bend lines {sk} deg off square; "
+            f"straights {' / '.join(f'{v:.2f}' for v in g.Ls)} mm; {g.length:.1f} mm long; top at z {g.z_max:.2f}")
 
 
 def main(out=None):
@@ -386,32 +391,32 @@ def main(out=None):
     PK.PCB_OUT = os.path.join(out, "pcb")
     os.makedirs(PK.PCB_OUT, exist_ok=True)
     g = solve()
-    print(f"jumper path: climb {g.rise_deg:.0f} deg, flat top at z {g.z_top:.2f} mm (turn {math.degrees(g.turn):.1f} deg, "
-          f"jog {math.degrees(g.jog):.1f}), bends r {g.r}")
-    for side in ("L", "R"):
-        name = f"jumper_rev2_{side}"
-        b, f = build_board(side, g)
-        path = os.path.join(PK.PCB_OUT, name + ".kicad_pcb")
-        pcbnew.SaveBoard(path, b)
-        b = pcbnew.LoadBoard(path)
-        err, warn, unc, rep = PK.drc(b, name)
-        # the coverlay is open across each finger field (Molex: the whole contact area bare), so that one aperture
-        # exposes all 20 nets by design: KiCad's "solder mask bridge" check doesn't apply to a cable end. KiCad 7's
-        # Python DRC ignores the project's rule severities, so those entries are taken out of the count here
-        import re
-        bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
-        err -= bridges
-        # single-sided flex: copper, coverlay openings (mask), outline and the PI stiffener areas (User.1)
-        z = PK.export(path, name, layers="F.Cu,F.Mask,Edge.Cuts,User.1", drill=False,
-                      rename={"-User_1.gbr": "-Stiffener_PI_bottom.gbr"})
-        bb = f["outline"].bounds
-        print(f"{name}: {f['length']:.1f} mm long, outline {bb[2] - bb[0]:.1f} x {bb[3] - bb[1]:.1f} mm | "
-              f"DRC {err} errors, {warn} warnings, {unc} unconnected (+{bridges} finger-field mask bridges, by design) | "
-              f"{os.path.basename(z)}")
+    print("jumper path: " + describe(g))
+    name = "jumper_rev2"
+    b, f = build_board(g)
+    path = os.path.join(PK.PCB_OUT, name + ".kicad_pcb")
+    pcbnew.SaveBoard(path, b)
+    b = pcbnew.LoadBoard(path)
+    err, warn, unc, rep = PK.drc(b, name)
+    # the coverlay is open across each finger field (Molex: the whole contact area bare), so that one aperture
+    # exposes all 20 nets by design: KiCad's "solder mask bridge" check doesn't apply to a cable end. KiCad 7's
+    # Python DRC ignores the project's rule severities, so those entries are taken out of the count here
+    import re
+    bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
+    err -= bridges
+    # conductors on one side; ordered as JLCPCB's 2-layer flex (much cheaper than 1-layer there): the back copper
+    # is empty and its coverlay unbroken. Front copper, both coverlays (mask: the front one open over the finger
+    # fields), outline and the PI stiffener areas (User.1)
+    z = PK.export(path, name, layers="F.Cu,B.Cu,F.Mask,B.Mask,Edge.Cuts,User.1", drill=False,
+                  rename={"-User_1.gbr": "-Stiffener_PI_bottom.gbr"})
+    bb = f["outline"].bounds
+    print(f"{name}: {f['length']:.1f} mm long, outline {bb[2] - bb[0]:.1f} x {bb[3] - bb[1]:.1f} mm | "
+          f"DRC {err} errors, {warn} warnings, {unc} unconnected (+{bridges} finger-field mask bridges, by design) | "
+          f"{os.path.basename(z)} (order 2 per keyboard: one part for both sides)")
     png = os.path.join(out, "png")
     os.makedirs(png, exist_ok=True)
     plot_flat(os.path.join(png, "jumper_rev2_flat.png"), g)
-    print(f"flat patterns: {os.path.join(png, 'jumper_rev2_flat.png')}")
+    print(f"flat pattern: {os.path.join(png, 'jumper_rev2_flat.png')}")
 
 
 if __name__ == "__main__":

@@ -348,9 +348,10 @@ def main():
     rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
         f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")
     fl = CT.board_bot - PR.FLOOR_T
-    rec(f"E jumper path: climb {jg.rise_deg:.0f} deg, flat top {jg.z_top:.2f} mm (turns {math.degrees(jg.turn):.0f} deg in plan), "
-        f"every bend r {jg.r} mm", jg.r >= 1.4 and jg.Lb >= 0 and jg.La >= 0 and jg.L2 >= 0,
-        f"straights {jg.Lb:.2f} / {jg.La:.2f} / {jg.L2:.2f} mm")
+    sk = max(abs(v) for v in jg.skews)
+    rec(f"E jumper path: one straight strip for both sides, climb {jg.rise_deg:.0f} deg, every bend r {jg.r} mm with its "
+        f"bend line <= {math.degrees(sk):.1f} deg off square", jg.r >= 1.4 and min(jg.Ls) >= 0 and sk <= J.SKEW_MAX + 1e-9,
+        f"straights {' / '.join(f'{v:.2f}' for v in jg.Ls)} mm, {jg.length:.1f} mm long")
     ins = G.P2W(jumper_insert_P())
     hits = {nm: GK_vol for nm in ("plate", "frame", "pico", "standoffs", "top parts", "case")
             if nm in parts and (GK_vol := vol(ins, parts[nm])) >= 1e-3}

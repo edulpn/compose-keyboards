@@ -9,7 +9,7 @@
 | **Case** | one-piece tub, gasket-mounted plates, bevelled frames, lift-off middle cover |
 | **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, a 20-pin vertical connector per half) |
 | **Half boards** | one reversible board for both halves, in four variants: hotswap or solder, with or without per-key RGB |
-| **Jumpers** | a custom 20-conductor flex PCB per half, 26 mm, bent to shape; left and right are mirror images |
+| **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.4 mm, bent to shape |
 | **Angles** | splay 10°, tent 12°, tilt 0° (provisional) |
 | **Hardware** | M3 screws and heat-set inserts; M2 for board to plate |
 
@@ -88,7 +88,7 @@ Everything prints without supports, in print orientation:
 | pad gap | 2.10 mm at every pad, top and bottom, measured on the solids along the plate normal |
 | assembly paths | plates and frames drop in along the plate normal; the controller and the cover drop straight down |
 | hardware | cover screws 2.95 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover |
-| jumpers | the bent shape solved from the case: plate 1.69 mm away (≥ 1.0 for the gasket's travel), half board 0.85, cover 3.60, standoffs 3.23, Pico 4.63; the controller end slides 4.1 mm straight down into its connector with the cover off |
+| jumpers | the bent shape solved from the case: plate 1.42 mm away (≥ 1.0 for the gasket's travel), half board 0.85, cover 1.68, standoffs 3.37, Pico 4.43; the controller end slides 4.1 mm straight down into its connector with the cover off |
 | printability | every part sliced at 0.2 mm in print orientation; each layer rests on the one below within 45° (short bridges over hole ceilings and lips up to 1.2 mm allowed). A plate with the flange halfway up its edge, the earlier design, fails this. |
 
 ### Hardware (case)
@@ -151,28 +151,38 @@ COL6 and ROW5 aren't used by this layout. The plain boards wire slot 3 straight 
 
 ![flex jumper flat pattern](images/rev2_jumper_flat.png)
 
-The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB per half joins them, bent to a fixed shape so it never has to twist or hang slack. `C58_REV=2 python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes both boards (`compose/pcb/jumper.py`).
+The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair, bent to a fixed shape so it never twists or hangs slack. `C58_REV=2 python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
+
+**One part for both halves**, like the half boards: the flat strip is straight and symmetric. On the left it's bent one way, on the right as the mirror image, so there's one design to order. Its conductors are straight across, so each one joins the same physical slot at both ends whichever side it's on: slot 1 on the left jumper is slot 20 on the right one, and that doesn't matter.
 
 | | |
 |---|---|
-| path, from the half | 1 mm of stiffener out of the connector, a bend up, a 55° climb, a bend over, a flat top that turns 10° in plan (the splay), a bend down, a short drop, 1 mm of stiffener above the controller's slot |
-| bends | every bend r 2 mm, each about one axis: the flat cut-out folds into shape, nothing twists |
-| size | 26.1 mm long, outline 27.7 × 23.1 mm, 21 mm wide |
-| conductors | 20, 0.5 mm wide at 1.0 mm pitch, single-sided; slot k at one end meets slot k at the other |
+| path, from the half | 1 mm of stiffener out of the connector, a bend up into a 58° climb, a bend over, a short straight, a bend down into a short drop, 1 mm of stiffener above the controller's slot |
+| bends | three, r 2 mm, each a plain cylindrical bend. Their bend lines cross the strip 4.7°, 6.9° and 5.2° off square: that's what turns it by the splay, so nothing twists and the flat strip needs no curve. The straights between them are long enough that neighbouring bend lines never meet. |
+| size | 27.4 × 21 mm (22.1 mm across the half end's retention ears) |
+| conductors | 20, 0.5 mm wide at 1.0 mm pitch, one side only |
 | half end (200528) | 0.7 mm gold fingers, 3.5 mm exposed, retention ears 0.55 mm proud between 1.5 and 2.2 mm from the tip; conductors face up |
 | controller end (52610) | 0.7 mm gold fingers, 3.5 mm exposed, two C0.3 chamfers; conductors face inboard, toward the Pico |
-| stiffeners | polyimide on the back of each end, 0.3 mm total thickness at the fingers (both connectors take 0.3 ± 0.05), 5.0 mm at the half end and 5.1 mm at the controller end |
+| stiffeners | polyimide on the back of each end, 5.0 mm at the half end and 5.1 mm at the controller end; both connectors take 0.3 ± 0.05 mm at the fingers |
 | DRC | 0 errors, 0 warnings, 0 unconnected (the open finger fields' solder-mask bridges are by design and reported apart) |
 
-**Ordering (JLCPCB flex):** upload `jumper_rev2_L_JLCPCB.zip` and `jumper_rev2_R_JLCPCB.zip` as two designs (they are mirror images; one of each per keyboard).
+The half's connector sits where this path needs the least skew (`JUMPER_ROW_Y` in `compose/pcb/rev2_half.py`; `solve(free_shift=True)` in `jumper.py` finds it for another layout).
 
-| option | choose |
-|---|---|
-| layers | 1 (single-sided flex) |
-| surface finish | ENIG (Molex asks for gold-plated contacts) |
-| coverlay | yes; the openings are on the mask layer (the two finger fields) |
-| stiffener | polyimide, on the back, total thickness 0.3 mm at the fingers; areas on layer User.1 (note them in the order remarks) |
-| copper | any (the circuit simulation assumes the thinnest, 1/3 oz) |
+**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper.
+
+| field | choose | why |
+|---|---|---|
+| Layers | 2 | the back copper is empty; its coverlay stays whole |
+| Substrate | 25 µm dielectric | |
+| PCB thickness | 0.11 mm | with the 0.20 mm stiffener, about 0.3 mm at the fingers |
+| Coverlay | yellow, PI 12.5 µm / AD 15 µm | |
+| Copper type | electro-deposited is fine; rolled annealed if it costs about the same | the bends are formed once, at assembly |
+| Surface finish | ENIG, 1 U″ gold | Molex asks for gold over nickel; the jumper is plugged a handful of times |
+| Gold fingers | No | that option is hard gold for card-edge connectors; ENIG covers these contacts |
+| EDA software | Other | |
+| Stiffener | Polyimide, 0.20 mm | areas in `jumper_rev2-Stiffener_PI_bottom.gbr` (JLC reviews them by hand when the design isn't from EasyEDA) |
+| Confirm production file | Yes | to check the stiffener areas and the finger thickness before they build |
+| Remark | "PI stiffener 0.20 mm on the bottom side, areas in the Stiffener_PI_bottom file (one under each finger field). Finished thickness at the fingers 0.30 ± 0.05 mm (FPC connectors Molex 200528 and 52610). Bottom copper is intentionally empty." | |
 
 Plug the jumper into the half's connector first (fingers toward the half board, then close the actuator), then set the board in and drop the other end straight down into the controller's connector with its slider open, then close the slider. Molex's application spec: insert the cable straight and keep it free of tension; the solved shape does both.
 
@@ -218,7 +228,7 @@ Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own 
 - RGB boards: one unbroken LED chain from slot 3 to slot 18, with every LED and capacitor across 5 V and GND;
 - plain boards: the RGB pass-through.
 
-Then it checks the jumpers: each jumper board's copper rebuilt the same way, and the flat cut-out folded along its solved path, so every finger has to land on a contact of the half's connector and of the controller's (it does, within 0.01 mm) and slot k meets slot k. Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and both jumpers: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a jumper with its fingers in reverse order, a half connector 0.5 mm off along its row) are caught.
+Then it checks the jumpers: the jumper board's copper rebuilt the same way, and the flat strip bent along its solved path on the left and as its mirror image on the right, so every finger has to land on a contact of the half's connector and of the controller's (it does, within 0.01 mm) and slot k meets slot k. Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and both jumpers: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a jumper with its fingers in reverse order, a half connector 0.5 mm off along its row) are caught.
 
 ### Parts (per half)
 
@@ -228,7 +238,7 @@ Then it checks the jumpers: each jumper board's copper rebuilt the same way, and
 | Kailh MX hotswap sockets (hotswap boards) | 29 |
 | 1N4148 diodes, DO-35 | 29 |
 | Molex 200528-0200 connector (right angle, bottom contact) | 1 |
-| flex jumper, `jumper_rev2_L` or `_R` (see [flex jumpers](#flex-jumpers)) | 1 |
+| flex jumper `jumper_rev2`, the same part on both halves (see [flex jumpers](#flex-jumpers)) | 1 |
 | M2 × 4 screws + M2 heat-set inserts (board to plate; 2.4 mm of thread in the insert) | 4 + 4 |
 | *RGB boards:* SK6812 MINI-E | 29 |
 | *RGB boards:* 100 nF 1206 capacitors | 10 |

@@ -15,7 +15,7 @@ Independent of the net names the boards were built with:
      slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 18 on
      the fitted face, every LED and capacitor across slot 2/19 (5 V) and 1/4/20 (GND), the unfitted face's
      copies harmless; plain boards: slot 3 wired straight to slot 18 and nothing else on 1-4 / 18-20.
-  4. The flex jumpers (`flex-jumper`): copper rebuilt from each jumper board, every half-end finger joined to
+  4. The flex jumper (`flex-jumper`, one part for both sides): copper rebuilt from its board, every half-end finger joined to
      exactly one controller-end finger; then the flat cut-out folded along the solved path (compose.pcb.jumper)
      puts each finger against a connector contact: at the half's 200528 the conductor side faces up (bottom
      contact, connector on the half's underside), at the controller's 52610 it faces inboard (the contact face,
@@ -204,9 +204,10 @@ def board_checks(h):
 
 # ---------------------------------------------------------------- the flex jumpers
 class Jumper:
-    """One routed flex jumper (left or right): {half slot: controller slot}, from the jumper's copper and the
-    folded geometry. The right jumper is the left one's mirror image, so its fingers are placed through the
-    left geometry with w negated, against the right half's and right connector's contacts mirrored back."""
+    """The flex jumper fitted on one side: {half slot: controller slot}, from the jumper's copper and the
+    folded geometry. It's one part for both sides; on the right it's bent as the mirror image of the left, so
+    its fingers are placed through the left geometry with w negated, against the right half's and right
+    connector's contacts mirrored back."""
 
     def __init__(self, path, side, g, half, ctrl_board, shift=0.0):
         self.cu = SP.Copper(path)
@@ -217,9 +218,9 @@ class Jumper:
         pts = np.array([c[0] for c in cl])
         Z = np.array([0.0, 0.0, 1.0])
         # where a conductor at offset w (left of the centre line seen from the conductor side) lands, measured
-        # along each connector's slot axis: half end left = Z x u1 (conductor side up through the rise),
-        # controller end left = Z x u2 (conductor side inboard after the drop)
-        lh, lc = np.cross(Z, g.u1) @ g.a1, np.cross(Z, g.u2) @ g.a2
+        # along each connector's slot axis: the strip's own width direction at each end, carried through the
+        # three bends by the solved path (conductor side up at the half, inboard at the controller)
+        lh, lc = g.left_half @ g.a1, g.left_ctrl @ g.a2
         fingers = {"H": [], "C": []}
         for fp in self.cu.b.GetFootprints():
             for p in fp.Pads():
@@ -345,7 +346,7 @@ def main():
     ok(sorted(e["matrix"] for e in fw["layouts"]["LAYOUT"]["layout"]) == sorted(exp_m.values()),
        "keyboard.json lists every key at the matrix position the scan reads it")
     pcb = os.path.join(OUT, "pcb")
-    jpath = lambda s_: os.path.join(pcb, f"jumper_rev2_{s_}.kicad_pcb")
+    jpath = lambda s_: os.path.join(pcb, "jumper_rev2.kicad_pcb")         # one part, both sides
     g = J.solve()
     only = [a for a in sys.argv[2:]] or os.environ.get("SIM_BOARDS", "").split() or list(H.BOARDS)
     for name, (variant, rgb) in H.BOARDS.items():
@@ -358,7 +359,7 @@ def main():
         halves = {s: Half(path, variant, rgb, s) for s in ("L", "R")}
         for h in halves.values():
             board_checks(h)
-        print(f"\n== {name}: flex jumpers (copper of {os.path.basename(jpath('L'))} / _R, folded along the solved path)")
+        print(f"\n== {name}: flex jumpers (copper of {os.path.basename(jpath('L'))}, folded along the solved path, left and mirrored right)")
         jumpers = {}
         for s_ in ("L", "R"):
             jm = Jumper(jpath(s_), s_, g, halves[s_], CB)
