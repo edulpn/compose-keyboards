@@ -408,7 +408,7 @@ def ctrl_rev2_model():
     import pcbnew
     brd = pcbnew.LoadBoard(path)
     # heights above the board (mm) and what plugs into them
-    H = {"U1": ("header", 8.5, None), "JL": ("cconn", 2.0, None), "JR": ("cconn", 2.0, None),
+    H = {"U1": ("header", 8.5, None), "JL": ("cconn", 5.75, None), "JR": ("cconn", 5.75, None),
          "J4": ("cconn", 8.5, 13.5), "J6": ("cconn", 8.5, 13.5), "J5": ("cconn", 4.3, 10.0),
          "U2": ("chip", 5.0, None), "C1": ("passive", 6.0, None), "C2": ("passive", 7.0, None),
          "F1": ("passive", CS.TALL_PART_MAX_H, None), "R": ("passive", 3.0, None)}

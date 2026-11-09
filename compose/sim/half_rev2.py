@@ -15,15 +15,23 @@ Independent of the net names the boards were built with:
      slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 18 on
      the fitted face, every LED and capacitor across slot 2/19 (5 V) and 1/4/20 (GND), the unfitted face's
      copies harmless; plain boards: slot 3 wired straight to slot 18 and nothing else on 1-4 / 18-20.
-  4. End to end: the controller rev 2 copper, two straight type B FFCs (same physical slot order at both
-     ends) and the two real halves; the QMK COL2ROW scan with the rev 2 pin config reads every key alone at
-     its keymap position, 1000 random chords exactly, and no ghosting.
-  5. Negative controls: a cut column track, a diode fitted backwards and a cable reversed are caught.
+  4. The flex jumper (`flex-jumper`, one part for both sides): copper rebuilt from its board, every half-end finger joined to
+     exactly one controller-end finger; then the flat cut-out folded along the solved path (compose.pcb.jumper)
+     puts each finger against a connector contact: at the half's 200528 the conductor side faces up (bottom
+     contact, connector on the half's underside), at the controller's 52610 it faces inboard (the contact face,
+     checked by sim-controller). Each finger must land within 0.25 mm of a contact, so the slot k <-> slot k'
+     map comes from geometry, not from the jumper's net names.
+  5. End to end: the controller rev 2 copper, the two jumpers and the two real halves; the QMK COL2ROW scan
+     with the rev 2 pin config reads every key alone at its keymap position, 1000 random chords exactly, and no
+     ghosting.
+  6. Negative controls: a cut column track, a diode fitted backwards, a jumper with its fingers in reverse
+     order and a half connector 0.5 mm off along its row are caught.
 """
 import os
 import sys
 import random
 import itertools
+import numpy as np
 import pcbnew
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
@@ -35,6 +43,7 @@ from compose.pcb import layout as PL
 from compose.pcb import rev2_half as H
 from compose.sim import matrix as SP
 from compose.sim import controller_copper as CC
+from compose.pcb import jumper as J
 
 ToMM = pcbnew.ToMM
 FAIL = []
@@ -93,6 +102,27 @@ class Half:
         return {k + 1: self.cu.node_at((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)), self.bottom)
                 for k, p in enumerate(pads)}
 
+    def connector_gap(self):
+        """(distance, part) from the fitted connector's pads to the nearest other pad on the same face."""
+        from shapely.geometry import Polygon as SP_
+        ref = "J1B" if self.side == "L" else "J1F"
+
+        def poly(p):
+            o = p.GetEffectivePolygon().Outline(0)
+            return SP_([(ToMM(o.CPoint(i).x), ToMM(o.CPoint(i).y)) for i in range(o.PointCount())])
+        mine = [poly(p) for p in self.fp[ref].Pads() if p.IsOnLayer(self.bottom)]
+        best = (1e9, None)
+        for r, f in self.fp.items():
+            if r.startswith("J1"):
+                continue
+            for p in f.Pads():
+                if p.IsOnLayer(self.bottom):
+                    q = poly(p)
+                    d = min(q.distance(m) for m in mine)
+                    if d < best[0]:
+                        best = (d, f"{r} pad {p.GetNumber()}")
+        return best
+
     def keys(self):
         """[(key index, row, col, switch contact a, contact b, diode anode, diode cathode)] as copper groups."""
         out = []
@@ -140,6 +170,9 @@ def board_checks(h):
     print(f"\n== {name}")
     sl = h.slots()
     ok(all(v is not None for v in sl.values()), "every connector contact is on copper")
+    gap = h.connector_gap()
+    ok(gap[0] >= 0.6 - 1e-3, f"jumper connector's pads >= 0.6 mm from every other part's pad on its face "
+                             f"(both hand-soldered): {gap[0]:.2f} mm, nearest {gap[1]}")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
     col = {c: sl[5 + c] for c in range(7)}
@@ -193,8 +226,75 @@ def board_checks(h):
     ok(all(set(c_) == {vdd, gnd} for c_ in cps), f"every capacitor across 5 V / GND ({len(cps)}, one per {H.CAP_EVERY} LEDs)")
 
 
+# ---------------------------------------------------------------- the flex jumpers
+class Jumper:
+    """The flex jumper fitted on one side: {half slot: controller slot}, from the jumper's copper and the
+    folded geometry. It's one part for both sides; on the right it's bent as the mirror image of the left, so
+    its fingers are placed through the left geometry with w negated, against the right half's and right
+    connector's contacts mirrored back."""
+
+    def __init__(self, path, side, g, half, ctrl_board, shift=0.0):
+        self.cu = SP.Copper(path)
+        self.side = side
+        sg = 1.0 if side == "L" else -1.0
+        f = J.flat(g, side)
+        cl, length = f["centre"], f["length"]
+        pts = np.array([c[0] for c in cl])
+        Z = np.array([0.0, 0.0, 1.0])
+        # where a conductor at offset w (left of the centre line seen from the conductor side) lands, measured
+        # along each connector's slot axis: the strip's own width direction at each end, carried through the
+        # three bends by the solved path (conductor side up at the half, inboard at the controller)
+        lh, lc = g.left_half @ g.a1, g.left_ctrl @ g.a2
+        fingers = {"H": [], "C": []}
+        for fp in self.cu.b.GetFootprints():
+            for p in fp.Pads():
+                X, Y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+                q = np.array([X - 50.0, 50.0 - Y])                        # jumper board: flex (x, y) -> (x + 50, 50 - y)
+                i = int(np.argmin(np.linalg.norm(pts - q, axis=1)))
+                h = cl[i][1]
+                w = float((q - pts[i]) @ np.array([-h[1], h[0]]))
+                end = "H" if cl[i][2] < length / 2 else "C"
+                fingers[end].append((sg * w, self.cu.node_at((X, Y), pcbnew.F_Cu)))
+        self.n_fingers = (len(fingers["H"]), len(fingers["C"]))
+        # contacts along the slot axis: half (fitted connector, slot 1 = the back-most), controller (52610)
+        ref = "J1B" if side == "L" else "J1F"
+        hp = sorted([p for p in half.fp[ref].Pads() if p.GetNumber() != "MP"], key=lambda p: p.GetPosition().y)
+        zf = -PR.PCB_T
+        hc = []
+        for p in hp:
+            lx, ly = ToMM(p.GetPosition().x) - OX, OY - ToMM(p.GetPosition().y)
+            hc.append(float((np.array(G.apply(G.M_LP, (lx, ly, zf))) - g.half.face) @ g.a1) + shift)
+        from compose.case import gasket as C
+        from compose.controller import rev2 as CR
+        cp = ctrl_board.fp["J" + side].Pads()
+        ys = sorted({round(ToMM(p.GetPosition().y), 2) for p in cp})
+        cc = [float((C.CT.y_pc - (y - CR.CY)) - g.ctrl.top[1]) for y in ys]   # controller: P y = y_pc - (KiCad y - CY)
+        self.miss, self.worst = [], {"half": 0.0, "controller": 0.0}
+
+        def slot_of(c, contacts, what):
+            d = [abs(c - x) for x in contacts]
+            k = int(np.argmin(d))
+            self.worst[what] = max(self.worst[what], d[k])
+            if d[k] > 0.25:
+                self.miss.append(f"{what} finger at {c:+.2f} mm off every contact ({d[k]:.2f})")
+            return k + 1
+        hs = {node: slot_of(w * lh, hc, "half") for w, node in fingers["H"]}
+        cs = {}
+        for w, node in fingers["C"]:
+            cs.setdefault(node, []).append(slot_of(w * lc, cc, "controller"))
+        self.map, self.bad = {}, []
+        for node, k in hs.items():
+            to = cs.get(node, [])
+            if len(to) != 1:
+                self.bad.append(f"half slot {k} reaches {len(to)} controller fingers")
+            else:
+                self.map[k] = to[0]
+        if len(set(hs.values())) != len(hs):
+            self.bad.append("two half-end fingers on one contact or one copper group")
+
+
 # ---------------------------------------------------------------- end to end
-def assemble(pins, halves, cable_rev=None, cut=None, diode_flip=None):
+def assemble(pins, halves, jumpers, cable_rev=None, cut=None, diode_flip=None):
     edges = {}
 
     def link(a, b):
@@ -203,10 +303,11 @@ def assemble(pins, halves, cable_rev=None, cut=None, diode_flip=None):
     keys, diodes = [], []
     for side, h in halves.items():
         sl = h.slots()
-        for k in range(1, 21):
-            hk = 21 - k if cable_rev == side else k
+        for hk, ck in jumpers[side].map.items():
+            if cable_rev == side:
+                ck = 21 - ck
             if sl[hk] is not None:
-                link(("C", pins[("ffc" + side, k)]), (side, sl[hk]))
+                link(("C", pins[("ffc" + side, ck)]), (side, sl[hk]))
         for i, r, c, sa, sb, an, cath in h.keys():
             colside = sb if sb == sl[5 + c] else sa
             other = sa if colside == sb else sb
@@ -222,8 +323,8 @@ def assemble(pins, halves, cable_rev=None, cut=None, diode_flip=None):
     return edges, keys, diodes
 
 
-def run(pins, halves, quiet=False, **kw):
-    edges, keys, diodes = assemble(pins, halves, **kw)
+def run(pins, halves, jumpers, quiet=False, **kw):
+    edges, keys, diodes = assemble(pins, halves, jumpers, **kw)
     scan = CC.scanner(pins, edges, keys, diodes, CC.QMK_V2)
     meta = {(s, ks.i): (ks.row, ks.col) for s, h in halves.items() for ks in h.s.keys}
     exp = lambda k: (meta[k][0], meta[k][1] if k[0] == "L" else 13 - meta[k][1])
@@ -269,6 +370,8 @@ def main():
     ok(sorted(e["matrix"] for e in fw["layouts"]["LAYOUT"]["layout"]) == sorted(exp_m.values()),
        "keyboard.json lists every key at the matrix position the scan reads it")
     pcb = os.path.join(OUT, "pcb")
+    jpath = lambda s_: os.path.join(pcb, "jumper_rev2.kicad_pcb")         # one part, both sides
+    g = J.solve()
     only = [a for a in sys.argv[2:]] or os.environ.get("SIM_BOARDS", "").split() or list(H.BOARDS)
     for name, (variant, rgb) in H.BOARDS.items():
         if name not in only:
@@ -280,15 +383,28 @@ def main():
         halves = {s: Half(path, variant, rgb, s) for s in ("L", "R")}
         for h in halves.values():
             board_checks(h)
-        print(f"\n== {name}: QMK COL2ROW scan, controller rev 2 + two FFCs + both halves")
-        run(pins, halves)
+        print(f"\n== {name}: flex jumpers (copper of {os.path.basename(jpath('L'))}, folded along the solved path, left and mirrored right)")
+        jumpers = {}
+        for s_ in ("L", "R"):
+            jm = Jumper(jpath(s_), s_, g, halves[s_], CB)
+            jumpers[s_] = jm
+            ok(jm.n_fingers == (20, 20), f"jumper {s_}: 20 fingers at each end ({jm.n_fingers[0]} / {jm.n_fingers[1]})")
+            ok(not jm.miss, f"jumper {s_}: every finger lands on a connector contact (within 0.25 mm; worst {jm.worst['half']:.2f} at the half, "
+               f"{jm.worst['controller']:.2f} at the controller)" + (f" {jm.miss[:2]}" if jm.miss else ""))
+            ok(not jm.bad and len(jm.map) == 20, f"jumper {s_}: each half-end finger joined to exactly one controller-end finger"
+               + (f" {jm.bad[:2]}" if jm.bad else ""))
+            ok(all(jm.map.get(k) == k for k in range(1, 21)), f"jumper {s_}: half slot k meets controller slot k, all 20")
+        jm = Jumper(jpath("L"), "L", g, halves["L"], CB, shift=0.5)
+        ok(bool(jm.miss), f"negative control: a half connector 0.5 mm off along its row is caught ({len(jm.miss)} fingers off a contact)")
+        print(f"\n== {name}: QMK COL2ROW scan, controller rev 2 + two flex jumpers + both halves")
+        run(pins, halves, jumpers)
         k0 = halves["L"].s.keys[7]
-        s_, _ = run(pins, halves, quiet=True, cut=("L", k0.i))
+        s_, _ = run(pins, halves, jumpers, quiet=True, cut=("L", k0.i))
         ok(("L", k0.i) in s_, f"negative control: a cut column connection kills key {k0.k.label_l} ... and the scan sees it")
-        s_, _ = run(pins, halves, quiet=True, diode_flip=("R", 3))
+        s_, _ = run(pins, halves, jumpers, quiet=True, diode_flip=("R", 3))
         ok(("R", 3) in s_, "negative control: a diode fitted backwards is caught")
-        s_, w_ = run(pins, halves, quiet=True, cable_rev="L")
-        ok(len(s_) > 0, f"negative control: a reversed left cable scrambles the left half ({len(s_)} keys wrong)")
+        s_, w_ = run(pins, halves, jumpers, quiet=True, cable_rev="L")
+        ok(len(s_) > 0, f"negative control: a left jumper with its fingers in reverse order scrambles the left half ({len(s_)} keys wrong)")
     print("\n" + ("SIMULATION PASSED" if not FAIL else f"{len(FAIL)} SIMULATION CHECK(S) FAILED"))
     return len(FAIL)
 

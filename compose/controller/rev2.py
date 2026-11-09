@@ -5,15 +5,16 @@ Compose controller rev 2: the shared controller board for all Compose split layo
 
 Interface (the standard; see README "Controller rev 2"):
   - Raspberry Pi Pico footprint (socketed on 2x 1x20 female headers, 8.5 mm), USB end = back (-y here).
-  - Two 20-position 1.0 mm FFC connectors (Molex 200528-0200, bottom contact), top face, mirror-symmetric,
-    cable side flush with the board's side edges. Slot order back -> front, the same on both sides:
+  - Two 20-position 1.0 mm FFC/FPC connectors (Molex 52610-2072, vertical, slider latch), top face, square to
+    the side edges at fixed positions (rev2_std: VFFC_*), contact face toward the Pico, so the board doesn't
+    depend on any layout's angles: each layout's flex jumpers take them up. Slot order back -> front, the same on both sides:
         1 GND, 2 5V_LED, 3 RGB data to the half, 4 GND (guard), 5-11 COL0-6, 12-17 ROW0-5,
         18 RGB data back from the half, 19 5V_LED, 20 GND
     Reversal-safe: a cable fitted flipped (slot k meets 21-k) puts 5 V on 5 V, GND on GND, the two RGB data
     lines on each other (through the 330 ohm) and rows on columns - nothing is damaged, keys just scramble.
     (the right connector is turned 180 deg, so its pad numbers run the other way; nets follow the slot).
-    Controller on top, half connectors on the halves' bottom faces -> one cable type for both sides:
-    20-pin 1.0 mm FFC, contacts on opposite sides ("type B / reverse").
+    The halves join through custom flex jumpers (compose/pcb/jumper.py): conductors on one face, the same
+    physical slot order at both ends.
   - Matrix: 6 rows shared by both halves (GP0-5), 7 columns per half
     (left GP6-12, right GP22, 21, 20, 19, 18, 17, 16 = COL0-6). QMK: 6 x 14.
   - I2C1 on GP14 (SDA) / GP15 (SCL), 4.7k pull-ups to 3.3 V: 4-pin OLED-style header + Qwiic.
@@ -45,8 +46,9 @@ from compose.pcb import art as PA
 V, MM, DEG = PK.V, PK.MM, PK.DEG
 NAME = "controller_rev2"
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
-from compose.controller.rev2_std import (W2, Y_BACK, Y_FRONT, CORNER_R, PICO_X, PICO_Y, FFC_DEPTH, FFC_PAD_X, STANDOFF_HOLES,
-                         M_CLEAR, STANDOFF_KEEP, CLIP_X, CLIP_Y, FFC_Y0, POST_R)
+from compose.controller.rev2_std import (W2, Y_BACK, Y_FRONT, CORNER_R, PICO_X, PICO_Y, STANDOFF_HOLES,
+                         M_CLEAR, STANDOFF_KEEP, CLIP_X, CLIP_Y, POST_R,
+                         VFFC_SLOT_X, VFFC_Y0, VFFC_SLOT_IN, VFFC_L, VFFC_D)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
 LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the rev 1 boards
@@ -160,6 +162,58 @@ def outline_poly():
     return CS.outline()
 
 
+VFFC_PAD_A = (1.85, -0.025)                # contact-face row: length (across), centre from the contact face (into the body +)
+VFFC_PAD_B = (1.65, 3.725)                 # far row
+VFFC_PAD_W = 0.6
+
+
+def vffc_x(side):
+    """x (board frame) of the connector's contact face; the body goes outward from it, toward the edge."""
+    sx = -1 if side == "L" else 1
+    return sx * (VFFC_SLOT_X - VFFC_SLOT_IN)
+
+
+def vffc_fp(b, side, net):
+    """Molex 52610-2072 (Easy-On, vertical, 20 pos, 1.0 mm), Molex's recommended pattern: two pad rows per
+    contact (the terminal's two tails), 0.6 mm wide. Placed for `side`: contact face (pin 1 notch side) toward
+    the Pico, slot k at y = VFFC_Y0 - 9.5 + (k - 1) (slot 1 at the back). Built in board-centred mm
+    (origin = Pico centre), then moved there."""
+    sx = -1 if side == "L" else 1
+    fp = pcbnew.FOOTPRINT(b)
+    fp.SetFPID(pcbnew.LIB_ID("compose", "Molex_52610-2072_1x20_P1.00mm_Vertical"))
+    fp.SetReference(f"J{side}")
+    fp.SetValue("Molex 52610-2072")
+    fp.Value().SetVisible(False)
+    xc = vffc_x(side)
+    sn = slot_nets(side)
+    for k in range(1, 21):
+        y = VFFC_Y0 - 9.5 + (k - 1)
+        pin = str(k if side == "L" else 21 - k)                # pin 1 at the notch end: back on the left, front on the right
+        for ln, off in (VFFC_PAD_A, VFFC_PAD_B):
+            PK.add_pad(fp, pin, "smd", "rect", (xc + sx * off, y), (ln, VFFC_PAD_W))
+        for p in fp.Pads():
+            if p.GetNumber() == pin and sn.get(k):
+                p.SetNet(net(sn[k]))
+    x_far = xc + sx * VFFC_D
+    y0, y1 = VFFC_Y0 - VFFC_L / 2, VFFC_Y0 + VFFC_L / 2
+    PK.silk_poly(fp, [(xc, y0), (x_far, y0), (x_far, y1), (xc, y1)], pcbnew.F_Fab, 0.1)
+    for yy in (y0, y1):                                      # body ends on the silk (the sides carry pads)
+        s_ = pcbnew.FP_SHAPE(fp, pcbnew.SHAPE_T_SEGMENT)
+        s_.SetStart0(V(xc, yy)); s_.SetEnd0(V(x_far, yy))
+        s_.SetLayer(pcbnew.F_SilkS); s_.SetWidth(MM(0.15))
+        s_.SetDrawCoord()
+        fp.Add(s_)
+    yn = y0 if side == "L" else y1                           # pin 1 notch end: a small triangle at the contact face
+    tri = [(xc - sx * 0.2, yn + (1 if side == "L" else -1) * 0.2), (xc - sx * 0.9, yn + (1 if side == "L" else -1) * 0.2),
+           (xc - sx * 0.55, yn + (1 if side == "L" else -1) * 0.8)]
+    PK.silk_poly(fp, tri, pcbnew.F_SilkS, 0.15)
+    xa = xc - sx * (VFFC_PAD_A[0] / 2 - VFFC_PAD_A[1])
+    xb = xc + sx * (VFFC_PAD_B[1] + VFFC_PAD_B[0] / 2)
+    PK.courtyard(fp, min(xa, xb) - 0.25, y0 - 0.25, max(xa, xb) + 0.25, y1 + 0.25, pcbnew.F_CrtYd)
+    fp.Move(V(CX, CY))                                       # built relative to the Pico centre
+    return fp
+
+
 def build():
     b = PK.new_board()
     net = PK.Nets(b)
@@ -198,25 +252,10 @@ def build():
                 p.SetNet(net(pin_net[pin]))
         keep(h)
 
-    # ---- FFC connectors: pad row at x = -+FFC_PAD_X, slot 1 at the back, cable side outward
+    # ---- cable connectors: Molex 52610 vertical, square to the side edges, contact face toward the Pico;
+    #      slot 1 at the back (nets by physical position, so the right one's pad numbers run the other way)
     for side, sx in (("L", -1), ("R", 1)):
-        j = add(b, "Connector_FFC-FPC", "Molex_200528-0200_1x20-1MP_P1.00mm_Horizontal", f"J{side}",
-                "Molex 200528-0200")
-        back, front = C(sx * FFC_PAD_X, FFC_Y0 - 9.5), C(sx * FFC_PAD_X, FFC_Y0 + 9.5)
-        na, nb = ("1", "20") if side == "L" else ("20", "1")
-        PK.place_by_pads(j, na, back, nb, front)
-        x0, _, x1, _ = crt(j)
-        if (x0 + x1) / 2 * sx < FFC_PAD_X:                     # the body (cable side) has to face outward
-            raise AssertionError(f"FFC {side}: body faces inward with this pad order")
-        assert abs((x1 if sx > 0 else -x0) - W2) < 0.02, ("FFC not flush", side, x0, x1)
-        sn = slot_nets(side)
-        for p in j.Pads():
-            if p.GetNumber() == "MP":
-                p.SetNet(net("GND"))                           # shell tabs to ground (shield + anchor)
-                continue
-            slot = int(round(pcbnew.ToMM(p.GetPosition().y) - CY - FFC_Y0 + 9.5)) + 1
-            if sn.get(slot):
-                p.SetNet(net(sn[slot]))
+        j = vffc_fp(b, side, net)
         keep(j)
 
     # ---- cover standoff holes (M3) in the corners, with copper keep-outs for the standoff / case boss
@@ -272,7 +311,7 @@ def build():
     f1 = add(b, "Fuse", "Fuse_Bourns_MF-RHT050", "F1", "MF-RHT050")
     put(f1, C(0, 0), angle=90)
     x0, y0, x1, y1 = crt(f1)
-    f1.Move(V(13.0 - (x0 + x1) / 2, -13.6 - (y0 + y1) / 2))
+    f1.Move(V(13.0 - (x0 + x1) / 2, -14.6 - (y0 + y1) / 2))         # its top-side joints clear of JR
     setnets(f1, {"1": "VBUS", "2": "+5V_LED"}, net)
     keep(f1)
 
@@ -326,15 +365,17 @@ def check_layout(fps):
             ov = boxes[a].intersection(boxes[c]).area
             assert ov < 1e-6, f"courtyards {a} / {c} overlap ({ov:.2f} mm2)"
 
-    def pth(fp):
-        return [(pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY)
+    def pth(fp, r=False):
+        return [((pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY),
+                 pcbnew.ToMM(max(p.GetSize().x, p.GetSize().y)) / 2) if r else
+                (pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY)
                 for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
     for a in refs:                                             # a part's body never sits on another face's pin tails
-        for c in refs:
+        for c in refs:                                         # or solder joints (the pad's copper on a's face)
             if (a in bottom) == (c in bottom):
                 continue
-            for q in pth(fps[c]):
-                assert not boxes[a].buffer(-0.05).contains(Point(q)), f"{a} body over {c}'s pin at {q}"
+            for q, r in pth(fps[c], r=True):
+                assert not boxes[a].intersects(Point(q).buffer(r - 1e-3)), f"{a} courtyard over {c}'s joint at {q}"
     pico = box(-10.5, -25.5, 10.5, 25.5)
     for ref in ("J4", "J5", "J6", "JL", "JR"):
         assert boxes[ref].intersection(pico).area < 1e-6, f"{ref} is under the Pico"
@@ -351,15 +392,20 @@ def check_layout(fps):
                 continue
             for q in pth(fp):
                 assert Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}"
-        assert abs(y - FFC_Y0) - STANDOFF_KEEP > 10.5 + 1.0, "standoff in the ribbon path"
+        if abs(x) > VFFC_SLOT_X - 1.0:                         # the jumpers come over the edge strip, 21 mm wide
+            assert abs(y - VFFC_Y0) - STANDOFF_KEEP > 10.5 + 1.0, "standoff in the jumper's path"
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
+
+
+TITLE_Y0, TITLE_Y1 = -18.9, -11.4         # title window up the left strip: between the back standoff's keep-out
+                                           #   and the cable connector's back end
 
 
 def art(b):
     rec = []
     L = lambda *a, **k: label(b, *a, records=rec, **k)
     # title: the composition ring + "Compose" (rev 1 style), standing up the left strip beside the Pico's
-    # back half (the back is narrowed there for the plates' inner seats)
+    # back half (the back is narrowed there for the plates' inner seats), behind the cable connector
     x_mid = -(10.5 + CLIP_X) / 2
 
     def title(xm):
@@ -369,9 +415,12 @@ def art(b):
             PA.fit(PA.text_shape(f"controller · rev 2 · {PR.HANDLE}", PR.ART_TEXT_FONT), -1.0, -2.25, 10.0, 0.85)[0]])
         g = rotate(g, 90, origin=(0, 0))                        # reads bottom -> top along the strip
         bx0, by0, bx1, by1 = g.bounds
-        return translate(g, xm - (bx0 + bx1) / 2, -(-14.4) - (by0 + by1) / 2)
+        k = min(1.0, (TITLE_Y1 - TITLE_Y0) / (by1 - by0))       # scaled down to fit the window if needed
+        g = scale(g, k, k, origin=((bx0 + bx1) / 2, (by0 + by1) / 2))
+        bx0, by0, bx1, by1 = g.bounds
+        return translate(g, xm - (bx0 + bx1) / 2, -((TITLE_Y0 + TITLE_Y1) / 2) - (by0 + by1) / 2)
     PK.add_poly(b, title(x_mid), pcbnew.F_SilkS, CX, CY)
-    rec.append(dict(text="Compose", x=round(x_mid, 2), y=-14.4))
+    rec.append(dict(text="Compose", x=round(x_mid, 2), y=round((TITLE_Y0 + TITLE_Y1) / 2, 2)))
     # bottom face (it faces the case floor): the same title, mirrored so it reads from below
     PK.add_poly(b, PA.mirror_about(title(x_mid), x_mid), pcbnew.B_SilkS, CX, CY)
     # cover standoffs
@@ -397,10 +446,10 @@ def art(b):
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
     # cable connectors: the side name along the contact row, centred on it; "1" right beside slot 1's contact
-    pad_in = FFC_PAD_X - 0.5                                   # inner end of the contacts (1.0 mm long pads)
-    for sx, s in zip((-1, 1), PR.HALF_NAMES):                 # lhs / rhs, read from the outside, as on rev 1
-        L(s, sx * (pad_in - 0.95), FFC_Y0, angle=90 * sx)
-        L("1", sx * (pad_in - 0.7), FFC_Y0 - 9.5)
+    for sx, s in zip((-1, 1), PR.HALF_NAMES):                 # lhs / rhs, read from the outside, as on rev 1:
+        x_in = abs(vffc_x("R")) - VFFC_PAD_A[0] / 2 + VFFC_PAD_A[1]   # in the strip between the Pico's socket
+        L(s, sx * (x_in - 1.5), VFFC_Y0, angle=90 * sx)              #   and the connector's contact-face pads
+        L("1", sx * (x_in - 0.9), VFFC_Y0 - 9.5)
     return rec
 
 

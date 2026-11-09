@@ -12,10 +12,10 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
   - Outline: the plate outline less PCB_INSET (inside the gasket pads). No case screws go through it: the
     board hangs from the plate on four M2 screws into heat-set inserts in the plate (posts solved here).
   - Matrix: the layout's (row, col), COL2ROW, a through-hole diode per key in the same spot at every key.
-  - Cable: Molex 200528-0200 FFC connector (20 pos, 1.0 mm, bottom contact) on the bottom face along the
-    inner edge, centred on the controller connector's row (bridge-frame y). The ribbon hangs in a slack U
-    between the two boards. Contacts get their nets by physical position: the back-most contact is slot 1,
-    as on the controller (type B cable, same physical order at both ends).
+  - Jumper connector: Molex 200528-0200 (20 pos, 1.0 mm, right angle, bottom contact) on the bottom face along
+    the inner edge, its contact row on bridge-frame y = the controller's Pico centre - jumper_row_y() (derived:
+    where the straight flex jumper needs the least skew, see compose.pcb.jumper). Contacts get their nets
+    by physical position: the back-most contact is slot 1, as on the controller (the jumper keeps the order).
   - Slots: 1 GND, 2 5V, 3 RGB in, 4 GND, 5-11 COL0-6, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/layout.py.
@@ -51,7 +51,12 @@ FFC_LIB, FFC_NAME = "Connector_FFC-FPC", "Molex_200528-0200_1x20-1MP_P1.00mm_Hor
 FFC_BODY = (-12.65, 12.65, -0.5, 5.15)   # along the row (u) / toward the cable side (n), from the contact row
                                          #   (n from -0.5: the contacts' back ends)
 FFC_H = 2.0                          # body height under the board
-FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush, as on the controller)
+FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush)
+FFC_PROUD_MAX = 0.5                  # ... or up to this far proud of the edge, if that's what the gap below needs
+FFC_GAP = 0.6                        # the connector (body and contact pads) to any other part on its face: both are
+                                     #   hand-soldered, so as far apart as the connector's own contacts (0.6 mm)
+JUMPER_ROW_Y = None                  # the connector's row centre in the controller's frame (y, mm). None = derived:
+                                     #   where the straight flex jumper needs the least skew in its bends (jumper_row_y)
 SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 4: "GND", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
 SLOT_NET.update({5 + c: f"COL{c}" for c in range(7)})
 SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
@@ -118,20 +123,64 @@ def ffc_frame():
     """Contact-row direction u (toward the back) and the cable-side normal n (toward the bridge), unit vectors
     in the board plane (plate-local xy). The row runs along the board's inner edge: turned to the bridge
     frame's y axis instead (the splay, 10 deg) its 25 mm body would sweep into the inner column's sockets.
-    The ribbon hangs in a slack U between the boards, and its two vertical runs take the splay up with a
-    slight twist."""
+    The flex jumper's flat top turns by the splay in plan, so the controller's connectors stay square."""
     return np.array([0.0, 1.0]), np.array([1.0, 0.0])
 
 
+_ROW = {}
+
+
+def jumper_row_y():
+    """The connector's row centre in the controller's frame (y): JUMPER_ROW_Y if set, else derived. Place the
+    connector, solve the jumper with the half connector free to slide along its row (least bend skew), move
+    the row by that slide, repeat until it settles (rounded to 0.01 mm). Cached in out_cache/, keyed by the
+    sources it depends on, since the solve takes a minute."""
+    if JUMPER_ROW_Y is not None:
+        return JUMPER_ROW_Y
+    if "v" in _ROW:
+        return _ROW["v"]
+    import hashlib
+    import json
+    here = os.path.dirname(os.path.abspath(__file__))
+    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "pcb/layout.py", "pcb/rev2_half.py",
+                                                  "pcb/jumper.py", "controller/rev2_std.py", "case/gasket.py")]
+    key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + os.environ.get("C58_REV", "").encode()).hexdigest()
+    cache = os.path.join("out_cache", "jumper_row_y.json")
+    try:
+        got = json.load(open(cache))
+        if got.get("key") == key:
+            _ROW["v"] = got["row_y"]
+            return _ROW["v"]
+    except (OSError, ValueError):
+        pass
+    from compose.pcb import jumper as J
+    y = 0.72                                                 # start: Compose58's value
+    for _ in range(6):
+        _ROW["v"] = y
+        _PLACEMENT.clear()
+        g = J.solve(free_shift=True)
+        y_new = round(y - g.shift * float(g.F0[1, 1]), 2)    # slide along the row -> its bridge-frame y part
+        if abs(y_new - y) < 0.005:
+            break
+        y = y_new
+    _ROW["v"] = y
+    _PLACEMENT.clear()
+    J._SOLVED.clear()
+    os.makedirs("out_cache", exist_ok=True)
+    json.dump({"key": key, "row_y": y}, open(cache, "w"))
+    return y
+
+
 def ffc_row_y_P():
-    """The controller's contact row (bridge-frame y)."""
+    """The connector's contact row (bridge-frame y), set from the controller's Pico centre by jumper_row_y()."""
     from compose.case import gasket as C
-    return C.CT.y_pc - CS.FFC_Y0
+    return C.CT.y_pc - jumper_row_y()
 
 
 def ffc_place(keep, ol):
     """Contact-row centre (local) on the bridge-frame line of the controller's row, as close to the board's
-    inner edge as the parts allow."""
+    inner edge as the parts allow: FFC_GAP clear of every other part (both faces' sockets, LEDs, holes), the body
+    flush with the edge, or up to FFC_PROUD_MAX proud of it if the gap needs that, else further in."""
     u, n = ffc_frame()
     yP = ffc_row_y_P()
     ax = G.ANCHOR[0] - PR.PCB_INSET                          # board inner edge (local x) along the bridge
@@ -144,7 +193,7 @@ def ffc_place(keep, ol):
     best = None
     for shift in np.arange(0.0, 8.01, 0.25):                 # along the row, either way, if the spot is taken
         for s in (shift, -shift):
-            for back in np.arange(0.0, 15.01, 0.25):         # in from the edge
+            for back in list(np.arange(0.0, -FFC_PROUD_MAX - FFC_EDGE - 1e-9, -0.1)) + list(np.arange(0.25, 15.01, 0.25)):
                 # row centre: P-frame y = yP, cable-side corner FFC_EDGE + back from the edge
                 lo, hi = -80.0, 40.0
                 for _ in range(60):                          # local y on the edge line giving P y = yP
@@ -159,7 +208,9 @@ def ffc_place(keep, ol):
                 d = max(x for x, _ in bx.exterior.coords) - ax
                 c = c - n * (d + FFC_EDGE + back)
                 bx = body(c)
-                if ol.buffer(-0.29).contains(bx) and not bx.buffer(PR.CLEARANCE + 0.01).intersects(keep):
+                # inside the board, except that the cable side may stand proud of the (straight) inner edge
+                inside = ol.buffer(-0.29).contains(bx.difference(sbox(ax - 0.29, -1e3, ax + 10.0, 1e3)))
+                if inside and not bx.buffer(FFC_GAP).intersects(keep):
                     best = (c, bx, s, back)
                     break
             if best:
@@ -519,6 +570,13 @@ def build(name):
                 nm = None
             if nm:
                 p.SetNet(net(nm))
+        # the library footprint's body outline runs to the cable side, which may stand proud of the board edge:
+        # those silk lines go to the fab layer (not printed) rather than being clipped by the edge
+        edge_X = PK.OX + G.ANCHOR[0] - PR.PCB_INSET
+        for gi in j.GraphicalItems():
+            if gi.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS) and \
+                    pcbnew.ToMM(gi.GetBoundingBox().GetRight()) > edge_X - 0.3:
+                gi.SetLayer(pcbnew.F_Fab if gi.GetLayer() == pcbnew.F_SilkS else pcbnew.B_Fab)
         b.Add(j)
     # ---- M2 holes (board -> plate inserts)
     for i, (x, y) in enumerate(s.posts):                      # no courtyard: they sit in the column gaps,

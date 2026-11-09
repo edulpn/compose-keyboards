@@ -11,7 +11,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 | Revision | Case | Controller | Status | Files |
 |---|---|---|---|---|
 | **[rev 1](rev1.md)** | One-piece, screwed sandwich mount | rev 1: Pico + 12-pin PicoBlade cables | **Built.** Assembled and wired; the final cable test is pending | [Release `compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1) |
-| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin FFC, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller and all four half boards designed and checked; not built yet | — |
+| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin flex jumpers, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller, all four half boards and the flex jumper designed and checked; not built yet | — |
 
 ![the four Compose58 rev 2 half boards](images/rev2_half_boards.png)
 
@@ -31,7 +31,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
   - Connectors and cables, including what to buy and the 1:1 cable trap.
   - Assembly order, PCBs, the controller rev 1 interface.
   - What the checks verify, print orientation.
-- **[Rev 2](rev2.md):** the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB), the checks and simulation, and the design notes and ideas collected along the way.
+- **[Rev 2](rev2.md):** the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB), the flex jumpers, the checks and simulation, and the design notes and ideas collected along the way.
 - **[Controller rev 2](../../docs/controller-rev2.md):** the shared controller rev 2 uses.
 - **[Building from source](../../docs/building.md):** changing angles or parameters and regenerating everything.
 

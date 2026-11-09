@@ -26,7 +26,7 @@ Each layout has its own pages: revisions, build guides, status and releases.
 
 - **One-piece tented, splayed cases** for 350 mm-class printers. Splay, tent and tilt are parameters.
 - **Reversible half PCBs.** One board serves both halves, in hotswap or solder-in versions (rev 2 adds optional per-key RGB, experimental), with QMK firmware generated alongside.
-- **A shared controller standard** ([rev 2](docs/controller-rev2.md)): socketed Raspberry Pi Pico, a reversal-safe cable pinout, optional RGB, I2C/OLED, Qwiic and AUX.
+- **A shared controller standard** ([rev 2](docs/controller-rev2.md)): socketed Raspberry Pi Pico, fixed jumper connectors with a reversal-safe pinout (custom flex jumpers take up each layout's angles), optional RGB, I2C/OLED, Qwiic and AUX.
 - **Gasket mount:** plates float on pads cut from ordinary foam weatherstrip tape. The squeeze is set by geometry, not screw torque.
 - **Verified, not just drawn.** Every revision ships with its checks:
   - fit and clearance between all parts;
@@ -34,7 +34,8 @@ Each layout has its own pages: revisions, build guides, status and releases.
   - printability, by slicing each part in its print orientation;
   - board DRC;
   - copper-level matrix and netlist simulation;
-  - ngspice simulation of the controller.
+  - ngspice simulation of the controller;
+  - the flex jumpers bent as elastic strips: fit, insertion and copper fatigue (rev 2).
 
 ## Getting the files
 

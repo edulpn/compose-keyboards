@@ -5,15 +5,17 @@ Independent of the net names the board was built with:
   1. Copper connectivity is rebuilt from geometry (pads, tracks and vias that touch on a layer).
   2. Parts are placed the way a builder would, from their datasheets:
        Pico       pinout at its mechanical pin positions (pin 1 top-left seen from above, USB at the back)
-       FFC        contacts at the physical slots (slot 1 = the back-most contact), whatever the pad numbers
+       FFC        Molex 52610 vertical: contacts at the physical slots (slot 1 = the back-most), whatever the pad
+                  numbers; each terminal's two tails on one copper node; the contact face toward the Pico
        74HCT125   DIP-14 pinout from pin 1 = the square pad, counter-clockwise seen from the side its body is on
        C2         + lead = square pad;  headers pin 1 = square pad;  Qwiic pins in a row from pin 1
   3. The netlist those parts make is compared with the spec below (written from the README, not from
      compose/controller/rev2.py), for the fully populated board and with the optional RGB parts left out.
   4. Silkscreen labels are checked against what the copper under them does.
   5. Two model halves (42 keys each, diode per key, reversible board = right half mirrored) are joined by
-     straight 20-way FFCs; the QMK COL2ROW scan runs with the rev 2 pin config: every key alone, random chords,
-     the ghosting square, and a cable fitted flipped.
+     20-way jumpers (same physical slot order at both ends); the QMK COL2ROW scan runs with the rev 2 pin
+     config: every key alone, random chords, the ghosting square, and a cable fitted flipped (the pinout's
+     reversal safety).
   6. Negative controls: a swapped firmware pin, a reversed right connector, reversed diodes, an injected
      short and a cut track must all be caught.
 """
@@ -93,7 +95,7 @@ def spec_nets(rgb=True):
                 add("RGB_L_IN" if side == "L" else "RGB_R_IN", pin)
             elif f == "RGB_FROM_HALF":
                 add("RGB_L_RET" if side == "L" else "NC_RGB_END", pin)
-        add("GND", ("ffc" + side, "MP"))
+        # (the Molex 52610 has no mounting tabs)
     # I2C + AUX
     add("GND", ("J4", 1)); add("3V3", ("J4", 2)); add("GP15", ("J4", 3)); add("GP14", ("J4", 4))
     add("GND", ("J5", 1)); add("3V3", ("J5", 2)); add("GP14", ("J5", 3)); add("GP15", ("J5", 4)); add("GND", ("J5", "MP"))
@@ -134,25 +136,43 @@ class Board:
 def place_parts(B):
     """Map every physical part pin to a copper group, from mechanical positions and datasheet pinouts."""
     pins, notes = {}, []
+    # the Molex 52610's terminals each have two tails (a pad either side of the body): the part joins them, so
+    # join their copper first (before any node is looked up)
+    cu = B.cu
+    for side in ("L", "R"):
+        fp = B.fp["J" + side]
+        for y in {round(ToMM(p.GetPosition().y), 2) for p in fp.Pads()}:
+            idx = []
+            for p in fp.Pads():
+                if abs(ToMM(p.GetPosition().y) - y) < 0.01:
+                    q = Point(ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
+                    idx += [i for i, (g, lay, lab) in enumerate(cu.items) if lay == pcbnew.F_Cu
+                            and lab not in ("track", "zone") and g.contains(q)][:1]
+            for i in idx[1:]:
+                cu.union(idx[0], i)
     # Pico: pin 1 top-left seen from above with USB at the back (-y); 2.54 mm pitch, rows 17.78 mm apart
     for p in range(1, 41):
         x = -8.89 if p <= 20 else 8.89
         y = -24.13 + (p - 1) * 2.54 if p <= 20 else 24.13 - (p - 21) * 2.54
         pins[("pico", p)] = B.node((CX + x, CY + y))
-    # FFC: physical slot order = contact position from the back; MP tabs
+    # cable connectors (Molex 52610, vertical): contacts at the physical slots, slot 1 = the back-most (each
+    # terminal's two tails joined above, so they're one node)
     for side in ("L", "R"):
         fp = B.fp["J" + side]
-        sig = sorted([p for p in fp.Pads() if p.GetNumber() != "MP"], key=lambda p: p.GetPosition().y)
-        for i, p in enumerate(sig):
-            pins[("ffc" + side, i + 1)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
-        mp = [B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))) for p in fp.Pads() if p.GetNumber() == "MP"]
-        pins[("ffc" + side, "MP")] = mp[0] if len(set(mp)) == 1 else ("split", tuple(mp))
-        # cable side outward: courtyard centre beyond the contact row
-        fp.BuildCourtyardCaches()
-        bb = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
-        cxm = ToMM((bb.GetLeft() + bb.GetRight()) // 2) - CX
-        cont_x = ToMM(sig[0].GetPosition().x) - CX
-        ok((cxm - cont_x) * (1 if side == "R" else -1) > 0, f"FFC {side}: cable entry faces outward (toward its half)")
+        ys = sorted({round(ToMM(p.GetPosition().y), 2) for p in fp.Pads()})
+        ok(len(ys) == 20, f"FFC {side}: 20 contact positions")
+        rows = {}
+        for i, y in enumerate(ys):
+            tails = [p for p in fp.Pads() if abs(ToMM(p.GetPosition().y) - y) < 0.01]
+            nodes = {B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))) for p in tails}
+            ok(len(tails) == 2 and len(nodes) == 1, f"FFC {side} slot {i + 1}: two tails, one terminal")
+            pins[("ffc" + side, i + 1)] = nodes.pop()
+            for p in tails:
+                rows.setdefault(round(ToMM(p.GetSize().x if p.GetSize().x > p.GetSize().y else p.GetSize().y), 2),
+                                []).append(ToMM(p.GetPosition().x) - CX)
+        # Molex's pattern: the contact-face row has the longer pads (1.85 vs 1.65); it must face the Pico (inboard)
+        long_x = sum(rows[max(rows)]) / len(rows[max(rows)]); short_x = sum(rows[min(rows)]) / len(rows[min(rows)])
+        ok(abs(long_x) < abs(short_x), f"FFC {side}: contact face toward the Pico (the jumper's conductors face inboard)")
     # DIP-14: pin 1 = the square pad; the rest counter-clockwise seen from above
     u = B.fp["U2"]
     pads = [p for p in u.Pads()]
@@ -298,8 +318,7 @@ def silk_truth(B, pins):
         ones = [(x, y) for t, x, y in texts if t == "1" and (x - CX) * sx > 0]
         s1 = B.cu.items  # noqa
         fp = B.fp["J" + side]
-        sig = sorted([p for p in fp.Pads() if p.GetNumber() != "MP"], key=lambda p: p.GetPosition().y)
-        y1 = ToMM(sig[0].GetPosition().y)
+        y1 = min(ToMM(p.GetPosition().y) for p in fp.Pads())
         ok(ones and abs(ones[0][1] - y1) < 1.0, f"FFC {side}: the '1' mark is level with slot 1")
         lr = [(x, y) for t, x, y in texts if t == nm]
         ok(lr and (lr[0][0] - CX) * sx > 0, f"'{nm}' printed beside the {'left' if sx < 0 else 'right'} connector")

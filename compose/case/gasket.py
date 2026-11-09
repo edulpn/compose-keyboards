@@ -268,6 +268,17 @@ def case2_world():
     # ---- half tubs (local): wall up to the seam, reveal rebate on the outside, open inside
     tub = prism(ring(O_OUTER), DEEP, PR.SEAM_Z)
     rebate = poly_prism(O_OUTER.buffer(1.0).difference(O_OUTER.buffer(-rv_w, join_style="round")), PR.SEAM_Z - rv_h, PR.SEAM_Z + 1)
+    # where the rebate runs into the bridge walls (the only thing above the seam), the wall would hang over it:
+    # the cut carries on above as a 60-degree chamfer back out to the outline, so the wall slopes over the notch
+    # (the sloped face runs on past the cutter's outer edge, so it ends on a clean crossing, not a knife edge)
+    r0 = O_OUTER.buffer(-rv_w, join_style="round").simplify(0.05, preserve_topology=True)
+    r1 = O_OUTER.buffer(1.0, join_style="round")
+    over = rv_w + 3.0
+    r2 = O_OUTER.buffer(-rv_w + over, join_style="round").simplify(0.05, preserve_topology=True)
+    zc0 = PR.SEAM_Z + 1
+    zc2 = zc0 + over * math.tan(math.radians(PR.LEDGE_CHAMFER_DEG))
+    wire = lambda poly, z: cq.Wire.makePolygon([cq.Vector(x, y, z) for x, y in poly.exterior.coords], close=True)
+    rebate = rebate.fuse(poly_prism(r1, zc0, zc2).cut(cq.Solid.makeLoft([wire(r0, zc0), wire(r2, zc2)], True)))
     cav = prism(ring(O_WALL_IN), DEEP, PR.SEAM_Z + 1)
     tubL, tubR = _both(tub)
     cavL, cavR = _both(cav)
@@ -279,20 +290,19 @@ def case2_world():
     hollow = union([cavL, cavR, interior]).intersect(big_box(-500, 500, -500, 500, PR.FLOOR_T, 500))
     body = body.cut(hollow)
     # ---- pad ledge (local) round each half, except along the bridge (the middle is open there)
-    # the tub prints floor down: the ledge is a shelf off the wall, so under its flat top it steps back to the
-    # wall at LEDGE_CHAMFER_DEG (0.6 mm steps) instead of hanging over air
+    # the tub prints floor down: the ledge is a shelf off the wall, so under its flat top a smooth chamfer runs
+    # back to the wall at LEDGE_CHAMFER_DEG instead of hanging over air (each print layer then moves a fraction
+    # of a line width; a staircase of 0.6 mm steps would leave an unsupported perimeter on every step)
     wall_b = O_WALL_IN.buffer(0.5, join_style="round")                  # 0.5 into the wall: a real overlap to fuse
-    step_in = 0.6
-    step_dz = step_in * math.tan(math.radians(PR.LEDGE_CHAMFER_DEG))
-    rings, k = [], 0
-    while PR.LEDGE_W - k * step_in > -0.5:                                # stop once the step is back inside the wall
-        r_ = wall_b.difference(O_PLATE.buffer(-(PR.LEDGE_W - k * step_in), join_style="round"))
-        if r_.area < 1.0:
-            break
-        z1 = PR.LEDGE_TOP if k == 0 else PR.LEDGE_TOP - PR.LEDGE_T - (k - 1) * step_dz + 0.01
-        rings.append(poly_prism(r_, PR.LEDGE_TOP - PR.LEDGE_T - k * step_dz, z1))
-        k += 1
-    ledge = union(rings)
+    z_b = PR.LEDGE_TOP - PR.LEDGE_T                                       # underside of the flat part
+    grow = PR.LEDGE_W + PR.FLOAT_GAP + 1.5                                 # the chamfer reaches past wall_b
+    dz = grow * math.tan(math.radians(PR.LEDGE_CHAMFER_DEG))
+    inner = O_PLATE.buffer(-PR.LEDGE_W, join_style="round").simplify(0.05, preserve_topology=True)
+    outer = inner.buffer(grow, join_style="round").simplify(0.05, preserve_topology=True)
+    under = cq.Solid.makeLoft([cq.Wire.makePolygon([cq.Vector(x, y, z_b) for x, y in inner.exterior.coords], close=True),
+                               cq.Wire.makePolygon([cq.Vector(x, y, z_b - dz) for x, y in outer.exterior.coords], close=True)],
+                              True)                                       # the space under the chamfer
+    ledge = poly_prism(wall_b.difference(inner), z_b - dz, PR.LEDGE_TOP).cut(under)
     ledge = ledge.cut(middle_side_local(-PR.LEDGE_W - 1.0))
     # frame-screw bosses (local): from the floor to the seam, counterbored from below
     fb = union([cyl(x, y, PR.FRAME_BOSS_R, DEEP, PR.SEAM_Z) for x, y in GL.screws])

@@ -14,10 +14,19 @@ const d2=new T.DirectionalLight(0xdfe8ff,0.9);d2.position.set(200,120,140);s.add
 const d3=new T.DirectionalLight(0xffffff,1.3);d3.position.set(40,-120,-220);s.add(d3);
 const hide=(v.get('hide')||'').split(',');const ex=JSON.parse(v.get('explode')||'{}');const show=v.get('show')?v.get('show').split(','):null;const cl=v.get('clip')?JSON.parse(v.get('clip')):null;const clipPlanes=cl?[new T.Plane(new T.Vector3(cl[0],cl[1],cl[2]),cl[3])]:[];
 const man=await (await fetch(v.get('man')||'manifest.json')).json();const L=new STLLoader();
-for(const m of man){ if(hide.includes(m.name)) continue; if(show&&!show.includes(m.name)) continue;
+for(const m of man){ if(m.decal) continue; if(hide.includes(m.name)) continue; if(show&&!show.includes(m.name)) continue;
   let g=await new Promise(res=>L.load(m.file,res));
   if(m.smooth){g.deleteAttribute('normal');g=mergeVertices(g,1e-3);g.computeVertexNormals();}
   const mat=new T.MeshStandardMaterial({color:m.color,metalness:m.metal,roughness:m.rough,flatShading:!m.smooth,clippingPlanes:clipPlanes,side:cl?T.DoubleSide:T.FrontSide});
+  const mesh=new T.Mesh(g,mat); if(ex[m.name]!==undefined){const e=ex[m.name]; if(Array.isArray(e)) mesh.position.set(e[0],e[1],e[2]); else mesh.position.z=e;} s.add(mesh);}
+// decals: an image laid on a flat face; corners = world positions of the image's top-left, top-right, bottom-left
+const TL=new T.TextureLoader();
+for(const m of man){ if(!m.decal) continue; if(hide.includes(m.name)) continue; if(show&&!show.includes(m.name)) continue;
+  const tex=await new Promise(res=>TL.load(m.decal,res)); tex.colorSpace=T.SRGBColorSpace; tex.anisotropy=8;
+  const [a,b,c]=m.corners.map(q=>new T.Vector3(...q)); const d=b.clone().add(c).sub(a);
+  const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute([...a.toArray(),...b.toArray(),...c.toArray(),...d.toArray()],3));
+  g.setAttribute('uv',new T.Float32BufferAttribute([0,1,1,1,0,0,1,0],2)); g.setIndex([0,2,1,1,2,3]); g.computeVertexNormals();
+  const mat=new T.MeshStandardMaterial({map:tex,transparent:true,alphaTest:0.5,roughness:m.rough??0.55,metalness:0.0,side:T.DoubleSide,clippingPlanes:clipPlanes,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   const mesh=new T.Mesh(g,mat); if(ex[m.name]!==undefined){const e=ex[m.name]; if(Array.isArray(e)) mesh.position.set(e[0],e[1],e[2]); else mesh.position.z=e;} s.add(mesh);}
 r.render(s,cam);window.done=1;
 </script></body></html>

@@ -203,7 +203,7 @@ GK_SQUEEZE = 0.30                # designed squeeze
 GK_C = GK_T * (1 - GK_SQUEEZE)   # installed thickness
 GK_PAD_L, GK_PAD_W = 10.0, 4.0   # pad: tape width along the edge (9.5-10) x slice length inward
 LEDGE_W = 4.5                    # case ledge under the flange, inward from the outline
-LEDGE_T = 1.0                    # flat part of the ledge; under it a 60-degree stepped chamfer back to the wall
+LEDGE_T = 1.0                    # flat part of the ledge; under it a smooth 60-degree chamfer back to the wall
 LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by up to 12 deg: 48 deg worst, printable)
 LEDGE_TOP = FLANGE_Z0 - GK_C     # pad seat (local z)
 FRAME_LIP_Z = FLANGE_Z0 + FLANGE_T + GK_C   # frame underside over the flange (local z)
@@ -217,8 +217,7 @@ GK_TABS = 18                     # pad pairs per half (outer edges)
 INNER_SEATS_P = ((-3.0, -13.0), (-48.5, -58.5))   # inner-edge pad pairs: P-frame y spans (back, front)
 INNER_SEAT_IN = 4.5              # inner seat width under the flange, from the plate edge
 PCB_INSET = LEDGE_W + 0.5        # half board outline inside the plate outline
-FFC_CABLE_L = 50.0               # rev 2 controller <-> half ribbon (20-pin 1.0 mm type B): slack hangs in a U in the bay
-FFC_CABLE_L_MAX = 60.0           # longest that still hangs clear of the floor (checked)
+JUMPER_W = 21.0                  # rev 2 flex jumper width (20 x 1.0 mm pitch + 1 mm margins: both connectors' N+1)
 COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of it by this (it doesn't clamp)
 # middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
 # standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
