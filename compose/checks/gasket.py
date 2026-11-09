@@ -186,17 +186,25 @@ def pads_local():
     return lo, up
 
 
-def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=1.2):
+LINE_W = 0.45                     # one extrusion line (0.4 mm nozzle)
+
+
+def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=LINE_W, seats=()):
     """Slice the part in print orientation and compare each layer with the one under it: material more than
-    one layer height (45 deg) beyond the layer below is unsupported. A patch is fine if it is a thin lip
-    (narrower than lip_max), or a bridge (narrower than bridge_max and resting on support around most of its
-    edge, like a hole's ceiling). Returns (worst patch or None, n bridges, n lips)."""
+    one layer height (45 deg) beyond the layer below is unsupported. A patch is fine if it is no wider than one
+    extrusion line (lip_max: the perimeter still lands mostly on the layer below), or a bridge (narrower than
+    bridge_max and resting on support around most of its edge, like a hole's ceiling). Anything else, a
+    stepped overhang included, fails: overhangs are meant to be smooth chamfers. The exception is `seats`
+    (print-frame polygons): the flat shoulders screw heads clamp on, inside their counterbores, which the tent
+    tilts so that each layer exposes a thin crescent of them. Returns (worst patch or None, n bridges, n lips,
+    n seat patches)."""
     from shapely.geometry import Polygon, MultiPolygon
     from shapely.ops import unary_union as uu
     z0, z1 = m.bounds[0][2], m.bounds[1][2]
     zs = np.arange(z0 + layer / 2, z1, layer)
     secs = m.section_multiplane(plane_origin=[0, 0, 0], plane_normal=[0, 0, 1], heights=zs)
-    prev, worst, n_br, n_thin = None, None, 0, 0
+    prev, worst, n_br, n_thin, n_seat = None, None, 0, 0, 0
+    seat_u = uu(list(seats)) if seats else Polygon()
     for z, s in zip(zs, secs):
         cur = uu([p for p in s.polygons_full]) if s is not None else Polygon()
         cur = cur.buffer(0)
@@ -214,9 +222,12 @@ def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=1.2):
                     n_br += 1
                     continue
                 c = u.centroid
+                if not seat_u.is_empty and seat_u.contains(c):
+                    n_seat += 1
+                    continue
                 worst = f"{u.area:.1f} mm2 at z {z:.1f} ({c.x:.0f}, {c.y:.0f})"
         prev = cur if not cur.is_empty else prev
-    return worst, n_br, n_thin
+    return worst, n_br, n_thin, n_seat
 
 
 def mirror_pair(local):
@@ -381,9 +392,18 @@ def main():
         u, cnt = np.unique(m.edges_sorted, axis=0, return_counts=True)
         rec(f"F {f}: watertight, no non-manifold edges", m.is_watertight and not (cnt > 2).any(),
             f"{int((cnt > 2).sum())} non-manifold edges")
-        worst, n_br, n_thin = overhangs(m)
-        rec(f"F {f}: every layer supported (45 deg rule; bridges <= 12 mm and lips <= 1.2 mm allowed)", worst is None,
-            f"{n_br} bridges, {n_thin} thin lips" + ("" if worst is None else f"; unsupported {worst}"))
+        seats = []
+        if f == "rev2_case.stl":                     # the frame screws' counterbore shoulders, in the STL's frame
+            bb = parts["case"].BoundingBox()
+            for x, y in C.GL.screws:
+                pw = G.apply(G.M_LW, (x, y, PR.SEAM_Z - PR.SHELF_T))
+                for sx in (1, -1):
+                    seats.append(Point(sx * pw[0] - bb.center.x, pw[1] - bb.center.y).buffer(PR.M3_CBORE_D / 2 + 0.5))
+        worst, n_br, n_thin, n_seat = overhangs(m, seats=seats)
+        rec(f"F {f}: every layer supported (45 deg rule; bridges <= 12 mm, no step wider than a {LINE_W} mm line)",
+            worst is None,
+            f"{n_br} bridges, {n_thin} thin lips" + (f", {n_seat} patches on the {len(seats)} screw seats" if seats else "")
+            + ("" if worst is None else f"; unsupported {worst}"))
 
     json.dump(RES, open(os.path.join(OUT, "checks2.json"), "w"), indent=1)
     n_f = sum(r["result"] == "FAIL" for r in RES)

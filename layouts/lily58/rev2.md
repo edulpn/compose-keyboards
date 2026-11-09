@@ -43,7 +43,7 @@ Everything prints without supports, in print orientation:
 
 | part | qty | prints | why |
 |---|---|---|---|
-| tub (both halves and the open middle bay) | 1 | on its floor, 332 × 161 mm on the 350 mm bed | the pad ledge steps back to the wall at 60° underneath instead of hanging off it |
+| tub (both halves and the open middle bay) | 1 | on its floor, 332 × 161 mm on the 350 mm bed | the pad ledge runs back to the wall on a smooth 60° chamfer underneath instead of hanging off it |
 | plates | 2 | switch side down, as on rev 1 | the flange (flush with the top face) lies flat on the bed; the switch-clip pockets open upward |
 | frames | 2 | upside down, visible top on the bed | bevels are 56° from the bed |
 | middle cover | 1 | upside down, visible top on the bed | same |
@@ -89,7 +89,7 @@ Everything prints without supports, in print orientation:
 | assembly paths | plates and frames drop in along the plate normal; the controller and the cover drop straight down |
 | hardware | cover screws 2.95 mm into the standoffs, standoff threads 4.4 mm into the inserts; Pico gap 0.96 mm, header plugs under the cover |
 | jumpers | the bent shape solved from the case: plate 1.53 mm away (≥ 1.0 for the gasket's travel), half board 0.90, cover 1.71, standoffs 3.37, Pico 4.44; the controller end slides 4.1 mm straight down into its connector with the cover off |
-| printability | every part sliced at 0.2 mm in print orientation; each layer rests on the one below within 45° (short bridges over hole ceilings and lips up to 1.2 mm allowed). A plate with the flange halfway up its edge, the earlier design, fails this. |
+| printability | every part sliced at 0.2 mm in print orientation; each layer rests on the one below within 45°, with no step wider than one 0.45 mm extrusion line. The exceptions are short bridges over hole ceilings and the 12 frame-screw seats: flat shoulders for the M3 heads, which the tent tilts so each layer exposes a thin crescent, inside the counterbore. A plate with the flange halfway up its edge, the earlier design, fails this. |
 
 ### Hardware (case)
 
