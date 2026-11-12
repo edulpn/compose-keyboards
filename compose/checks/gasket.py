@@ -363,6 +363,8 @@ def main():
     rec("C pad count / area per half", True, f"{len(centres)} pairs, {pad_area:.0f} mm2 each")
 
     # ---- D: assembly paths
+    unsided = {}
+
     def sweep_local(local, d0, d1, step):
         return [G.L2W(local.translate(cq.Vector(0, 0, z))) for z in np.arange(d0, d1 + 1e-9, step)]
 
@@ -370,7 +372,9 @@ def main():
         """Both halves' plate or frame swept along its normal: the left shape and its mirror, or with a pointer
         device each side's own shape."""
         if sides is None:
-            local = {"plate": C.plate2_local, "frame": C.frame2_local}[name]()      # built here: only this path uses them
+            if name not in unsided:                          # built here, once: only this path uses them
+                unsided[name] = {"plate": C.plate2_local, "frame": C.frame2_local}[name]()
+            local = unsided[name]
             return [s.fuse(s.mirror("YZ")) for s in sweep_local(local, d0, d1, step)]
         l_, r_ = sides[name]
         return [a.fuse(b.mirror("YZ")) for a, b in zip(sweep_local(l_, d0, d1, step), sweep_local(r_, d0, d1, step))]
