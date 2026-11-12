@@ -33,6 +33,10 @@ O_OUTER = (G.OUTLINE.buffer(PR.FLOAT_GAP + W, join_style="round")   # bevel's to
            .buffer(-_R_OUT, join_style="round").buffer(_R_OUT, join_style="round").simplify(0.01))
 O_OUTER = _orient(O_OUTER, 1.0)                                # CCW: miter_offset insets a CCW ring
 O_CORE = G.OUTLINE.buffer(-PR.FLANGE_W, join_style="round")
+from compose.case import bay as _BAY
+BAY = _BAY.solve() if _BAY.enabled() else None             # thumb bay, when on: its pocket's wall joins the case's
+if BAY is not None:                                         # outer outline; plate, ledge and gaskets don't change
+    O_OUTER = BAY.outer
 
 
 # ================================================================ layout of screws and pads
@@ -227,6 +231,10 @@ def frame2_local(side=None):
     bosses = union([cyl(x, y, PR.FRAME_BOSS_R, PR.SEAM_Z, PR.FRAME_LIP_Z + 0.5) for x, y in GL.screws_all])
     body = body.fuse(bosses.intersect(env))
     body = body.cut(poly_prism(_key_opening(side), PR.FRAME_LIP_Z - 1, PR.FRAME_TOP_Z + 1))
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "bay":           # the frame covers the bay's pocket: opened over the device
+        from compose.pointer import solids as PS
+        body = body.cut(PS.lid_opening(pl.frame, pl.footprint))
     body = body.cut(union([cyl(x, y, PR.M3_INSERT_D / 2, PR.SEAM_Z - 0.5, PR.SEAM_Z + PR.M3_INSERT_L) for x, y in GL.screws_all]))
     # the inner rail ends FLOAT_GAP short of the interface plane, square at the bridge's back and front faces:
     # one cut with the bridge's own block in the P frame (a second, local-frame cut along the same plane left
@@ -302,6 +310,8 @@ def case2_world():
     wire = lambda poly, z: cq.Wire.makePolygon([cq.Vector(x, y, z) for x, y in poly.exterior.coords], close=True)
     rebate = rebate.fuse(poly_prism(r1, zc0, zc2).cut(cq.Solid.makeLoft([wire(r0, zc0), wire(r2, zc2)], True)))
     cav = prism(ring(O_WALL_IN), DEEP, PR.SEAM_Z + 1)
+    if BAY is not None:                                  # the bay's pocket, its own cavity beside the half's
+        cav = cav.fuse(poly_prism(BAY.pocket, DEEP, PR.SEAM_Z + 1))
     tubL, tubR = _both(tub)
     cavL, cavR = _both(cav)
     # ---- middle (P): back/front walls up to the cover underside, open between the plates' inner edges
@@ -339,6 +349,12 @@ def case2_world():
     # ---- middle (P): posts under the standoffs (from the floor to the board's underside)
     posts = union([cyl(x, y, CS.POST_R, DEEP, CT.board_bot) for x, y in CT.mounts])
     body = body.fuse(union([locL, locR, G.P2W(posts)]).intersect(top)).clean()
+    if BAY is not None:                                  # the bay's posts from the pocket floor, the cable's hole
+        from compose.pointer import solids as PS, place as PPL
+        fr = PPL.frame(BAY.name)[1]
+        pL, pR = _both(PS.bay_posts(fr, BAY.name))
+        hL, hR = _both(PS.wall_hole(fr))
+        body = body.fuse(pL.fuse(pR).intersect(top)).cut(hL).cut(hR).clean()
     rbL, rbR = _both(rebate)               # reveal rebate last, so the frame-screw bosses don't fill it
     body = body.cut(rbL).cut(rbR)
     _dbg('fuse', body)
@@ -360,7 +376,7 @@ def case2_world():
     _dbg('hp', body)
     # ---- feet
     feet = []
-    for x, y in L.feet:
+    for x, y in list(L.feet) + ([(BAY.x, BAY.y)] if BAY is not None else []):     # and one under each bay
         p = G.apply(G.M_LW, (x, y, 0))
         feet += [cyl(p[0], p[1], PR.FOOT_D / 2, -1, PR.FOOT_DEPTH), cyl(-p[0], p[1], PR.FOOT_D / 2, -1, PR.FOOT_DEPTH)]
     for sx in (-1, 1):
