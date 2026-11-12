@@ -3,7 +3,7 @@ python3 -m compose <command> [outdir] [args...]
 
 Every command runs one module of the platform as if it were a script: the arguments after the
 command are passed through unchanged (most take the output folder first). Environment variables
-(C58_REV, C58_SPLAY, C58_TENT, C58_TILT, FREEROUTING, ...) work as before.
+(C58_REV, C58_SPLAY, C58_TENT, C58_TILT, C58_POINTER, C58_THUMB_BAY, FREEROUTING, ...) work as before.
 """
 import runpy
 import sys
@@ -34,6 +34,7 @@ COMMANDS = {
     "order-rev2":       ("compose.order_rev2",             "Compose58 rev 2 order folder: every board's JLCPCB zip, checked against its board, + ORDER.md"),
     "flex-sim":         ("compose.checks.flex_sim",        "rev 2 flex jumper as an elastic strip: seated, insertion, gasket travel, length; clearances"),
     "half-rev2":        ("compose.pcb.rev2_half",        "rev 2 half boards (hotswap/solder, +rgb): place, route, DRC, Gerbers (--plan: drawing only)"),
+    "pointer-checks":   ("compose.checks.pointer",       "rev 2 pointer modules and the thumb bay (C58_POINTER, C58_THUMB_BAY): footprint, device, cable, firmware checks (--fast: 2D only; --list; --suggest-bay)"),
 }
 
 
