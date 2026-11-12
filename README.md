@@ -21,6 +21,7 @@ Each layout has its own pages: revisions, build guides, status and releases.
 - **[Building from source](docs/building.md):** requirements, commands, repository layout, customising.
 - **[Controller rev 2](docs/controller-rev2.md):** the shared controller board standard for every layout.
 - **[How the parts fit together](docs/case-geometry.md):** the case geometry that keeps every part insertable.
+- **[Pointer modules](docs/pointer-modules.md):** the pointer mount standard (a slot in place of the 1.5u thumb key, a thumb bay on the case) and the devices that meet it, starting with a trackball.
 
 ## What the platform does
 

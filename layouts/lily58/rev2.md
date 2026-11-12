@@ -101,6 +101,10 @@ Everything prints without supports, in print orientation:
 | foam weatherstrip tape, closed-cell EPDM/neoprene, self-adhesive, 1/8″ × 3/8″ (3 × 10 mm), ~0.4 m | 1 roll |
 | rubber bumpons, 10 mm | as rev 1 |
 
+### Pointer module and thumb bay
+
+Compose58 gives both footprints of the [pointer mount standard](../../docs/pointer-modules.md): the slot at either 1.5u thumb key (`C58_POINTER=pim447:R`), and the 30 mm thumb bay past it on both halves (`C58_POINTER=pim447:R:bay30`; `C58_THUMB_BAY=bay30` gives the bay without a device). Set them for `gasket-case`, `gasket-checks` and `firmware-rev2`; `pointer-checks` checks them.
+
 ## The half boards
 
 `C58_REV=2 python3 -m compose half-rev2 out_r2t` builds all four boards (place, route, DRC, Gerbers; `--plan` draws the placement only). The code is `compose/pcb/rev2_half.py`.
