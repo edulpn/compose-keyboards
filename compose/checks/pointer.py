@@ -117,7 +117,7 @@ def check_device(ctx):
     ctx["pl"] = pl
     p = PL.device_problems(pl)
     rec(f"M2 board and carrier inside the {cfg.mount} window, under its top ({S.top(cfg.mount):g})", not _by(p, "M2"),
-        _by(p, "M2") or f"top {pl.ball_top:.2f} mm above the plate")
+        _by(p, "M2") or f"top {pl.top_z:.2f} mm above the plate, board {pl.base_clear:.2f} mm over the base")
     rec(f"M3 the carrier screws to >= {S.MIN_POINTS} of the footprint's points", not _by(p, "M3"),
         f"{len(set(pl.uses))} of {len(pl.points)}")
     rec("M4 standard screws: the board's into the carrier, the carrier's into the footprint", not _by(p, "M4"),
@@ -127,7 +127,8 @@ def check_device(ctx):
     rec("M5 the cable drops from the pads (" + ("to the switch hole" if pl.kind == "slot" else "into the pocket")
         + ")", not _by(p, "M5"), _by(p, "M5") or "clear")
     rec(f"M6 touch surface near the suggested {PR.POINTER_BALL_TOP:g} mm above the plate",
-        abs(pl.ball_top - PR.POINTER_BALL_TOP) <= 0.5, f"{pl.ball_top:.2f} mm", warn=True)
+        abs(pl.ball_top - PR.POINTER_BALL_TOP) <= 0.5,
+        f"{pl.ball_top:.2f} mm" + (f", board tilted {pl.tilt:g} deg outward" if pl.tilt else ""), warn=True)
     if dev.bus == "i2c":
         a = dev.address
         rec("M7 I2C address clear of the other modules", a not in OTHER_I2C,

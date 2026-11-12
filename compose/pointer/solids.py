@@ -91,6 +91,14 @@ def wall_hole(fr):
 
 
 # ---------------------------------------------------------------- device parts
+def _turned(pl, solid):
+    """The solid built flat, turned by the placement's tilt about the axis through its pivot (none when 0)."""
+    if not pl.tilt:
+        return solid
+    px, py, pz = pl.pivot
+    return solid.rotate(cq.Vector(px, py, pz), cq.Vector(px + pl.axis[0], py + pl.axis[1], pz), pl.tilt)
+
+
 def module_solid(pl):
     """The board (with its mounting holes), the housing and ball envelope above it, the parts' envelope under it."""
     d = pl.device
@@ -100,7 +108,7 @@ def module_solid(pl):
     board = poly_prism(pl.board.difference(holes), zb, zt)
     top = poly_prism(pl.top, zt, zt + d.top_h)
     back = poly_prism(pl.back, zb - d.back_h, zb)
-    return union([board, top, back])
+    return _turned(pl, union([board, top, back]))
 
 
 def screws_solid(pl):
@@ -112,8 +120,8 @@ def screws_solid(pl):
     sol = []
     if pl.dev_screw:
         L = pl.dev_screw[0]
-        sol += [cyl(x, y, PR.M2_HEAD_D / 2, zt, zt + PR.M2_HEAD_H) for x, y in pl.holes]
-        sol += [cyl(x, y, 1.0, zt - L, zt) for x, y in pl.holes]
+        sol += [_turned(pl, union([cyl(x, y, PR.M2_HEAD_D / 2, zt, zt + PR.M2_HEAD_H) for x, y in pl.holes]
+                                  + [cyl(x, y, 1.0, zt - L, zt) for x, y in pl.holes]))]
     if pl.fp_screw:
         L = pl.fp_screw[0]
         zh = PR.PLATE_T + S.seat_z(fp) + car.BASE_T[fp]
@@ -127,5 +135,5 @@ def screws_solid(pl):
 def carrier_solid(pl):
     """The device's printed carrier, left local (pointers/<name>/carrier.py solid(), in its footprint frame)."""
     x, y, rot = pl.frame
-    c = D.carrier(pl.device.name).solid(pl.footprint)
+    c = D.carrier(pl.device.name).solid(pl.footprint, pl.tilt)
     return c.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), rot).translate(cq.Vector(x, y, PR.PLATE_T))

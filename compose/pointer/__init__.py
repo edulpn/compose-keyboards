@@ -6,6 +6,7 @@ which is gone) or a bay such as "bay30" (on the case, in the thumb bay the layou
 comes with it, compose/case/bay.py). Configured like the angles, by environment variables:
 
     C58_POINTER=pim447:R             device : side (L or R) [: footprint, slot (default) or e.g. bay30]. Unset, "" or 0 = none.
+    C58_POINTER_TILT=15              the board's tilt, outward from the keys, in degrees, replacing the carrier's own (0 = flat).
     C58_POINTER_PORT=J5              the controller connector an I2C device's cable plugs into: J5 (Qwiic, default) or J4 (the OLED header).
 """
 import os
@@ -23,9 +24,10 @@ class PointerConfig:
     side: str
     mount: str = "slot"
     port: str = "J5"
+    tilt: object = None      # degrees, or None for the carrier's own
 
 
-def parse(spec, port=None):
+def parse(spec, port=None, tilt=None):
     """'pim447:R' or 'pim447:L:bay30' -> PointerConfig; '' or None -> None. Raises ValueError when malformed (an
     unknown device is the checks' business: compose/pointer/device.py)."""
     if spec in OFF or spec is None:
@@ -42,13 +44,23 @@ def parse(spec, port=None):
     port = port or "J5"
     if port not in PORTS:
         raise ValueError(f"C58_POINTER_PORT={port!r}: must be one of {', '.join(PORTS)}")
-    return PointerConfig(device, side, mount, port)
+    if tilt is None or tilt == "":
+        t = None
+    else:
+        try:
+            t = float(tilt)
+        except ValueError:
+            raise ValueError(f"C58_POINTER_TILT={tilt!r}: degrees, a number") from None
+        if not -45.0 <= t <= 45.0:
+            raise ValueError(f"C58_POINTER_TILT={tilt!r}: between -45 and 45 degrees")
+    return PointerConfig(device, side, mount, port, t)
 
 
 def active():
     """The configured device, or None. Raises ValueError for a bad setting, or for a bay device that names a different
     bay than C58_THUMB_BAY."""
-    cfg = parse(os.environ.get("C58_POINTER", ""), os.environ.get("C58_POINTER_PORT"))
+    cfg = parse(os.environ.get("C58_POINTER", ""), os.environ.get("C58_POINTER_PORT"),
+                os.environ.get("C58_POINTER_TILT"))
     if cfg is not None and cfg.mount != "slot":
         from compose.case import bay
         bay.active()                                  # raises when C58_THUMB_BAY names another bay

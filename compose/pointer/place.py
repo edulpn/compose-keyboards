@@ -14,7 +14,7 @@ device is placed on the left local footprint and mirrored with its half, as the 
 import math
 from dataclasses import dataclass
 from functools import lru_cache
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import MultiPoint, Point, Polygon, box
 from shapely import affinity as A
 from shapely.ops import unary_union
 from compose import params as PR
@@ -45,6 +45,14 @@ class Placement:
     ball_top: float        # the touch surface above the plate top
     dev_screw: tuple       # (length, thread) of the board's M2 screws into the carrier's inserts, or None
     fp_screw: tuple        # (length, thread) of the carrier's screws into the footprint, or None
+    tilt: float = 0.0      # the board's tilt (degrees) about the horizontal axis through `pivot`, leaning toward `lean`
+    pivot: tuple = None    # that axis's point: the device frame's origin on the board's top face (left local x, y, z)
+    axis: tuple = None     # the axis's direction (x, y), left local
+    rot: object = None     # point map (x, y, z) -> (x, y, z) of that turn, left local
+    pad_pt: tuple = None   # middle of the cable pads on the board's underside, tilted (left local x, y, z)
+    base_clear: float = 0.0   # the board's lowest underside point above the carrier's base top
+    top_z: float = 0.0     # the device's highest point above the plate top
+    # (board, top, back, holes and pads above are the untilted device: the solids are built flat and then turned)
 
 
 # ---------------------------------------------------------------- frames
@@ -184,12 +192,21 @@ def bay_problems(fp=None):
 
 
 # ---------------------------------------------------------------- the device on its carrier
-def screws(dev, car, fp):
+def tilted(pl, poly, z0, z1):
+    """Top view of the board's `poly` between heights z0 and z1 above its underside, with the tilt applied: the
+    hull of the turned corners (the poly itself when there's no tilt)."""
+    if not pl.tilt:
+        return poly
+    pts = [pl.rot(x, y, pl.board_bot_z + z)[:2] for x, y in poly.exterior.coords[:-1] for z in (z0, z1)]
+    return MultiPoint(pts).convex_hull
+
+
+def screws(dev, car, fp, tilt=None):
     """((length, thread) of the board's M2 screws into the carrier's inserts, (length, thread) of the carrier's
     screws into the footprint's points); None where no standard length fits. The board's screws take 2.5 mm up to the
     insert hole's depth less 0.1; the carrier's take the footprint's thread range (std.thread)."""
     z0 = S.seat_z(fp)
-    depth = min(car.BOARD_Z[fp] - z0, PR.M2_PLATE_INSERT_L + 1.0)       # the carrier's insert holes
+    depth = car.insert_depth(fp, tilt)                                  # the carrier's insert holes
     dev_s = next(((L, round(L - dev.pcb_t, 2)) for L in PR.STANDARD_SCREW_LENGTHS
                   if 2.5 <= L - dev.pcb_t <= depth - 0.1), None)
     lo, hi = S.thread(fp)
@@ -213,20 +230,32 @@ def place(cfg):
     g = D.pose_fn(car.POSE[cfg.mount])
     fl = lambda x, y: f(*g(x, y))                       # device frame -> left local
     zb = car.BOARD_Z[cfg.mount]
-    dev_s, fp_s = screws(dev, car, cfg.mount)
+    tl = getattr(cfg, "tilt", None)
+    ang, az = car.tilt_of(cfg.mount, tl)
+    dev_s, fp_s = screws(dev, car, cfg.mount, tl)
     pts = points(cfg.mount, fr)
+    ox, oy = fl(0.0, 0.0)
+    phi = math.radians(az + fr[2])                      # the lean's direction, left local
+    pivot = (ox, oy, PR.PLATE_T + zb + dev.pcb_t)
+    rot = D.tilt_map(pivot, ang, az + fr[2])
+    px, py, pz = (sum(c) / len(dev.pads) for c in zip(*car.pad_points(cfg.mount, tl)))   # tilted pads' middle
+    pad_pt = (*f(px, py), PR.PLATE_T + pz)
     return Placement(device=dev, side=cfg.side, footprint=cfg.mount, kind=S.kind(cfg.mount), key_index=i, frame=fr,
                      window=window(cfg.mount, fr), points=pts, uses=[pts[j] for j in car.USES[cfg.mount]],
                      board=poly_to_local(D.outline(dev), fl), top=poly_to_local(box(*dev.top_rect), fl),
                      back=poly_to_local(box(*dev.back_rect), fl), holes=[fl(*h) for h in dev.holes],
                      pads=[(n, *fl(x, y)) for n, x, y in dev.pads],
-                     carrier=geom_to_local(car.outline(cfg.mount), f), board_bot_z=PR.PLATE_T + zb,
-                     ball_top=round(zb + dev.pcb_t + dev.top_h, 2), dev_screw=dev_s, fp_screw=fp_s)
+                     carrier=geom_to_local(car.outline(cfg.mount, tl), f), board_bot_z=PR.PLATE_T + zb,
+                     ball_top=round(zb + dev.pcb_t + dev.top_h * math.cos(math.radians(ang)), 2), dev_screw=dev_s,
+                     fp_screw=fp_s, tilt=ang, pivot=pivot, axis=(-math.sin(phi), math.cos(phi)), rot=rot, pad_pt=pad_pt,
+                     base_clear=round(car.board_low(cfg.mount, tl) - (S.seat_z(cfg.mount) + car.BASE_T[cfg.mount]), 3),
+                     top_z=round(max(rot(*fl(x, y), PR.PLATE_T + zb + dev.pcb_t + dev.top_h)[2]
+                                     for x, y in box(*dev.top_rect).exterior.coords) - PR.PLATE_T, 3))
 
 
 def pads_centre(pl):
-    """Middle of the device's cable pads (left local): where its cable leaves."""
-    return (sum(x for _, x, _ in pl.pads) / len(pl.pads), sum(y for _, _, y in pl.pads) / len(pl.pads))
+    """Middle of the device's cable pads (left local, top view, tilted): where its cable leaves."""
+    return pl.pad_pt[0], pl.pad_pt[1]
 
 
 def device_problems(pl):
@@ -236,11 +265,16 @@ def device_problems(pl):
     fp = pl.footprint
     w = pl.window.buffer(0.01)
     heads = unary_union([Point(p).buffer(S.screw_head(fp)[0] / 2) for p in pl.uses])
-    for what, g in (("board", pl.board), ("carrier", pl.carrier), ("carrier's screw heads", heads)):
+    d = pl.device
+    for what, g in (("board", tilted(pl, pl.board, 0.0, d.pcb_t)),
+                    ("device's housing", tilted(pl, pl.top, d.pcb_t, d.pcb_t + d.top_h)),
+                    ("carrier", pl.carrier), ("carrier's screw heads", heads)):
         if not w.contains(g):
             out.append(("M2", f"the {what} reaches {g.difference(pl.window).area:.1f} mm2 outside the window"))
-    if pl.ball_top > S.top(fp):
-        out.append(("M2", f"the device's top {pl.ball_top:.1f} mm above the plate (the footprint allows {S.top(fp)})"))
+    if pl.top_z > S.top(fp):
+        out.append(("M2", f"the device's top {pl.top_z:.1f} mm above the plate (the footprint allows {S.top(fp)})"))
+    if pl.base_clear < PR.POINTER_BOARD_BASE_CLR:
+        out.append(("M2", f"the board's low side {pl.base_clear:.2f} mm above the carrier's base (>= {PR.POINTER_BOARD_BASE_CLR})"))
     if len(set(pl.uses)) < S.MIN_POINTS:
         out.append(("M3", f"screwed to {len(set(pl.uses))} of the footprint's points (at least {S.MIN_POINTS})"))
     if pl.dev_screw is None:

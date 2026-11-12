@@ -23,6 +23,8 @@ A pointer module is a pointing device on a rev 2 Compose keyboard, with its own 
 
 A device stands on a printed **carrier**. The carrier stays inside the window and below 16 mm above the plate, screw heads included, and screws to at least two of the footprint's points. The bay's posts and wall hole are always there on a half that has the bay, so a bay case prints the same whatever goes in it.
 
+**Tilt.** A carrier may tilt its board outward, away from the keys, so the thumb meets a ball with the pad of the thumb and not the side of it. The tilt belongs to the carrier, not the standard: the posts and the seat stay flat and parallel to the plate (so one printed case still takes any device), and the carrier is a wedge, its base flat on the posts and its bosses ending on the tilted underside. The device's carrier sets it per footprint (`TILT` in `pointers/<name>/carrier.py`: angle, and the direction the board's normal leans in the footprint's frame; 0° is outward, away from the keys, 180° toward them). The turn is about the device's touch point (on the board's top face), so the ball barely moves: its top drops 0.3 mm at 15°. `C58_POINTER_TILT=<deg>` overrides the angle (`0` is flat). The checks measure what the tilt does: the touch surface's height (M6), the board and housing inside the window and under the footprint's top, 0.8 mm between the board's low side and the carrier's base, a standard screw length (M2, M4), and the cable's drop from the raised pads (P4, P5). The PIM447's bay30 carrier tilts 15°; its slot carrier stays flat, because the base on the plate is too thin for a wedge.
+
 - **The slot** needs a layout with a 1.5u thumb key and a little room beside it. On Compose58 it's Space / Enter.
 - **A bay** needs a layout that declares a position for its size: `bays = {"bay30": (x, y, rot)}` in `layouts/<name>/layout.py`, the centre and turn of its square in the left half's frame. `C58_REV=2 python3 -m compose pointer-checks --suggest-bay` prints the line to paste in, one entry per bay size. It goes round the thumb arc from the 1.5u thumb key, or from the innermost bottom-row key if there's none, to the first spot that leaves 5 mm to the other half and to the bridge. `--one-sided` suggests a spot for a bay on one half only, which leaves more room (the distance is then to the other half's plain wall, not to its lobe).
 - **Compose58's bay** is 46.0 mm from the 1.5u key's centre: the thumb leaves the key to reach it. The slot puts the device right under the thumb.
@@ -76,9 +78,9 @@ J4 and J5 are the same I2C1 bus (GP14 SDA, GP15 SCL), so a pointer on one and an
 | device in | to J5: route / buy | to J4: route / buy |
 |---|---|---|
 | right slot | 124 mm / 200 mm | 162 mm / 200 mm |
-| right `bay30` | 185 mm / 300 mm | 224 mm / 300 mm |
+| right `bay30` | 167 mm / 200 mm | 206 mm / 300 mm |
 | left slot | 189 mm / 300 mm | 98 mm / 150 mm |
-| left `bay30` | 250 mm / 300 mm | 159 mm / 200 mm |
+| left `bay30` | 232 mm / 300 mm | 141 mm / 200 mm |
 
 **Firmware:** `firmware/pointer/` and `firmware/rgb_pointer/`. For an I2C device: QMK's driver on I2C1 (GP14/GP15, 100 kHz), the same for either port. In the slot, the device's key is dropped from the layout; in the bay, every key stays.
 

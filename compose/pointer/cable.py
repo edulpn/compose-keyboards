@@ -61,7 +61,7 @@ def module_points(pl):
         zh = PS.wall_hole_z()
         out = PR.BAY_POCKET_GAP + PR.WALL_T + 0.5 * PR.BAY_POCKET_GAP     # pocket side of the wall
         inn = PR.LEDGE_W + PR.FLOAT_GAP + 2.0                              # past the ledge's chamfer
-        pts = [(px, py, pl.board_bot_z - 1.0 - r), (px, py, zh), (wx + n[0] * out, wy + n[1] * out, zh),
+        pts = [(px, py, pl.pad_pt[2] - 1.0 - r), (px, py, zh), (wx + n[0] * out, wy + n[1] * out, zh),
                (wx - n[0] * inn, wy - n[1] * inn, zh)]
         return pts, z_under
     from compose.pointer import place as PL
@@ -71,7 +71,7 @@ def module_points(pl):
     ux, uy = (px - kx) / n, (py - ky) / n
     d_in = PR.SWITCH_HOLE / 2 - r - 0.1                 # just inside the switch hole's edge, toward the pads
     z_run = PR.PLATE_T + r + 0.05                        # along the plate top, in the carrier's cable channel
-    pts = [(px, py, pl.board_bot_z - 1.0 - r), (px, py, z_run), (kx + ux * d_in, ky + uy * d_in, z_run),
+    pts = [(px, py, pl.pad_pt[2] - 1.0 - r), (px, py, z_run), (kx + ux * d_in, ky + uy * d_in, z_run),
            (kx, ky, r + 0.3), (kx, ky, z_under)]
     return pts, z_under
 

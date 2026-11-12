@@ -3,13 +3,16 @@ Pointer devices as data. Each lives in its own folder, pointers/<name>/ (like la
 
     module.py    DEVICE = Device(...): the part's numbers, each with its source, and how it connects
     carrier.py   its printed carrier for each footprint it supports (compose/pointer/std.py): POSE, USES, BASE_T,
-                 BOARD_Z, outline(fp), solid(fp)
+                 BOARD_Z, TILT, outline(fp), solid(fp)
     pcb.py       (optional) a board of its own, generated like compose/pcb/*
 
 Device frame: origin at the touch point's centre (the ball) on the board's top face, +y toward the board edge away
 from the header, z up. A right-half device is the left-half one mirrored with its half (compose/case/gasket.py,
 compose/pointer/place.py), so a device and its carrier must be mirror-symmetric about the device's own y axis (x -> -x),
-or the right half's solids won't match the real part. `measured` stays False until a real part has been measured
+or the right half's solids won't match the real part. A carrier may tilt the board: TILT[fp] = (angle, azimuth)
+turns the board about the horizontal axis through the device frame's origin so its normal leans `angle` degrees
+toward `azimuth` (degrees, footprint frame: 0 = toward +x, the bay's outer side away from the keys; 180 = toward them). The carrier is then a wedge: its
+base stays flat on the footprint, its bosses end on the tilted underside. `measured` stays False until a real part has been measured
 (pointer-checks warns until then).
 """
 import os
@@ -46,6 +49,22 @@ class Device:
 
 def outline(d):
     return unary_union([box(*r) for r in d.rects])
+
+
+def tilt_map(pivot, angle, azimuth):
+    """Point map (x, y, z) -> (x, y, z): a turn of `angle` degrees about the horizontal axis through `pivot` that leans
+    the +z normal toward `azimuth` (degrees, from +x toward +y)."""
+    a, phi = math.radians(angle), math.radians(azimuth)
+    kx, ky = -math.sin(phi), math.cos(phi)
+    c, s = math.cos(a), math.sin(a)
+
+    def f(x, y, z):
+        px, py, pz = x - pivot[0], y - pivot[1], z - pivot[2]
+        d = (kx * px + ky * py) * (1.0 - c)                       # Rodrigues, the axis (kx, ky, 0)
+        return (px * c + ky * pz * s + kx * d + pivot[0],
+                py * c - kx * pz * s + ky * d + pivot[1],
+                pz * c + (kx * py - ky * px) * s + pivot[2])
+    return f
 
 
 def pose_fn(pose):
