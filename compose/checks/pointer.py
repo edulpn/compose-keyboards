@@ -133,8 +133,55 @@ def check_device(ctx):
         f"from drawings and listings: measure before printing (pointers/{dev.name}/module.py)", warn=True)
 
 
+# ---------------------------------------------------------------- assembled and wired
+def check_solids(ctx):
+    pl = ctx.get("pl")
+    if pl is None:
+        return
+    import cadquery as cq
+    import trimesh
+    from compose.checks import gasket as CK
+    parts, case, _, _ = CK.parts_world()
+    ctx["parts"] = parts
+    for a in ("pointer", "pointer carrier"):
+        for b in ("plate", "frame", "case", "cover", "half pcb", "half parts", "jumpers"):
+            v = CK.vol(parts[a], parts[b])
+            rec(f"P1 no overlap: {a} / {b}", v < 1e-3, f"{v:.3f} mm3")
+    v = CK.vol(parts["pointer"], parts["pointer carrier"])
+    rec("P1 no overlap: pointer / pointer carrier", v < 1e-3, f"{v:.3f} mm3")
+    d = CK.dist(parts["pointer"], parts["frame"])
+    rec(f"P2 clearance pointer / frame >= {PR.KEY_OPENING_GAP}", d >= PR.KEY_OPENING_GAP - 0.01, f"{d:.2f} mm")
+    c = D.carrier(pl.device.name).solid(pl.footprint)
+    p = os.path.join(OUT, "_pointer_carrier.stl")
+    os.makedirs(OUT, exist_ok=True)
+    cq.exporters.export(cq.Workplane().add(c), p, tolerance=0.02, angularTolerance=0.1)
+    m = trimesh.load(p)
+    worst, n_br, n_thin, _ = CK.overhangs(m)
+    rec("P3 carrier prints flat on its base: watertight, every layer supported", m.is_watertight and worst is None,
+        f"{n_br} bridges, {n_thin} thin lips" + ("" if worst is None else f"; unsupported {worst}"))
+
+
+def check_cable(ctx):
+    pl, parts = ctx.get("pl"), ctx.get("parts")
+    if pl is None or parts is None:
+        return
+    from compose.pointer import cable as PC
+    r = PC.ROUTE[ctx["cfg"]]                     # solved by checks/gasket.py parts_world()
+    pts, probs = r["pts"], r["problems"]
+    rec("P4 cable route clear of everything (crossing solved)", not probs, "; ".join(probs) or
+        f"crosses the bay at P y {r['y']:.1f} mm")
+    L, stock = PC.length(pts), PC.stock_length(pts)
+    rec(f"P5 cable length + {PR.POINTER_CABLE_SLACK:g} mm slack within a stock length", stock is not None,
+        f"route {L:.0f} mm -> buy {stock} mm" if stock else f"route {L:.0f} mm: longer than the longest stock cable")
+    if pl.device.bus == "i2c":
+        c_pf = 10.0 + 5.0 + PR.POINTER_CABLE_PF_M * L / 1000.0 + 10.0
+        rec("P6 I2C bus capacitance (pins 10 + board 5 + cable + device 10 pF) <= 100 pF (100 kHz)", c_pf <= 100.0,
+            f"{c_pf:.0f} pF")
+        rec("P6 ... <= 60 pF (400 kHz, not used)", c_pf <= 60.0, f"{c_pf:.0f} pF", warn=True)
+
+
 FAST_CHECKS = [check_footprint, check_device]
-FULL_CHECKS = []          # Tasks 5 and 6 add the full checks
+FULL_CHECKS = [check_solids, check_cable]
 
 
 def main():
