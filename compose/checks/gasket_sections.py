@@ -27,10 +27,10 @@ def assembly():
     parts = {}
     parts["case"] = (C.case2_world(), "#b9b2a6")
     from compose import pointer as PTR
-    if PTR.active() is None:
+    if not C.sided():
         pl = G.L2W(C.plate2_local()); pl = pl.fuse(pl.mirror("YZ"))
         fr = G.L2W(C.frame2_local()); fr = fr.fuse(fr.mirror("YZ"))
-    else:                                                  # a device: each side as built (slot inserts, bay lid)
+    else:                                                  # a device or a one-sided bay: each side as built
         pl = G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R")))
         fr = G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R")))
     parts["plate"] = (pl, "#7a8fa6")

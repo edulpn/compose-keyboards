@@ -5,7 +5,8 @@ Route: off the device's pads, down to the plate, through the carrier's cable cha
 the half board's MX centre hole, down below the board's parts (the slot); or straight down from the pads through the
 carrier's base into the thumb bay's pocket and through the diamond hole in the half's wall, under the case ledge (a
 bay). Then under the board to its inner edge, down into the bay below everything under the controller board, along
-to beside the connector, up to just under the cover, across and down into the plug. Where it leaves the half
+to beside the connector, up to just under the cover, across and down into the plug (J4, soldered on the board's
+underside: straight along below the board, up into the plug). Where it leaves the half
 (bridge-frame y) is solved: the candidate nearest the connector that keeps the tube clear of everything (route()).
 """
 import math
@@ -18,14 +19,15 @@ from compose.case import gasket as C
 from compose.controller import rev2_std as CS
 
 CLEAR = {"jumpers": 0.5, "standoffs": 0.5, "pico": 0.5, "ctrl board": 0.5, "bottom parts": 0.5, "top parts": 0.5,
-         "lead tails": 0.5, "cover": 0.5, "case": 0.3}               # minimum distance (mm)
+         "lead tails": 0.5, "cover": 0.5, "case": 0.3, "pointer plug": 0.5}               # minimum distance (mm)
 NO_OVERLAP = ("plate", "frame", "half pcb", "half parts", "pointer", "pointer carrier")   # may touch, not overlap
 ROUTE = {}                # PointerConfig -> {"pts", "problems", "y"}: the last route() result, for pointer-checks
 
 
 @lru_cache(maxsize=2)
 def port_P(port):
-    """(x, y, plug top z) of the cable's connector on controller rev 2, bridge frame P (its courtyard centre)."""
+    """(x, y, z of the plug's free end) of the cable's connector on controller rev 2, bridge frame P (its courtyard
+    centre): the plug top, or for a header on the board's underside (J4) the plug bottom."""
     import pcbnew
     from compose.controller import rev2 as CV
     b = CV.build()
@@ -35,8 +37,10 @@ def port_P(port):
     x = (pcbnew.ToMM(r.GetLeft()) + pcbnew.ToMM(r.GetRight())) / 2 - CV.CX
     y = (pcbnew.ToMM(r.GetTop()) + pcbnew.ToMM(r.GetBottom())) / 2 - CV.CY
     px, py = C.CT.to_P(x, y)
-    from compose.checks.gasket import PLUG_TOP      # mated plug above the controller board (function-local: that module
-    return px, py, C.CT.board_top + PLUG_TOP[port]   # reads sys.argv and makes its output folder when imported)
+    from compose.checks.gasket import PLUG_TOP, UNDER_PORTS   # function-local: that module reads sys.argv and makes its
+    if port in UNDER_PORTS:                                  # output folder when imported
+        return px, py, C.CT.board_bot - PLUG_TOP[port]       # header on the underside: the plug's free end, below
+    return px, py, C.CT.board_top + PLUG_TOP[port]           # mated plug above the controller board
 
 
 def local_to_P(p, side):
@@ -85,6 +89,9 @@ def crossing_points(cfg, yc, z_under, port=None):
     t = 1.0 if px > 0 else -1.0                          # rise on the connector's side of the controller
     y_up = max(py, -PR.BRIDGE_LEN + PR.BRIDGE_WALL_T + r + 0.5)
     z_low = C.CT.board_bot - CS.BOTTOM_PARTS_H - r - 0.5     # below everything under the controller board
+    if ptop < C.CT.board_bot:                            # the plug hangs under the board: along below, up into it
+        X = CS.W2 + 2.5
+        return [a, (s * X, yc, z_low), (t * X, y_up, z_low), (px, py, z_low), (px, py, ptop - r)]
     z_top = C.CT.cover_under - r - 0.6                   # just under the cover
     x_room = abs(G.interface_x(y_up, z_top)) - PR.FLOAT_GAP - r - 0.5    # inside the plates' inner edges
     x_out = min(CS.W2 + 2.5, x_room)

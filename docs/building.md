@@ -102,7 +102,7 @@ C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
 C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
 C58_REV=2 python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
 C58_REV=2 C58_POINTER=pim447:R python3 -m compose pointer-checks out_r2t      # a pointer device's checks (--fast: 2D only)
-C58_REV=2 C58_POINTER=pim447:R:bay30 python3 -m compose gasket-case out_r2t   # a trackball in the thumb bay
+C58_REV=2 C58_POINTER=pim447:R:bay30 python3 -m compose gasket-case out_r2t   # a trackball in the right half's thumb bay (the left has none)
 C58_REV=2 python3 -m compose pointer-checks --list                         # the devices in pointers/
 C58_REV=2 python3 -m compose pointer-checks --suggest-bay                  # thumb bay positions for a new layout
 ```

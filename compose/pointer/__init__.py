@@ -6,7 +6,7 @@ which is gone) or a bay such as "bay30" (on the case, in the thumb bay the layou
 comes with it, compose/case/bay.py). Configured like the angles, by environment variables:
 
     C58_POINTER=pim447:R             device : side (L or R) [: footprint, slot (default) or e.g. bay30]. Unset, "" or 0 = none.
-    C58_POINTER_PORT=J5              the controller connector an I2C device's cable plugs into: J5 (Qwiic) or J4.
+    C58_POINTER_PORT=J5              the controller connector an I2C device's cable plugs into: J5 (Qwiic, default) or J4 (the OLED header).
 """
 import os
 from dataclasses import dataclass

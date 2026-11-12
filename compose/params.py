@@ -238,7 +238,7 @@ POINTER_CABLE_PF_M = 60.0        # loose 4-wire cable, conductor to conductor (p
 
 # ---------------------------------------------------------------- rev 2: thumb bay (compose/case/bay.py)
 # a pocket added to the case where the layout declares it for that size (Layout.bays), on both halves, when a bay is
-# on (C58_POINTER=…:bay30 or C58_THUMB_BAY=bay30). The frame covers it as a lid. Plates, gaskets and half boards don't
+# on (C58_POINTER=…:bay30 or C58_THUMB_BAY=bay30:R). The frame covers it as a lid. Plates, gaskets and half boards don't
 # change. The bay's sizes are the standard's bay footprints (compose/pointer/std.py).
 BAY_POCKET_GAP = 1.0             # the bay's square (the footprint's w, l) to the pocket's walls
 BAY_WALL_GAP = 5.0               # between the two halves' outer walls, and from the bridge (no narrow slot)

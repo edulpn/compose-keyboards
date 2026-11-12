@@ -3,9 +3,10 @@ Pointer module checks (rev 2): docs/pointer-modules.md.
 
     C58_REV=2 C58_POINTER=pim447:R python3 -m compose pointer-checks [outdir] [--fast]       (the slot)
     C58_REV=2 C58_POINTER=pim447:R:bay30 python3 -m compose pointer-checks [outdir] [--fast] (a bay)
-    C58_REV=2 C58_THUMB_BAY=bay30 python3 -m compose pointer-checks [outdir]                 (an empty bay)
+    C58_REV=2 C58_THUMB_BAY=bay30:R python3 -m compose pointer-checks [outdir]               (an empty bay: L, R or LR)
     C58_REV=2 python3 -m compose pointer-checks --list           (the devices in pointers/ and their footprints)
-    C58_REV=2 python3 -m compose pointer-checks --suggest-bay    (a position for each bay size, for Layout.bays)
+    C58_REV=2 python3 -m compose pointer-checks --suggest-bay [--one-sided]   (a position for each bay size, for
+                                                                  Layout.bays; one-sided: a bay on one half only)
 
 Three groups (the footprints are in compose/pointer/std.py, the devices in pointers/<name>/):
   S1-S5, B1-B7  this layout gives the footprint: the slot at its 1.5u thumb key, or the bay it declares
@@ -73,8 +74,11 @@ def check_bay(ctx, fp=None):
         return False
     rec("B1 the layout declares the thumb bay", True, f"{fp} at ({b.x:g}, {b.y:g}), {b.rot:g} deg")
     _, k = B.arc_anchor()
-    rec(f"B2 >= {PR.BAY_WALL_GAP} mm between the halves' outer walls", b.wall_gap >= PR.BAY_WALL_GAP,
-        f"{b.wall_gap:.1f} mm; centre {math.hypot(b.x - k.x, b.y - k.y):.1f} mm from key {k.label_l} / {k.label_r}")
+    on = B.sides()
+    wg = B.gap(b, on)
+    what = "the halves' outer walls" if len(on) == 2 else "the lobe and the other half's plain wall"
+    rec(f"B2 >= {PR.BAY_WALL_GAP} mm between {what}", wg >= PR.BAY_WALL_GAP,
+        f"{wg:.1f} mm, bay on {'+'.join(on)}; centre {math.hypot(b.x - k.x, b.y - k.y):.1f} mm from key {k.label_l} / {k.label_r}")
     from compose.case import gasket as C
     w = b.pocket.distance(C.O_WALL_IN)
     rec("B3 the pocket leaves the half's own wall whole", w >= PR.WALL_T - 0.01, f"{w:.2f} mm of wall (>= {PR.WALL_T})")
@@ -85,7 +89,7 @@ def check_bay(ctx, fp=None):
     rec(f"B6 the bay's posts inside the pocket", not _by(p, "B6"), _by(p, "B6") or f"{len(S.get(fp).points)} posts")
     rec(f"B7 the lid's opening clear of the plate, >= {PR.BAY_FRAME_RIM} mm inside the case's edge", not _by(p, "B7"),
         _by(p, "B7") or "clear")
-    return b.wall_gap >= PR.BAY_WALL_GAP and g >= PR.BAY_WALL_GAP and not p
+    return wg >= PR.BAY_WALL_GAP and g >= PR.BAY_WALL_GAP and not p
 
 
 def check_footprint(ctx):
@@ -214,14 +218,15 @@ def main():
     if "--suggest-bay" in sys.argv:                  # a position per bay size, for Layout.bays (layouts/<name>/layout.py)
         i, k = B.arc_anchor()
         found = {}
+        on = ("R",) if "--one-sided" in sys.argv else ("L", "R")
         for fp in S.bays():
             try:
-                b = B.suggest(fp)
+                b = B.suggest(fp, on)
             except ValueError as e:
                 print(f"{fp}: {e}")
                 continue
             found[fp] = b
-            print(f"{fp} from key {i} ({k.label_l} / {k.label_r}): {b.wall_gap:.1f} mm between the halves, "
+            print(f"{fp} from key {i} ({k.label_l} / {k.label_r}): {B.gap(b, on):.1f} mm between the walls, "
                   f"{B.bridge_gap(b):.1f} mm from the bridge")
         print("    bays = {" + ", ".join(f'"{fp}": ({b.x:g}, {b.y:g}, {b.rot:g})' for fp, b in found.items()) + "}")
         return 0

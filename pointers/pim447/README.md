@@ -7,7 +7,7 @@ A 3–5 V I2C trackball (address 0x0A) with an RGBW LED under the ball. Its carr
 | | |
 |---|---|
 | setting | `C58_POINTER=pim447:R` (slot) or `C58_POINTER=pim447:R:bay30` (bay); `L` for the left half |
-| connects | I2C1 on the controller: J5 (Qwiic) or J4 (OLED header). QMK driver `pimoroni_trackball` |
+| connects | I2C1 on the controller: J5 (Qwiic, the default) or J4 (OLED header, `C58_POINTER_PORT=J4`: see [ports](../../docs/pointer-modules.md#ports)). QMK driver `pimoroni_trackball` |
 | ball top | 13.0 mm above the plate, about the top of the keycaps |
 | carrier | `rev2_pointer_carrier_pim447_slot.stl` or `…_bay30.stl` from `gasket-case`; prints flat on its base, no supports |
 | status | the numbers come from a third-party drawing and retailer listings: measure a real part first (`module.py`) |
@@ -15,7 +15,7 @@ A 3–5 V I2C trackball (address 0x0A) with an RGBW LED under the ball. Its carr
 ## What to buy
 
 - The PIM447 breakout. It's reported retired; a replacement is listed as ADA5063. Check what's on sale and measure it.
-- A Qwiic / STEMMA QT cable (4-wire JST SH): 200 mm for the slot, 300 mm for the bay (the checks print the route length). One end gets cut off.
+- A Qwiic / STEMMA QT cable (4-wire JST SH), one end cut off. Buy the length `pointer-checks` prints (P5). On Compose58 to J5 that is 200 mm for the right slot and 300 mm for the right bay or either left config; the [ports table](../../docs/pointer-modules.md#ports) has J4's. For J4 you need a 4-pin 2.54 mm Dupont housing, or solder the wires straight into the header's holes.
 - Four M2 × 5 button-head screws and four M2 heat-set inserts for the board on its carrier.
 - Slot: two M2 × 4 button-head screws and four M2 heat-set inserts for the plate.
 - Bay: four M3 × 5 button-head screws. The M3 inserts for the posts are the case's own (M3 × 5 × 4).
@@ -27,7 +27,7 @@ A 3–5 V I2C trackball (address 0x0A) with an RGBW LED under the ball. Its carr
 3. Press four M2 inserts into the carrier's bosses.
 4. Thread the cable's cut end up through the half board's MX centre hole at that key and the plate's switch hole, then out along the carrier's channel. Solder it to the board: 3–5 V → VCC (3.3 V), SDA → SDA, SCL → SCL, GND → GND. Leave INT unconnected.
 5. Screw the carrier to the plate (two M2 × 4, the inserts beside the board's header), then the board to the carrier (four M2 × 5).
-6. Route the cable under the half board to the middle bay. Plug it into J5 with the cover off.
+6. Route the cable under the half board to the middle bay. Plug it into J5 with the cover off (J4: the header goes on the controller's underside, plug from below; or solder straight to the holes).
 
 ## Fitting: bay30
 
@@ -35,4 +35,4 @@ A 3–5 V I2C trackball (address 0x0A) with an RGBW LED under the ball. Its carr
 2. Before the plate goes in, feed the cable's cut end from inside the half through the diamond hole in the wall into the pocket.
 3. Screw the carrier to the four posts (M3 × 5).
 4. Bring the cable up through the carrier's channel beside the board's header, solder it to the board as above, and screw the board to the carrier (four M2 × 5).
-5. Route the cable under the half board to the middle bay. Plug it into J5 with the cover off.
+5. Route the cable under the half board to the middle bay. Plug it into J5 with the cover off (J4: the header goes on the controller's underside, plug from below; or solder straight to the holes).

@@ -443,6 +443,17 @@ def art(b):
     for i, t in enumerate(("26", "27", "28", "3V3", "5V", "GND")):
         L(t, -6.6 + i * 2.54, 25.9)
     L("AUX", 7.49 + 0.5, ROW_Y, anchor="l")
+    # J4 and J6 take their header from either side (J4's goes on the underside for a pointer's cable, pointers/):
+    # the same names and an outline on the bottom face, mirrored so they read from below
+    for x, t in zip(j4_x, ("GND", "VCC", "SCL", "SDA")):
+        blabel(b, t, x, 26.3, angle=90, anchor="b")
+    blabel(b, "OLED", (j4_x[0] + j4_x[-1]) / 2, top - 0.45, anchor="b")
+    bsilk_header(b, j4_x[0] - 1.27, ROW_Y - 1.27, j4_x[-1] + 1.27, ROW_Y + 1.27)       # pin 1 = GND, the cut corner
+    for i, t in enumerate(("26", "27", "28", "3V3", "5V", "GND")):
+        blabel(b, t, -6.6 + i * 2.54, 25.9)
+    bsilk_header(b, -6.6 - 1.27, ROW_Y - 1.27, -6.6 + 5 * 2.54 + 1.27, ROW_Y + 1.27)   # pin 1 = GP26, the cut corner
+    ab = PA.text_shape("AUX", PR.ART_TEXT_FONT, LABEL_EM).bounds
+    blabel(b, "AUX", 7.49 + 0.5 + (ab[2] - ab[0]) / 2, ROW_Y)
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
     # cable connectors: the side name along the contact row, centred on it; "1" right beside slot 1's contact
@@ -451,6 +462,24 @@ def art(b):
         L(s, sx * (x_in - 1.5), VFFC_Y0, angle=90 * sx)              #   and the connector's contact-face pads
         L("1", sx * (x_in - 0.9), VFFC_Y0 - 9.5)
     return rec
+
+
+def bsilk_header(b, x0, y0, x1, y1, w=0.15, ch=0.9):
+    """Bottom-face outline of a 1-row header whose pin 1 is at the low-x end (x0): the corner at (x0, y1) is cut off,
+    the way a pin-1 mark is drawn on a header footprint."""
+    pts = [(x0, y0), (x1, y0), (x1, y1), (x0 + ch, y1), (x0, y1 - ch)]
+    bsilk_poly(b, pts, w)
+
+
+def bsilk_poly(b, pts, w=0.15):
+    for a, c in zip(pts, pts[1:] + pts[:1]):
+        s = pcbnew.PCB_SHAPE(b)
+        s.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        s.SetStart(V(*C(*a)))
+        s.SetEnd(V(*C(*c)))
+        s.SetLayer(pcbnew.B_SilkS)
+        s.SetWidth(MM(w))
+        b.Add(s)
 
 
 def bsilk_rect(b, x0, y0, x1, y1, w=0.15):
@@ -464,13 +493,13 @@ def bsilk_rect(b, x0, y0, x1, y1, w=0.15):
         b.Add(s)
 
 
-def blabel(b, msg, x, y, angle=0.0):
-    """Bottom-face label (mirrored so it reads from below), centred at x, y."""
+def blabel(b, msg, x, y, angle=0.0, anchor="c"):
+    """Bottom-face label (mirrored so it reads from below), centred at x, y ("b": its lowest point at y, as label())."""
     g = PA.text_shape(msg, PR.ART_TEXT_FONT, LABEL_EM)
     if angle:
         g = rotate(g, angle, origin=(0, 0))
     bx0, by0, bx1, by1 = g.bounds
-    g = translate(g, x - (bx0 + bx1) / 2, -y - (by0 + by1) / 2)
+    g = translate(g, x - (bx0 + bx1) / 2, (-y - by0) if anchor == "b" else (-y - (by0 + by1) / 2))
     PK.add_poly(b, PA.mirror_about(g, x), pcbnew.B_SilkS, CX, CY)
 
 

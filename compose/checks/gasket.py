@@ -55,6 +55,7 @@ def dist(a, b):
 # ---------------------------------------------------------------- the controller as placed (board frame -> P)
 H_TOP = {"U1": 8.5, "JL": CS.VFFC_H, "JR": CS.VFFC_H, "J4": 8.5, "J6": 8.5, "J5": 4.3}
 PLUG_TOP = {"J4": CS.TOP_PLUG_H, "J6": CS.TOP_PLUG_H, "J5": 10.0}
+UNDER_PORTS = ("J4",)      # the 2.54 mm header a pointer cable plugs into: soldered on the board's underside (cable.py)
 H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": CS.BOTTOM_PARTS_H, "R": 3.0}
 
 
@@ -81,6 +82,9 @@ def _controller_solids():
     hol = union([cyl(*to_P(x, y), CS.M_CLEAR / 2, bb - 1, bt + 1) for x, y in CS.STANDOFF_HOLES])
     out["ctrl board"] = prism(list(CT.outline_P.exterior.coords)[:-1], bb, bt).cut(hol)
     top, bot, tails = [], [], []
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    under = (cfg.port,) if cfg is not None and cfg.port in UNDER_PORTS else ()
     for fp in b.GetFootprints():
         ref = fp.GetReference()
         flipped = fp.IsFlipped()
@@ -95,14 +99,16 @@ def _controller_solids():
             bot.append(big_box(px0, px1, py0, py1, bb - h, bb))
         else:
             k = next((k for k in H_TOP if ref.startswith(k)), None)
-            if k:
+            if k and ref in under:                  # a pointer cable's J4: the header goes on the underside, plug below
+                out["pointer plug"] = big_box(px0, px1, py0, py1, bb - PLUG_TOP[k], bb)
+            elif k:
                 top.append(big_box(px0, px1, py0, py1, bt, bt + H_TOP[k]))
                 if k in PLUG_TOP:
                     top.append(big_box(px0, px1, py0, py1, bt + H_TOP[k] - 3.0, bt + PLUG_TOP[k]))
         for p in fp.Pads():
             if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
                 x, y = to_P(pcbnew.ToMM(p.GetPosition().x) - CV.CX, pcbnew.ToMM(p.GetPosition().y) - CV.CY)
-                if flipped:
+                if flipped or ref in under:                  # (a header on the underside: its tails come out on top)
                     tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bt, bt + CS.LEAD_ABOVE))
                 else:
                     tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bb - CS.LEAD_BELOW, bb))
@@ -246,20 +252,24 @@ def parts_world(jumpers=True):
     case = C.case2_world()
     cover = G.P2W(C.cover2_P())
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
-    if cfg is None:
+    if not C.sided():
         plateL = C.plate2_local()
         frameL = C.frame2_local()
         plate = mirror_pair(plateL)
         frame = mirror_pair(frameL)
         half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
         half_parts = mirror_pair(half_parts_local())
-    else:                                  # one side carries a pointer device: each side on its own
+    else:                                  # a pointer device or a one-sided bay: each side on its own
+        plate = G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R")))
+        frame = G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R")))
+    if cfg is None and C.sided():          # (an empty bay on one half: the boards are the same on both)
+        half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
+        half_parts = mirror_pair(half_parts_local())
+    elif cfg is not None:
         from compose.pointer import place as PPL
         pl = PPL.place(cfg)
         side_w = {"L": G.L2W, "R": G.R2W}
         plain = [s for s in "LR" if s != cfg.side][0]
-        plate = G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R")))
-        frame = G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R")))
         hp_m = hp if pl.kind == "bay" else hp.difference(Point(pl.frame[:2]).buffer(PR.MX_CENTER_D / 2))
         half_pcb = side_w[plain](prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0)).fuse(    # the cable's way
             side_w[cfg.side](poly_prism(hp_m, -PR.PCB_T, 0.0)))                                    # down at the key
@@ -287,7 +297,7 @@ def main():
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
     from compose import pointer as PTR
-    sides = None if PTR.active() is None else {"plate": (C.plate2_local("L"), C.plate2_local("R")),     # a device:
+    sides = None if not C.sided() else {"plate": (C.plate2_local("L"), C.plate2_local("R")),     # a device:
                                                "frame": (C.frame2_local("L"), C.frame2_local("R"))}    # as built
     plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
     ctrl = {k: parts[k] for k in controller_solids()}
@@ -321,7 +331,9 @@ def main():
                        ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5),
                        ("half parts", "case", 0.3), ("jumpers", "case", 0.5), ("jumpers", "plate", 1.0),
                        ("jumpers", "frame", 0.5), ("jumpers", "cover", 0.5), ("jumpers", "half pcb", 0.5),
-                       ("jumpers", "standoffs", 0.5), ("jumpers", "pico", 0.5), ("jumpers", "ctrl board", 0.5)):
+                       ("jumpers", "standoffs", 0.5), ("jumpers", "pico", 0.5), ("jumpers", "ctrl board", 0.5),
+                       ("pointer plug", "case", 0.3), ("pointer plug", "bottom parts", 0.5),
+                       ("pointer plug", "standoffs", 0.5)):
         if a not in parts_b or b_ not in parts_b:
             continue
         d = dist(parts_b[a], parts_b[b_])

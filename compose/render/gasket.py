@@ -168,10 +168,10 @@ def build():
     pair = K.mirror_pair
     add("case", stl(C.case2_world(), "case"))
     from compose import pointer as PTR
-    if PTR.active() is None:
+    if not C.sided():
         add("plate", stl(pair(C.plate2_local()), "plate"))
         add("frame", stl(pair(C.frame2_local()), "frame"))
-    else:                                                  # a device: each side as built (slot inserts, bay lid)
+    else:                                                  # a device or a one-sided bay: each side as built
         add("plate", stl(G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R"))), "plate"))
         add("frame", stl(G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R"))), "frame"))
     add("cover", stl(G.P2W(C.cover2_P()), "cover"))

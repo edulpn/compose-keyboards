@@ -103,7 +103,7 @@ Everything prints without supports, in print orientation:
 
 ### Pointer module and thumb bay
 
-Compose58 gives both footprints of the [pointer mount standard](../../docs/pointer-modules.md): the slot at either 1.5u thumb key (`C58_POINTER=pim447:R`), and the 30 mm thumb bay past it on both halves (`C58_POINTER=pim447:R:bay30`; `C58_THUMB_BAY=bay30` gives the bay without a device). Set them for `gasket-case`, `gasket-checks` and `firmware-rev2`; `pointer-checks` checks them.
+Compose58 gives both footprints of the [pointer mount standard](../../docs/pointer-modules.md): the slot at either 1.5u thumb key (`C58_POINTER=pim447:R`), and the 30 mm thumb bay past it, on the half you configure (`C58_POINTER=pim447:R:bay30` grows it on the right half only; `C58_THUMB_BAY=bay30:LR` gives both halves a bay without a device). Set them for `gasket-case`, `gasket-checks` and `firmware-rev2`; `pointer-checks` checks them.
 
 ## The half boards
 

@@ -10,7 +10,7 @@ A pointer module is a pointing device on a rev 2 Compose keyboard, with its own 
 
 | | `slot` | `bay30` |
 |---|---|---|
-| where | on the plate, in place of a half's 1.5u thumb key | on the case, in the thumb bay: a pocket the case grows where the layout declares it; every key stays |
+| where | on the plate, in place of a half's 1.5u thumb key | on the case, in the thumb bay: a pocket the case grows on that half where the layout declares it; every key stays |
 | setting | `C58_POINTER=<device>:R` | `C58_POINTER=<device>:R:bay30` |
 | window | 22.5 × 28.5 mm, centred on the key | 30 × 30 mm, centred on the bay |
 | fixing | 4 M2 heat-set inserts in the plate at (±8, ±11) | 4 posts with M3 heat-set inserts at (±12, ±12) |
@@ -21,12 +21,14 @@ A pointer module is a pointing device on a rev 2 Compose keyboard, with its own 
 
 **Sizes.** A bigger device gets a new entry, say `bay40`, beside the existing ones. An entry never changes once parts are printed against it, and adding one changes nothing that exists: cases are built from the footprint they use, devices name the footprints they fit, and layouts declare a position per bay size.
 
-A device stands on a printed **carrier**. The carrier stays inside the window and below 16 mm above the plate, screw heads included, and screws to at least two of the footprint's points. The bay's posts and wall hole are always there when the bay is on, so a bay case prints the same whatever goes in it.
+A device stands on a printed **carrier**. The carrier stays inside the window and below 16 mm above the plate, screw heads included, and screws to at least two of the footprint's points. The bay's posts and wall hole are always there on a half that has the bay, so a bay case prints the same whatever goes in it.
 
 - **The slot** needs a layout with a 1.5u thumb key and a little room beside it. On Compose58 it's Space / Enter.
-- **A bay** needs a layout that declares a position for its size: `bays = {"bay30": (x, y, rot)}` in `layouts/<name>/layout.py`, the centre and turn of its square in the left half's frame. `C58_REV=2 python3 -m compose pointer-checks --suggest-bay` prints the line to paste in, one entry per bay size. It goes round the thumb arc from the 1.5u thumb key, or from the innermost bottom-row key if there's none, to the first spot that leaves 5 mm to the other half and to the bridge.
+- **A bay** needs a layout that declares a position for its size: `bays = {"bay30": (x, y, rot)}` in `layouts/<name>/layout.py`, the centre and turn of its square in the left half's frame. `C58_REV=2 python3 -m compose pointer-checks --suggest-bay` prints the line to paste in, one entry per bay size. It goes round the thumb arc from the 1.5u thumb key, or from the innermost bottom-row key if there's none, to the first spot that leaves 5 mm to the other half and to the bridge. `--one-sided` suggests a spot for a bay on one half only, which leaves more room (the distance is then to the other half's plain wall, not to its lobe).
 - **Compose58's bay** is 46.0 mm from the 1.5u key's centre: the thumb leaves the key to reach it. The slot puts the device right under the thumb.
-- **An empty bay:** `C58_THUMB_BAY=bay30` without a device gives the case and frames with a closed bay on both halves, for a case printed ahead of the device.
+- **Only the side you configure gets the bay.** `C58_POINTER=pim447:R:bay30` gives the right half a lobe and the left half the plain case wall and frame, with no pocket and no foot under it. A lobe fuses into its own half's wall and the case stays one solid.
+- **An empty bay,** for a case printed ahead of the device: `C58_THUMB_BAY=bay30:R` (or `:L`) grows the lobe on that half with its lid closed. `C58_THUMB_BAY=bay30:LR` forces a symmetric case with both lobes. The side is always named: a bare `bay30` is an error. A device bay plus `C58_THUMB_BAY` gives the union (a device on the right and `bay30:LR` gives both lobes, the module on the right).
+- **The gap between two lobes** (a symmetric case) has to be at least 5 mm (check B2). With a lobe on one half only, B2 measures from the lobe to the other half's plain wall instead.
 
 ## Devices
 
@@ -54,16 +56,31 @@ python3 -m compose gasket-case out_r2t        # case, plates, frames and the dev
 python3 -m compose firmware-rev2 out_r2t      # adds firmware/pointer/ and firmware/rgb_pointer/
 ```
 
-`C58_POINTER` is device:side[:footprint]: the device's folder name, `L` or `R`, then a footprint from the standard, `slot` (the default) or `bay30`. `C58_POINTER_PORT=J4` sends an I2C device's cable to the OLED header instead of J5. Leave `C58_POINTER` and `C58_THUMB_BAY` unset and every output is exactly as before.
+`C58_POINTER` is device:side[:footprint]: the device's folder name, `L` or `R`, then a footprint from the standard, `slot` (the default) or `bay30`. Leave `C58_POINTER` and `C58_THUMB_BAY` unset and every output is exactly as before.
 
-**Cable** (an I2C device: a Qwiic cable with one end cut off and soldered to the device). It runs under the half board and across the middle bay to the controller.
+### Ports
 
-| | route | buy |
+An I2C device's cable plugs into one of two controller connectors. `C58_POINTER_PORT` picks it:
+
+| port | what | when |
 |---|---|---|
-| pim447 in the right slot, to J5 | 124 mm | 200 mm cable |
-| pim447 in the right `bay30`, to J5 | 185 mm | 300 mm cable |
+| `J5` (default) | the Qwiic connector, JST SH 4-pin, top entry | the standard: pointer on Qwiic, the OLED header J4 stays free for an OLED |
+| `J4` | the OLED header, a 2.54 mm 1×4 | no OLED, or Qwiic is taken. The header goes on the controller's **underside**: the plug is 12.5 mm tall under a 13 mm gap, so no cable fits on top. It is through-hole, so the same holes take it from below (no board change); its pin tails come out on top. The bottom silkscreen names the pins and outlines the header |
 
-**Firmware:** `firmware/pointer/` and `firmware/rgb_pointer/`. For an I2C device: QMK's driver on I2C1 (GP14/GP15, 100 kHz). In the slot, the device's key is dropped from the layout; in the bay, every key stays.
+J4 and J5 are the same I2C1 bus (GP14 SDA, GP15 SCL), so a pointer on one and an OLED on the other work together. I2C is multi-drop, so for more devices fan out with a Qwiic hub; nothing in the case holds one yet. The AUX header (GP26–28, 3.3 V, 5 V, GND) is not an I2C port: GP26 and GP27 are I2C1's alternate pins, so using them would take the bus away from J4 and J5, and a second bus isn't reachable on this board. AUX is not offered as a pointer port.
+
+**Soldering straight to the controller.** J4 and AUX are through-hole, so if you are tight on space, or don't need the plug, solder the device's wires directly into their holes (no header, no plug). It is less modular, and the checks model a plug, so a direct solder has more clearance than they show. Both headers also have bottom silkscreen, so you can fit them from either face.
+
+**Cable** (an I2C device: a Qwiic cable with one end cut off and soldered to the device). It runs under the half board and across the middle bay to the controller. `pointer-checks` prints the route and the stock length to buy (P5); on Compose58, with 30 mm of slack:
+
+| device in | to J5: route / buy | to J4: route / buy |
+|---|---|---|
+| right slot | 124 mm / 200 mm | 162 mm / 200 mm |
+| right `bay30` | 185 mm / 300 mm | 224 mm / 300 mm |
+| left slot | 189 mm / 300 mm | 98 mm / 150 mm |
+| left `bay30` | 250 mm / 300 mm | 159 mm / 200 mm |
+
+**Firmware:** `firmware/pointer/` and `firmware/rgb_pointer/`. For an I2C device: QMK's driver on I2C1 (GP14/GP15, 100 kHz), the same for either port. In the slot, the device's key is dropped from the layout; in the bay, every key stays.
 
 ## Checks (`pointer-checks`)
 

@@ -2,18 +2,20 @@
 Thumb bay (rev 2): a pocket added to the case beside a half's thumb keys, where a pointer device stands on posts from
 the pocket floor (compose/pointer/). Its size is one of the standard's bay footprints (compose/pointer/std.py, e.g.
 "bay30"). The layout says where each size goes (Layout.bays: {footprint: (x, y, rot)}, the centre and turn of its
-square, left local), and the case grows the bay only when it's on: with a bay device (C58_POINTER=…:bay30), or empty
-with C58_THUMB_BAY=bay30 (both lids closed, for a case printed ahead of the device). A layout that declares no
-position for that size takes no such bay.
+square, left local), and the case grows the bay only where it is asked for: on the side of a bay device
+(C58_POINTER=pim447:R:bay30 gives the right half a pocket and the left none), or empty with C58_THUMB_BAY=bay30:L,
+bay30:R, or bay30:LR (both halves: a symmetric case) with its lid closed, for a case printed ahead of the device. A
+layout that declares no position for that size takes no such bay.
 
 Only the case and the frames change: the frame covers the pocket as a lid (opened over the module on its side);
-plates, gaskets, frame screws and half boards are the same as without the bay. Both halves get the pocket, so the
-case and frames stay mirror images apart from the module's opening.
+plates, gaskets, frame screws and half boards are the same as without the bay. A half without a bay has the plain
+case wall and the plain frame.
 
 For a new layout or a new size, `pointer-checks --suggest-bay` proposes a position (suggest()): the square turns round the thumb
 arc from its anchor key (the 1.5u thumb key, else the innermost key of the last row), starting at that key's own angle
 and stepping BAY_ANGLE_STEP further round; at each angle it moves out from the key until the pocket clears the half's
-own wall. The first angle that leaves BAY_WALL_GAP between the two halves' outer walls and to the bridge wins.
+own wall. The first angle that leaves BAY_WALL_GAP between the two halves' outer walls and to the bridge wins (with one
+bay only, between its wall and the other half's plain wall: gap()).
 """
 import math
 import os
@@ -31,21 +33,47 @@ from compose.pointer import OFF
 _R_OUT = PR.BEZEL_BEVEL + 0.5          # same rounding as compose/case/gasket.py O_OUTER
 
 
-def active():
-    """The bay footprint the case is built with, or None: a bay device's (C58_POINTER=…:bay30), else C58_THUMB_BAY.
-    Raises ValueError when C58_THUMB_BAY names no bay of the standard."""
-    parts = os.environ.get("C58_POINTER", "").split(":")
+def _thumb_bay():
+    """C58_THUMB_BAY as (footprint, sides): "bay30:L", "bay30:R", or "bay30:LR" for both (a symmetric case); None
+    when unset. The side is always named: a bay goes only where it is asked for. Raises ValueError otherwise."""
     v = os.environ.get("C58_THUMB_BAY", "")
-    if len(parts) == 3 and parts[2] in S.bays():
-        if v not in OFF and v != parts[2]:
-            raise ValueError(f"C58_POINTER={':'.join(parts)!r} brings its own bay, but C58_THUMB_BAY={v!r} asks for "
-                             f"another: unset C58_THUMB_BAY or make them the same")
-        return parts[2]
     if v in OFF:
         return None
-    if v not in S.bays():
-        raise ValueError(f"C58_THUMB_BAY={v!r}: one of the standard's bays: {', '.join(S.bays())}")
-    return v
+    name, _, sides = v.partition(":")
+    if name not in S.bays():
+        raise ValueError(f"C58_THUMB_BAY={v!r}: one of the standard's bays: {', '.join(S.bays())}, with the side(s) it "
+                         f"goes on, e.g. {S.bays()[0]}:R (one side) or {S.bays()[0]}:LR (both)")
+    if not sides or any(c not in "LR" for c in sides):
+        raise ValueError(f"C58_THUMB_BAY={v!r}: name the side(s) the bay goes on: {name}:L, {name}:R, or {name}:LR "
+                         f"(both, a symmetric case)")
+    return name, tuple(c for c in "LR" if c in sides)
+
+
+def active():
+    """The bay footprint the case is built with, or None: a bay device's (C58_POINTER=…:bay30), else C58_THUMB_BAY.
+    Raises ValueError when C58_THUMB_BAY names no bay of the standard or another one than the device's."""
+    parts = os.environ.get("C58_POINTER", "").split(":")
+    tb = _thumb_bay()
+    if len(parts) == 3 and parts[2] in S.bays():
+        if tb is not None and tb[0] != parts[2]:
+            raise ValueError(f"C58_POINTER={':'.join(parts)!r} brings its own bay, but C58_THUMB_BAY="
+                             f"{os.environ.get('C58_THUMB_BAY')!r} asks for another: unset C58_THUMB_BAY or make them "
+                             f"the same bay")
+        return parts[2]
+    return None if tb is None else tb[0]
+
+
+def sides():
+    """The halves that get the bay's pocket, ("L",), ("R",) or ("L", "R"); () when no bay is on. A bay device's own
+    side, plus the sides C58_THUMB_BAY names (C58_THUMB_BAY=bay30:LR makes the case symmetric)."""
+    parts = os.environ.get("C58_POINTER", "").split(":")
+    have = set()
+    if len(parts) == 3 and parts[2] in S.bays() and parts[1] in ("L", "R"):
+        have.add(parts[1])
+    tb = _thumb_bay()
+    if tb is not None:
+        have |= set(tb[1])
+    return tuple(c for c in "LR" if c in have)
 
 
 def enabled():
@@ -110,7 +138,7 @@ class Bay:
     square: Polygon        # where the module's board and posts stand (top view)
     pocket: Polygon        # the pocket's cavity, top view
     outer: Polygon         # the case's outer outline with the bay
-    wall_gap: float        # between the two halves' outer walls (P frame)
+    wall_gap: float        # between the two halves' outer walls with a bay on each (P frame)
 
 
 def build(fp, x, y, rot):
@@ -127,11 +155,20 @@ def solve(fp=None):
     """The Bay the layout declares for footprint fp (default: the active one); ValueError when it declares none."""
     fp = fp or active()
     if fp is None:
-        raise ValueError("no thumb bay is on (C58_POINTER=…:bay30 or C58_THUMB_BAY=bay30)")
+        raise ValueError("no thumb bay is on (C58_POINTER=…:bay30 or C58_THUMB_BAY=bay30:R)")
     if fp not in G.LAYOUT.bays:
         raise ValueError(f"layout {G.LAYOUT.name!r} declares no {fp} thumb bay (Layout.bays): "
                          f"`pointer-checks --suggest-bay` proposes one")
     return build(fp, *G.LAYOUT.bays[fp])
+
+
+def gap(b, on=("L", "R")):
+    """P-frame gap between the halves' outer walls with the bay on the halves `on`: lobe to lobe when both have one
+    (b.wall_gap), else the lobe to the other half's plain wall."""
+    if tuple(on) == ("L", "R") or not on:
+        return b.wall_gap
+    o = _to_P(b.outer)
+    return o.distance(Polygon([(-x, y) for x, y in _to_P(plate_outer()).exterior.coords]))
 
 
 def bridge_gap(b):
@@ -141,9 +178,10 @@ def bridge_gap(b):
     return _to_P(b.pocket.buffer(PR.WALL_T, join_style="round")).distance(bridge)
 
 
-def suggest(fp):
+def suggest(fp, on=("L", "R")):
     """A Bay of footprint fp for a layout that has none yet (positions rounded to 0.01 mm, ready for Layout.bays);
-    ValueError when no angle round the arc works."""
+    `on` is the halves that get it (one half only leaves more room to the other). ValueError when no angle round the
+    arc works."""
     _, k = arc_anchor()
     f = S.get(fp)
     s = max(f.w, f.l) / 2
@@ -158,6 +196,7 @@ def suggest(fp):
             if sq.distance(po) >= PR.BAY_POCKET_GAP + 0.01:          # + 0.01: still clear after rounding
                 break
         b = build(fp, round(cx, 2), round(cy, 2), th)
-        if b.wall_gap >= PR.BAY_WALL_GAP and bridge_gap(b) >= PR.BAY_WALL_GAP:
+        if gap(b, on) >= PR.BAY_WALL_GAP and bridge_gap(b) >= PR.BAY_WALL_GAP:
             return b
-    raise ValueError(f"no {fp} position round the arc leaves {PR.BAY_WALL_GAP} mm to the other half and the bridge")
+    raise ValueError(f"no {fp} position round the arc leaves {PR.BAY_WALL_GAP} mm to the other half and the bridge"
+                     + ("" if tuple(on) != ("L", "R") else " (try one side only: --one-sided)"))
