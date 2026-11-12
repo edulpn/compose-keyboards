@@ -51,4 +51,5 @@ def layout():
     xo = -P / 2 - M + 12
     feet = [(xo, P / 2 + M - 12), (xo, -3.5 * P - M + 12),
             key_point(kk["Lower"], 0.0, -(0.5 * P + M - 12))]
-    return Layout("lily58", keys, inner, stagger[inner], screws, posts, feet)
+    bays = {"bay30": (130.22, -120.86, -48.0)}    # rev 2 thumb bay: from `pointer-checks --suggest-bay`
+    return Layout("lily58", keys, inner, stagger[inner], screws, posts, feet, bays)

@@ -38,6 +38,7 @@ class Layout:
     screws: list = field(default_factory=list)    # M3 sandwich screws (x, y)
     posts: list = field(default_factory=list)     # M2 plate supports (x, y)
     feet: list = field(default_factory=list)      # rubber feet (x, y)
+    bays: dict = field(default_factory=dict)     # rev 2 thumb bays: {footprint: (x, y, rot) of its centre, left local}
 
 
 def key_point(k, dx, dy):
