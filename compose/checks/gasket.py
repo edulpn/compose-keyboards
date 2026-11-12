@@ -286,7 +286,6 @@ def main():
     from compose.pcb import jumper as J
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
-    plateL, frameL = C.plate2_local(), C.frame2_local()
     from compose import pointer as PTR
     sides = None if PTR.active() is None else {"plate": (C.plate2_local("L"), C.plate2_local("R")),     # a device:
                                                "frame": (C.frame2_local("L"), C.frame2_local("R"))}    # as built
@@ -371,7 +370,8 @@ def main():
         """Both halves' plate or frame swept along its normal: the left shape and its mirror, or with a pointer
         device each side's own shape."""
         if sides is None:
-            return [s.fuse(s.mirror("YZ")) for s in sweep_local({"plate": plateL, "frame": frameL}[name], d0, d1, step)]
+            local = {"plate": C.plate2_local, "frame": C.frame2_local}[name]()      # built here: only this path uses them
+            return [s.fuse(s.mirror("YZ")) for s in sweep_local(local, d0, d1, step)]
         l_, r_ = sides[name]
         return [a.fuse(b.mirror("YZ")) for a, b in zip(sweep_local(l_, d0, d1, step), sweep_local(r_, d0, d1, step))]
     # plate in along its normal: never hits the case on the way (pads off)

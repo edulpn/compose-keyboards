@@ -79,7 +79,7 @@ python3 -m compose firmware-rev2 out_r2t      # adds firmware/pointer/ and firmw
 ## Adding a device
 
 1. Make `pointers/<name>/module.py` with `DEVICE = Device(...)` (`compose/pointer/device.py` says what each field means). Give every number its source, and leave `measured=False` until a real part has been measured.
-2. Make `carrier.py` for each footprint it supports. `POSE` places the device in the footprint's frame, and `USES` picks the points it screws to (at least two). `BASE_T` and `BOARD_Z` set its heights, and `outline()` and `solid()` draw it. `pointers/pim447/carrier.py` is the example.
+2. Make `carrier.py` for each footprint it supports. `POSE` places the device in the footprint's frame, and `USES` picks the points it screws to (at least two). `BASE_T` and `BOARD_Z` set its heights, and `outline()` and `solid()` draw it. `pointers/pim447/carrier.py` is the example. The right half is the left one mirrored, so the device (outline, holes, pads, envelopes) and its carrier must be mirror-symmetric about the device's own y axis; one that isn't needs its own right-hand variant first.
 3. Add a `README.md`: what to buy, how to fit it.
 4. Run `pointer-checks --fast`, then the full `pointer-checks` and `gasket-checks`, for each footprint.
 5. If it connects other than by I2C, `firmware-rev2` needs to learn its bus first.

@@ -5,7 +5,7 @@ pointers/<name>/. The footprint is one of the standard's: "slot" (on the plate, 
 which is gone) or a bay such as "bay30" (on the case, in the thumb bay the layout declares; every key stays; the bay
 comes with it, compose/case/bay.py). Configured like the angles, by environment variables:
 
-    C58_POINTER=pim447:R             device : side (L or R) [: footprint, slot (default) or e.g. bay30]. Unset = none.
+    C58_POINTER=pim447:R             device : side (L or R) [: footprint, slot (default) or e.g. bay30]. Unset, "" or 0 = none.
     C58_POINTER_PORT=J5              the controller connector an I2C device's cable plugs into: J5 (Qwiic) or J4.
 """
 import os
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from compose.pointer import std as S
 
 PORTS = ("J5", "J4")
+OFF = ("", "0")          # values of C58_POINTER and C58_THUMB_BAY that mean "not set"
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,7 @@ class PointerConfig:
 def parse(spec, port=None):
     """'pim447:R' or 'pim447:L:bay30' -> PointerConfig; '' or None -> None. Raises ValueError when malformed (an
     unknown device is the checks' business: compose/pointer/device.py)."""
-    if not spec:
+    if spec in OFF or spec is None:
         return None
     parts = spec.split(":")
     if len(parts) not in (2, 3) or not all(parts):
@@ -45,5 +46,10 @@ def parse(spec, port=None):
 
 
 def active():
-    """The configured device, or None."""
-    return parse(os.environ.get("C58_POINTER", ""), os.environ.get("C58_POINTER_PORT"))
+    """The configured device, or None. Raises ValueError for a bad setting, or for a bay device that names a different
+    bay than C58_THUMB_BAY."""
+    cfg = parse(os.environ.get("C58_POINTER", ""), os.environ.get("C58_POINTER_PORT"))
+    if cfg is not None and cfg.mount != "slot":
+        from compose.case import bay
+        bay.active()                                  # raises when C58_THUMB_BAY names another bay
+    return cfg

@@ -26,8 +26,15 @@ def mesh(shape):
 def assembly():
     parts = {}
     parts["case"] = (C.case2_world(), "#b9b2a6")
-    pl = G.L2W(C.plate2_local()); parts["plate"] = (pl.fuse(pl.mirror("YZ")), "#7a8fa6")
-    fr = G.L2W(C.frame2_local()); parts["frame"] = (fr.fuse(fr.mirror("YZ")), "#55606e")
+    from compose import pointer as PTR
+    if PTR.active() is None:
+        pl = G.L2W(C.plate2_local()); pl = pl.fuse(pl.mirror("YZ"))
+        fr = G.L2W(C.frame2_local()); fr = fr.fuse(fr.mirror("YZ"))
+    else:                                                  # a device: each side as built (slot inserts, bay lid)
+        pl = G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R")))
+        fr = G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R")))
+    parts["plate"] = (pl, "#7a8fa6")
+    parts["frame"] = (fr, "#55606e")
     parts["cover"] = (G.P2W(C.cover2_P()), "#3d4652")
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
     h = G.L2W(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))

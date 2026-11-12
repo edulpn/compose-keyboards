@@ -2,13 +2,11 @@
 The pointer module's cable as the checks see it: a tube (POINTER_CABLE_D) along straight segments, world frame.
 
 Route: off the device's pads, down to the plate, through the carrier's cable channel into the switch hole, through
-the half board's MX centre hole, down below the board's parts (the slot); or straight down from the pads
-through the carrier's base into the thumb bay's pocket and through the diamond hole in the half's wall, under the case
-ledge (a bay). Then under the
-board to its inner edge, down into the bay below
-everything under the controller board, along to beside the connector, up to just under the cover, across and down
-into the plug. Where it leaves the half (bridge-frame y) is solved: the candidate nearest the connector that keeps
-the tube clear of everything (route()).
+the half board's MX centre hole, down below the board's parts (the slot); or straight down from the pads through the
+carrier's base into the thumb bay's pocket and through the diamond hole in the half's wall, under the case ledge (a
+bay). Then under the board to its inner edge, down into the bay below everything under the controller board, along
+to beside the connector, up to just under the cover, across and down into the plug. Where it leaves the half
+(bridge-frame y) is solved: the candidate nearest the connector that keeps the tube clear of everything (route()).
 """
 import math
 from functools import lru_cache
@@ -19,8 +17,6 @@ from compose import geom as G
 from compose.case import gasket as C
 from compose.controller import rev2_std as CS
 
-HALF_PARTS_H = 2.1        # tallest part under a rev 2 half board (checks/gasket.py HALF_PART_H["ffc"])
-PLUG_TOP = {"J5": 10.0, "J4": CS.TOP_PLUG_H}     # mated plug above the controller board (checks/gasket.py PLUG_TOP)
 CLEAR = {"jumpers": 0.5, "standoffs": 0.5, "pico": 0.5, "ctrl board": 0.5, "bottom parts": 0.5, "top parts": 0.5,
          "lead tails": 0.5, "cover": 0.5, "case": 0.3}               # minimum distance (mm)
 NO_OVERLAP = ("plate", "frame", "half pcb", "half parts", "pointer", "pointer carrier")   # may touch, not overlap
@@ -39,7 +35,8 @@ def port_P(port):
     x = (pcbnew.ToMM(r.GetLeft()) + pcbnew.ToMM(r.GetRight())) / 2 - CV.CX
     y = (pcbnew.ToMM(r.GetTop()) + pcbnew.ToMM(r.GetBottom())) / 2 - CV.CY
     px, py = C.CT.to_P(x, y)
-    return px, py, C.CT.board_top + PLUG_TOP[port]
+    from compose.checks.gasket import PLUG_TOP      # mated plug above the controller board (function-local: that module
+    return px, py, C.CT.board_top + PLUG_TOP[port]   # reads sys.argv and makes its output folder when imported)
 
 
 def local_to_P(p, side):
@@ -51,7 +48,8 @@ def module_points(pl):
     """Local-frame centreline from the pads to under the half board (at the key, or just inside the wall from the
     bay); and the depth it runs on at (local z)."""
     r = PR.POINTER_CABLE_D / 2
-    z_under = -PR.PCB_T - HALF_PARTS_H - r - 0.5         # below the half board's tallest part
+    from compose.checks.gasket import HALF_PART_H
+    z_under = -PR.PCB_T - HALF_PART_H["ffc"] - r - 0.5         # below the half board's tallest part
     if pl.kind == "bay":
         from compose.pointer import place as PL, solids as PS
         px, py = PL.pads_centre(pl)

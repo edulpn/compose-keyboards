@@ -1,6 +1,5 @@
 """
-Pointer module checks (rev 2): docs/pointer-modules.md, design in
-docs/superpowers/specs/2026-11-11-pointer-modules-design.md.
+Pointer module checks (rev 2): docs/pointer-modules.md.
 
     C58_REV=2 C58_POINTER=pim447:R python3 -m compose pointer-checks [outdir] [--fast]       (the slot)
     C58_REV=2 C58_POINTER=pim447:R:bay30 python3 -m compose pointer-checks [outdir] [--fast] (a bay)
@@ -234,6 +233,8 @@ def main():
     if cfg is None:
         check_bay(ctx)
     else:
+        if S.kind(cfg.mount) == "slot" and B.enabled():     # a device in the slot, and the case has a (empty) bay too
+            check_bay(ctx)
         for f in FAST_CHECKS + ([] if FAST else FULL_CHECKS):
             f(ctx)
     os.makedirs(OUT, exist_ok=True)

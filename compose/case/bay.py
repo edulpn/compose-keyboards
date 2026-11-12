@@ -26,6 +26,7 @@ from shapely.ops import unary_union
 from compose import params as PR
 from compose import geom as G
 from compose.pointer import std as S
+from compose.pointer import OFF
 
 _R_OUT = PR.BEZEL_BEVEL + 0.5          # same rounding as compose/case/gasket.py O_OUTER
 
@@ -34,10 +35,13 @@ def active():
     """The bay footprint the case is built with, or None: a bay device's (C58_POINTER=…:bay30), else C58_THUMB_BAY.
     Raises ValueError when C58_THUMB_BAY names no bay of the standard."""
     parts = os.environ.get("C58_POINTER", "").split(":")
-    if len(parts) == 3 and parts[2] in S.bays():
-        return parts[2]
     v = os.environ.get("C58_THUMB_BAY", "")
-    if v in ("", "0"):
+    if len(parts) == 3 and parts[2] in S.bays():
+        if v not in OFF and v != parts[2]:
+            raise ValueError(f"C58_POINTER={':'.join(parts)!r} brings its own bay, but C58_THUMB_BAY={v!r} asks for "
+                             f"another: unset C58_THUMB_BAY or make them the same")
+        return parts[2]
+    if v in OFF:
         return None
     if v not in S.bays():
         raise ValueError(f"C58_THUMB_BAY={v!r}: one of the standard's bays: {', '.join(S.bays())}")

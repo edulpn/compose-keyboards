@@ -7,7 +7,10 @@ Pointer devices as data. Each lives in its own folder, pointers/<name>/ (like la
     pcb.py       (optional) a board of its own, generated like compose/pcb/*
 
 Device frame: origin at the touch point's centre (the ball) on the board's top face, +y toward the board edge away
-from the header, z up. `measured` stays False until a real part has been measured (pointer-checks warns until then).
+from the header, z up. A right-half device is the left-half one mirrored with its half (compose/case/gasket.py,
+compose/pointer/place.py), so a device and its carrier must be mirror-symmetric about the device's own y axis (x -> -x),
+or the right half's solids won't match the real part. `measured` stays False until a real part has been measured
+(pointer-checks warns until then).
 """
 import os
 import math
@@ -43,10 +46,6 @@ class Device:
 
 def outline(d):
     return unary_union([box(*r) for r in d.rects])
-
-
-def body(d):
-    return box(*d.rects[0])
 
 
 def pose_fn(pose):

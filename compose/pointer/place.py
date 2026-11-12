@@ -40,7 +40,6 @@ class Placement:
     back: Polygon          # its envelope of the parts under the board, left local
     holes: list            # its mounting holes, left local
     pads: list             # its cable pads [(signal, x, y)], left local
-    ball: tuple            # its touch point, left local (x, y)
     carrier: Polygon       # the carrier's top view, left local
     board_bot_z: float     # the board's underside, local z
     ball_top: float        # the touch surface above the plate top
@@ -220,7 +219,7 @@ def place(cfg):
                      window=window(cfg.mount, fr), points=pts, uses=[pts[j] for j in car.USES[cfg.mount]],
                      board=poly_to_local(D.outline(dev), fl), top=poly_to_local(box(*dev.top_rect), fl),
                      back=poly_to_local(box(*dev.back_rect), fl), holes=[fl(*h) for h in dev.holes],
-                     pads=[(n, *fl(x, y)) for n, x, y in dev.pads], ball=fl(0.0, 0.0),
+                     pads=[(n, *fl(x, y)) for n, x, y in dev.pads],
                      carrier=geom_to_local(car.outline(cfg.mount), f), board_bot_z=PR.PLATE_T + zb,
                      ball_top=round(zb + dev.pcb_t + dev.top_h, 2), dev_screw=dev_s, fp_screw=fp_s)
 
@@ -232,8 +231,7 @@ def pads_centre(pl):
 
 def device_problems(pl):
     """[(check id, message)] for the device on its carrier: M2 inside the window (screw heads too) and under the
-    footprint's top, M3
-    screwed to enough of the footprint's points, M4 standard screws, M5 the cable's way down."""
+    footprint's top, M3 screwed to enough of the footprint's points, M4 standard screws, M5 the cable's way down."""
     out = []
     fp = pl.footprint
     w = pl.window.buffer(0.01)

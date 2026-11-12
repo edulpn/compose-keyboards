@@ -66,6 +66,9 @@ def wall_hole_frame(fr):
         q = ring_.interpolate(d)
         if all(q.distance(P_(s)) >= keep for s in C.GL.screws_all):
             break
+    else:
+        raise ValueError(f"no spot on the half's wall within {0.5 * 60:g} mm of the bay's nearest point clears the "
+                         f"frame-screw bosses by {keep:.1f} mm: move the bay or the frame screws")
     a, b = ring_.interpolate(d - 0.5), ring_.interpolate(d + 0.5)
     t = np.array([b.x - a.x, b.y - a.y]); t /= np.linalg.norm(t)
     n = np.array([t[1], -t[0]])
