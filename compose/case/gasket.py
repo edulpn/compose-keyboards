@@ -157,7 +157,20 @@ GL = gasket_layout()
 
 
 # ================================================================ plate
-def plate2_local():
+def _pointer_on(side):
+    """The pointer device's placement when it sits on `side` ("L"/"R"), else None (compose/pointer/)."""
+    if side is None:
+        return None
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    if cfg is None or cfg.side != side:
+        return None
+    from compose.pointer import place as PL
+    return PL.place(cfg)
+
+
+def plate2_local(side=None):
+    """One half's plate (left local). `side` matters only with a slot device: that side's plate gets the slot's inserts."""
     from compose.case import sandwich as PT
     core = prism(ring(O_CORE), 0.0, TH)
     flange = prism(ring(O_PLATE), PR.FLANGE_Z0, PR.FLANGE_Z0 + PR.FLANGE_T)
@@ -173,13 +186,22 @@ def plate2_local():
     plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in hb.posts]))
     plate = plate.cut(poly_prism(hb.pockets, -1.0, PR.JOINT_POCKET_D))
     plate = plate.cut(union([cyl(x, y, PR.NOTCH_R, -1.0, TH + 1.0) for x, y in GL.screws_all]))
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "slot":          # the slot's inserts (compose/pointer/std.py)
+        from compose.pointer import solids as PS
+        plate = plate.cut(PS.slot_seat(pl.frame, pl.footprint))
     return plate.clean()
 
 
 # ================================================================ frame
-def _key_opening():
+def _key_opening(side=None):
     from compose.case import sandwich as PT
-    return PT.key_opening()
+    o = PT.key_opening()
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "slot":          # room for the slot's window
+        from compose.pointer import solids as PS
+        o = o.union(PS.slot_relief(pl.frame, pl.footprint))
+    return o
 
 
 def middle_side_local(gap):
@@ -188,7 +210,7 @@ def middle_side_local(gap):
     return G.bridge_zone_local(reach=-gap, z0=-60.0, z1=60.0)
 
 
-def frame2_local():
+def frame2_local(side=None):
     """Full ring around the key field (rev 1's bevelled look): skirt + trim lip down to the case wall on the
     outer edges; along the bridge an inner rail that ends at the interface plane (the cover continues it)."""
     outer = ring(O_OUTER)
@@ -204,7 +226,7 @@ def frame2_local():
     body = body.cut(prism(ring(O_WALL_IN), TH - 1.0, PR.FRAME_LIP_Z))                    # clear of the plate + top pads
     bosses = union([cyl(x, y, PR.FRAME_BOSS_R, PR.SEAM_Z, PR.FRAME_LIP_Z + 0.5) for x, y in GL.screws_all])
     body = body.fuse(bosses.intersect(env))
-    body = body.cut(poly_prism(_key_opening(), PR.FRAME_LIP_Z - 1, PR.FRAME_TOP_Z + 1))
+    body = body.cut(poly_prism(_key_opening(side), PR.FRAME_LIP_Z - 1, PR.FRAME_TOP_Z + 1))
     body = body.cut(union([cyl(x, y, PR.M3_INSERT_D / 2, PR.SEAM_Z - 0.5, PR.SEAM_Z + PR.M3_INSERT_L) for x, y in GL.screws_all]))
     # the inner rail ends FLOAT_GAP short of the interface plane, square at the bridge's back and front faces:
     # one cut with the bridge's own block in the P frame (a second, local-frame cut along the same plane left
@@ -394,9 +416,20 @@ def export_print(out):
         shape = shape.translate(cq.Vector(-bb.center.x, -bb.center.y, -bb.zmin))
         cq.exporters.export(cq.Workplane().add(shape), os.path.join(d, name), **tol)
     save(case2_world(), "rev2_case.stl")
-    pl, fr = plate2_local(), frame2_local()
-    save(flip(pl), "rev2_plate_left.stl"); save(flip(pl.mirror("YZ")), "rev2_plate_right.stl")   # switch side down
-    save(flip(fr), "rev2_frame_left.stl"); save(flip(fr.mirror("YZ")), "rev2_frame_right.stl")
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    if cfg is None:
+        pl, fr = plate2_local(), frame2_local()
+        save(flip(pl), "rev2_plate_left.stl"); save(flip(pl.mirror("YZ")), "rev2_plate_right.stl")   # switch side down
+        save(flip(fr), "rev2_frame_left.stl"); save(flip(fr.mirror("YZ")), "rev2_frame_right.stl")
+    else:                                         # one side carries a pointer device: build each side on its own
+        save(flip(plate2_local("L")), "rev2_plate_left.stl")
+        save(flip(plate2_local("R").mirror("YZ")), "rev2_plate_right.stl")
+        save(flip(frame2_local("L")), "rev2_frame_left.stl")
+        save(flip(frame2_local("R").mirror("YZ")), "rev2_frame_right.stl")
+        from compose.pointer import device as PD
+        c = PD.carrier(cfg.device).solid(cfg.mount)   # the device's carrier: prints flat on its base
+        save(c if cfg.side == "L" else c.mirror("YZ"), f"rev2_pointer_carrier_{cfg.device}_{cfg.mount}.stl")
     save(flip(cover2_P()), "rev2_cover.stl")
 
 
