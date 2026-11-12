@@ -180,8 +180,28 @@ def check_cable(ctx):
         rec("P6 ... <= 60 pF (400 kHz, not used)", c_pf <= 60.0, f"{c_pf:.0f} pF", warn=True)
 
 
+def check_firmware(ctx):
+    pl = ctx.get("pl")
+    if pl is None:
+        return
+    from compose import firmware_rev2 as FW
+    from compose import geom as G
+    for rgb in (False, True):
+        plain, ptr = FW.board(rgb), FW.board(rgb, pl)
+        gone = FW.matrix_pos(G.LAYOUT.keys[pl.key_index], pl.side) if pl.key_index is not None else None
+        m_plain = [e["matrix"] for e in plain["layouts"]["LAYOUT"]["layout"]]
+        m_ptr = [e["matrix"] for e in ptr["layouts"]["LAYOUT"]["layout"]]
+        ok = ((gone is None or (gone in m_plain and gone not in m_ptr))
+              and sorted(m_ptr) == sorted(x for x in m_plain if x != gone)
+              and ptr["features"].get("pointing_device") is True
+              and FW.pointer_files(pl)["rules.mk"] == [f"POINTING_DEVICE_DRIVER = {pl.device.driver}"])
+        what = f"key {gone} removed" if gone is not None else "every key kept"
+        rec(f"P7 firmware {'rgb_' if rgb else ''}pointer: {what}, other keys unchanged, driver set", ok,
+            f"{len(m_ptr)} keys, driver {pl.device.driver}")
+
+
 FAST_CHECKS = [check_footprint, check_device]
-FULL_CHECKS = [check_solids, check_cable]
+FULL_CHECKS = [check_solids, check_cable, check_firmware]
 
 
 def main():
