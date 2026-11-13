@@ -138,7 +138,7 @@ def board_low(dev, car, fp, tilt=None):
                min(z for _, _, z in under(dev, car, fp, tilt, back, -dev.back_h)))
 
 
-def insert_depth(dev, car, fp, tilt=None, insert_d=None, insert_l=None, floor=None):
+def insert_depth(dev, car, fp, tilt=None, insert_d=None, floor=None):
     """Depth of the carrier's insert holes along the board's normal: the flat rule (4.5, or the room up to the seat), less
     what a tilted board's low side leaves: the hole's bottom face, its lowest rim point included, keeps `floor` of base."""
     from compose import params as PR

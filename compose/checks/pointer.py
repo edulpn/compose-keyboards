@@ -156,6 +156,13 @@ def check_solids(ctx):
     rec("P1 no overlap: pointer / pointer carrier", v < 1e-3, f"{v:.3f} mm3")
     d = CK.dist(parts["pointer"], parts["frame"])
     rec(f"P2 clearance pointer / frame >= {PR.KEY_OPENING_GAP}", d >= PR.KEY_OPENING_GAP - 0.01, f"{d:.2f} mm")
+    if pl.tilt:
+        from compose.pointer import solids as PS
+        p0 = (pl.pivot[0] + 5.0, pl.pivot[1] + 3.0, pl.pivot[2] + 2.0)
+        tiny = cq.Workplane().box(0.1, 0.1, 0.1).translate(p0).val()
+        c_ = PS._turned(pl, tiny).Center()
+        err = math.dist(pl.rot(*p0), (c_.x, c_.y, c_.z))
+        rec("P1 the solids turn as the carrier's maths says (tilt sign and axis)", err < 1e-4, f"{err:.1e} mm")
     c = D.carrier(pl.device.name).solid(pl.footprint, pl.tilt)
     p = os.path.join(OUT, "_pointer_carrier.stl")
     os.makedirs(OUT, exist_ok=True)
@@ -164,20 +171,13 @@ def check_solids(ctx):
     worst, n_br, n_thin, _ = CK.overhangs(m)
     rec("P3 carrier prints flat on its base: watertight, every layer supported", m.is_watertight and worst is None,
         f"{n_br} bridges, {n_thin} thin lips" + ("" if worst is None else f"; unsupported {worst}"))
-    bad, _ = _insert_walls(pl, c)
-    rec(f"P3 insert holes keep >= {PR.POINTER_INSERT_BOSS_WALL:g} mm of wall and >= {PR.POINTER_INSERT_FLOOR:g} mm of floor",
+    bad = _insert_walls(pl, c)
+    rec(f"P3 insert holes keep >= {PR.POINTER_INSERT_BOSS_WALL:g} mm of wall" + (f" and >= {PR.POINTER_INSERT_FLOOR:g} mm of floor" if pl.tilt else ""),
         not bad, "; ".join(bad) or f"{len(pl.holes)} holes, along the board's normal")
-    if pl.tilt:
-        PS = __import__("compose.pointer.solids", fromlist=["x"])
-        p0 = (pl.pivot[0] + 5.0, pl.pivot[1] + 3.0, pl.pivot[2] + 2.0)
-        tiny = cq.Workplane().box(0.1, 0.1, 0.1).translate(p0).val()
-        c_ = PS._turned(pl, tiny).Center()
-        err = math.dist(pl.rot(*p0), (c_.x, c_.y, c_.z))
-        rec("P1 the solids turn as the carrier's maths says (tilt sign and axis)", err < 1e-4, f"{err:.1e} mm")
 
 
 def _insert_walls(pl, c):
-    """([problems], floor) for the carrier solid `c` (footprint frame): round each board insert hole, along its whole
+    """[problems] for the carrier solid `c` (footprint frame): round each board insert hole, along its whole
     depth, a ring of POINTER_INSERT_BOSS_WALL must be material; tilted, under it POINTER_INSERT_FLOOR too."""
     import cadquery as cq
     dev, car, fp = pl.device, D.carrier(pl.device.name), pl.footprint
@@ -198,7 +198,7 @@ def _insert_walls(pl, c):
         short = fl.Volume() - fl.intersect(c).Volume()
         if short > 0.1:
             out.append(f"hole {i + 1}: {short:.1f} mm3 of its floor missing")
-    return out, PR.POINTER_INSERT_FLOOR
+    return out
 
 
 def check_cable(ctx):
