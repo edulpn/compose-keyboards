@@ -40,6 +40,43 @@ def vol_inter(a, b):
     return r.volume if r is not None and len(r.faces) else 0.0
 
 
+# Point-in-mesh and signed-distance queries on up to 120 000 sample points. trimesh casts one ray per point
+# and sizes its arrays by points x candidate triangles: in one call that peaked at ~40 GB. The points go in
+# chunks of CHUNK instead, spread over worker processes (forked, so they share the mesh and its ray index);
+# every point's answer is computed exactly as before and the chunks are joined in order.
+CHUNK = 1000
+_NPROC = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else 1
+_MESH = None
+
+
+def _chunks(p):
+    return [p[i:i + CHUNK] for i in range(0, len(p), CHUNK)] or [p]
+
+
+def _contains(c):
+    return _MESH.contains(c)
+
+
+def _IN(m, p):
+    """m.contains(p), in chunks, in parallel where the platform can fork."""
+    global _MESH
+    cs = _chunks(p)
+    if _NPROC < 2 or len(cs) < 2 or not sys.platform.startswith("linux"):
+        return np.concatenate([m.contains(c) for c in cs])
+    import multiprocessing
+    m.contains(p[:1])                       # build the ray index once, before the workers fork
+    _MESH = m
+    with multiprocessing.get_context("fork").Pool(min(_NPROC, len(cs))) as pool:
+        out = pool.map(_contains, cs)
+    _MESH = None
+    return np.concatenate(out)
+
+
+def _SD(m, p):
+    """trimesh.proximity.signed_distance(m, p), in chunks."""
+    return np.concatenate([trimesh.proximity.signed_distance(m, c) for c in _chunks(p)])
+
+
 def collide(a, b, n=20000):
     """Collision measure for any pair: overlap volume when both are closed,
     otherwise penetration depth (mm) of the open mesh's surface samples into
@@ -50,10 +87,10 @@ def collide(a, b, n=20000):
     if not cl.is_watertight:
         raise ValueError("collide: at least one mesh must be closed")
     pts, _ = trimesh.sample.sample_surface(op, n, seed=5)
-    ins = cl.contains(pts)
+    ins = _IN(cl, pts)
     if not ins.any():
         return 0.0, "mm"
-    return float(trimesh.proximity.signed_distance(cl, pts[ins]).max()), "mm"
+    return float(_SD(cl, pts[ins]).max()), "mm"
 
 
 def group(*names):
@@ -66,9 +103,9 @@ def penetration(mesh, solids, n=25000):
     pts, _ = trimesh.sample.sample_surface(mesh, n, seed=3)
     worst = 0.0
     for s in solids:
-        ins = s.contains(pts)
+        ins = _IN(s, pts)
         if ins.any():
-            worst = max(worst, float(trimesh.proximity.signed_distance(s, pts[ins]).max()))
+            worst = max(worst, float(_SD(s, pts[ins]).max()))
     return worst
 
 
@@ -172,8 +209,8 @@ if PR.MATRIX == "pcb":
     sw_under = trimesh.util.concatenate([group("pins"), group("swlegs")])
     pts, _ = trimesh.sample.sample_surface(sw_under, 120000, seed=4)
     hpcb = group("hpcb")
-    ins = hpcb.contains(pts)
-    depth = float(trimesh.proximity.signed_distance(hpcb, pts[ins]).max()) if ins.any() else 0.0
+    ins = _IN(hpcb, pts)
+    depth = float(_SD(hpcb, pts[ins]).max()) if ins.any() else 0.0
     ok(depth < 0.02, f"switch pins, legs and centre posts through the board holes: max {depth:.2f} mm into the board")
     # diodes vs hotswap sockets, on the face they share (both orientations): bare leads must not reach a tab
     from shapely.geometry import Point as SP, LineString as SL, Polygon as SPo
@@ -198,9 +235,9 @@ if PR.MATRIX == "pcb":
     v, u = 0.0, "mm"
     for lobe in hs.split(only_watertight=False):
         if lobe.is_watertight:
-            ins = lobe.contains(pts)
+            ins = _IN(lobe, pts)
             if ins.any():
-                v = max(v, float(trimesh.proximity.signed_distance(lobe, pts[ins]).max()))
+                v = max(v, float(_SD(lobe, pts[ins]).max()))
     ok(v < 0.02, f"switch legs/posts vs hotswap socket bodies: {v:.2f} {u}")
     g = min_gap(group("cconn", "cpcb"), hb)
     ok(g >= 1.0, f"controller to half boards and their parts: {g:.2f} mm (room for the cable plugs)")
