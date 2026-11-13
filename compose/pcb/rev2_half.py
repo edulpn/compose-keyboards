@@ -134,7 +134,7 @@ def jumper_row_y():
     """The connector's row centre in the controller's frame (y): JUMPER_ROW_Y if set, else derived. Place the
     connector, solve the jumper with the half connector free to slide along its row (least bend skew), move
     the row by that slide, repeat until it settles (rounded to 0.01 mm). Cached in out_cache/, keyed by the
-    sources it depends on, since the solve takes a minute."""
+    sources and the parameter values it depends on, since the solve takes a minute."""
     if JUMPER_ROW_Y is not None:
         return JUMPER_ROW_Y
     if "v" in _ROW:
@@ -142,9 +142,13 @@ def jumper_row_y():
     import hashlib
     import json
     here = os.path.dirname(os.path.abspath(__file__))
-    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "pcb/layout.py", "pcb/rev2_half.py",
+    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "layout.py", "pcb/layout.py", "pcb/rev2_half.py",
                                                   "pcb/jumper.py", "controller/rev2_std.py", "case/gasket.py")]
-    key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + os.environ.get("C58_REV", "").encode()).hexdigest()
+    src.append(os.path.join(here, "..", "..", "layouts", PR.LAYOUT, "layout.py"))
+    # params.py as it resolved, not only as written: C58_TENT, C58_SPLAY, C58_GAP_TOP and the other environment
+    # overrides move the row as much as an edit does
+    vals = repr(sorted((k, v) for k, v in vars(PR).items() if k.isupper() and isinstance(v, (int, float, tuple))))
+    key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + vals.encode()).hexdigest()
     cache = os.path.join("out_cache", "jumper_row_y.json")
     try:
         got = json.load(open(cache))
@@ -931,13 +935,17 @@ def draw(s, path):
 
 
 if __name__ == "__main__":
+    # Through the importable module, not this __main__ copy of it: compose.pcb.jumper imports this module by name,
+    # and with two copies each keeps its own placement and connector row. jumper_row_y() then ran its real solve
+    # in the other copy, saw no slide left here and kept (and cached) its start value.
+    from compose.pcb import rev2_half as _M
     args = [a for a in sys.argv[2:] if not a.startswith("-")]
     if "--plan" in sys.argv:
         out = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
         os.makedirs(os.path.join(out, "pcb"), exist_ok=True)
-        s = plan("hotswap", True)
+        s = _M.plan("hotswap", True)
         print("diodes in one common spot:", s.diode_common, "| ffc shift/back", s.ffc.shift, s.ffc.back,
               "| posts", [tuple(round(v, 1) for v in p) for p in s.posts], "| caps", len(s.caps))
-        draw(s, os.path.join(out, "pcb", "half_rev2_plan.png"))
+        _M.draw(s, os.path.join(out, "pcb", "half_rev2_plan.png"))
     else:
-        main(args or None)
+        _M.main(args or None)
