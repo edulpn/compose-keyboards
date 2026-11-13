@@ -8,5 +8,5 @@ scipy>=1.11
 matplotlib>=3.8        # font outlines for the board lettering
 networkx>=3.0
 rtree>=1.0
-# Not on PyPI: KiCad 7+ (its pcbnew Python module), Java 17+ with freerouting.jar,
+# Not on PyPI: KiCad 7+ (its pcbnew Python module), Java 21+ with freerouting.jar,
 # ngspice (controller simulation), node 18+ (renders only, see compose/render/web/package.json)
