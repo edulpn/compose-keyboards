@@ -185,6 +185,8 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
 `.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs: rev 1 (build, model, checks, and the byte-for-byte comparison with the pull request's base), rev 2 (case, `gasket-checks`, firmware), the pointer configurations, and the boards (controller, the four half boards, the jumper, then `sim-half-rev2` and `order-rev2`). The `checks-passed` job sums them up: it's the one status to require.
 
+Routing is random, and on 4 cores an RGB half board can miss a clean route for 30 attempts in a row. So each RGB board routes in three parallel jobs of four Freerouting runs per attempt, for up to 55 minutes each, and `sim-half-rev2` takes the first that came out DRC-clean. The bar is the same as on your machine.
+
 A pull request runs only the suites its changes can reach. Each full run on `main` records the repository files every suite read: modules imported (and module names it tried to import), files opened, folders listed (`.github/ci/traced.py`). The `plan` job compares those with the files the pull request changes (`.github/ci/plan.py`) and lists the reasons in the run summary. A docs-only change runs nothing; a change to rev 2 code alone skips rev 1. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record.
 
 ## Notes for working on the code

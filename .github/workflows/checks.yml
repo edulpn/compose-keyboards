@@ -137,7 +137,7 @@ jobs:
       - run: $T deps/boards.txt controller o2
       - run: $T deps/boards.txt sim-controller o2
       - uses: actions/upload-artifact@v4
-        with: { name: board-controller, path: o2/pcb, retention-days: 7 }
+        with: { name: board-controller-s1, path: o2/pcb, retention-days: 7 }
       - uses: actions/upload-artifact@v4
         with: { name: deps-boards-controller, path: deps, retention-days: 7 }
 
@@ -149,7 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: board-controller, path: o2/pcb }
+        with: { name: board-controller-s1, path: o2/pcb }
       - uses: ./.github/actions/setup
       - run: $T deps/boards.txt spice-controller o2
       - uses: actions/upload-artifact@v4
@@ -159,20 +159,48 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run_boards == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 180          # the RGB boards retry until DRC is clean; normally 1-12 minutes
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        board: [half_rev2_hotswap, half_rev2_solder, half_rev2_hotswap_rgb, half_rev2_solder_rgb]
+        # Freerouting is random, and on the RGB boards most of its runs end a few connections short or hit its
+        # "restored an earlier board" quirk: with 2 router jobs per attempt (4 cores) one board took 30 attempts
+        # in vain. So each RGB board races in three shards of 4 jobs per attempt for 55 minutes; boards-sim takes
+        # the first clean one. The bar is unchanged: DRC clean, then the copper simulation.
+        include:
+          - { board: half_rev2_hotswap,     shard: 1, shards: 1 }
+          - { board: half_rev2_solder,      shard: 1, shards: 1 }
+          - { board: half_rev2_hotswap_rgb, shard: 1, shards: 3 }
+          - { board: half_rev2_hotswap_rgb, shard: 2, shards: 3 }
+          - { board: half_rev2_hotswap_rgb, shard: 3, shards: 3 }
+          - { board: half_rev2_solder_rgb,  shard: 1, shards: 3 }
+          - { board: half_rev2_solder_rgb,  shard: 2, shards: 3 }
+          - { board: half_rev2_solder_rgb,  shard: 3, shards: 3 }
+    name: half (${{ matrix.board }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
     env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}
-      - uses: actions/upload-artifact@v4
-        with: { name: "board-${{ matrix.board }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
-      - uses: actions/upload-artifact@v4
-        with: { name: "deps-boards-${{ matrix.board }}", path: deps, retention-days: 7 }
+      - id: route
+        run: |
+          if [ "${{ matrix.shards }}" = 1 ]; then
+            $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}
+            echo "routed=true" >> "$GITHUB_OUTPUT"
+          elif ROUTER_JOBS=4 timeout --signal=INT 55m $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}; then
+            echo "routed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::${{ matrix.board }} shard ${{ matrix.shard }}: no clean route in 55 minutes; boards-sim takes another shard's"
+          fi
+      - if: steps.route.outputs.routed == 'true'
+        uses: actions/upload-artifact@v4
+        with: { name: "board-${{ matrix.board }}-s${{ matrix.shard }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "deps-boards-${{ matrix.board }}-s${{ matrix.shard }}"
+          path: deps
+          retention-days: 7
+          if-no-files-found: ignore
 
   jumper:
     needs: plan
@@ -185,7 +213,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: $T deps/boards.txt flex-jumper o2
       - uses: actions/upload-artifact@v4
-        with: { name: board-jumper, path: "o2/pcb/jumper_rev2*", retention-days: 7 }
+        with: { name: board-jumper-s1, path: "o2/pcb/jumper_rev2*", retention-days: 7 }
       - run: $T deps/boards.txt flex-sim o2
       - uses: actions/upload-artifact@v4
         with: { name: deps-boards-jumper, path: deps, retention-days: 7 }
@@ -198,7 +226,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { pattern: "board-*", path: o2/pcb, merge-multiple: true }
+        with: { pattern: "board-*", path: boards }
+      - name: one routed copy of every board
+        run: |
+          mkdir -p o2/pcb
+          for b in controller jumper half_rev2_hotswap half_rev2_solder half_rev2_hotswap_rgb half_rev2_solder_rgb; do
+            d=$(ls -d boards/board-$b-s* 2>/dev/null | sort | head -1)
+            [ -n "$d" ] || { echo "::error::no clean route for $b in any shard (see the half jobs' logs)"; exit 1; }
+            echo "$b: $d"; cp -r "$d"/. o2/pcb/
+          done
       - uses: ./.github/actions/setup
       - run: $T deps/boards.txt sim-half-rev2 o2
       - run: $T deps/boards.txt order-rev2 o2
