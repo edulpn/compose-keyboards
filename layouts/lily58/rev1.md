@@ -30,7 +30,7 @@ python3 -m compose model out      # switches, wiring, Pico etc. for checks/rende
 python3 -m compose checks out     # fit, assembly and print checks; exit 1 on failure                   (~40 s)
 python3 -m compose render out     # PNGs → out/png  (needs node + playwright; cross-sections need only matplotlib)
 python3 -m compose pcb out        # PCBs → out/pcb: KiCad boards, DRC reports, *_JLCPCB.zip, previews
-                                  #   needs KiCad 7 (pcbnew), Java 17+, and freerouting.jar (github.com/freerouting/freerouting releases)
+                                  #   needs KiCad 7 (pcbnew), Java 21+, and freerouting.jar (github.com/freerouting/freerouting releases)
                                   #   at ../tools/freerouting.jar or set FREEROUTING=/path/to/jar
 python3 -m compose firmware out   # QMK keyboard.json for the PCB build → out/firmware
 python3 -m compose sim out        # electrical simulation of the routed boards + firmware pins (~10 s)

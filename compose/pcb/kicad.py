@@ -446,7 +446,32 @@ def _router_stats(log):
         return None
 
 
+_JAVA_OK = False
+
+
+def check_java():
+    """Freerouting 2.1.0 is built for Java 21 (class files version 65): an older `java` exits at once without
+    writing a .ses, which would look like a board that never routes. Fail early with the reason instead."""
+    global _JAVA_OK
+    if _JAVA_OK:
+        return
+    try:
+        r = subprocess.run(["java", "-version"], capture_output=True, text=True)
+    except OSError:
+        raise RuntimeError("Freerouting needs Java 21+, and `java` isn't on PATH")
+    m = re.search(r'version "(\d+)(?:\.(\d+))?', r.stderr + r.stdout)
+    major = int(m.group(1)) if m else 0
+    major = int(m.group(2)) if major == 1 and m.group(2) else major          # "1.8" -> 8
+    if major < 21:
+        first = (r.stderr + r.stdout).strip().splitlines()[0] if (r.stderr + r.stdout).strip() else "?"
+        raise RuntimeError(f"Freerouting 2.1.0 needs Java 21+, but `java` on PATH is: {first}")
+    if not os.path.exists(FREEROUTING):
+        raise RuntimeError(f"Freerouting jar not found at {FREEROUTING}: set FREEROUTING")
+    _JAVA_OK = True
+
+
 def route(board, name, passes=40):
+    check_java()
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
     poly, ox, oy = board.kb2_outline
@@ -499,7 +524,7 @@ def route(board, name, passes=40):
             # restored board to the .ses instead of the one it finished with: reject that output
             return False, stats["connections"]["incomplete_count"]
         return True, stats["connections"]["incomplete_count"]
-    t0, winner, rejected = time.time(), None, 0
+    t0, winner, rejected, silent = time.time(), None, 0, 0
     while any(not j.done for j in jobs) and winner is None:
         time.sleep(2)
         for j in jobs:
@@ -511,7 +536,8 @@ def route(board, name, passes=40):
                 if ok and inc == 0:
                     winner = j
                     break
-                rejected += not ok
+                silent += not os.path.exists(j.ses)
+                rejected += not ok and os.path.exists(j.ses)
                 continue
             if time.time() - t0 > JOB_TIMEOUT_MIN * 60 + 240:
                 j.proc.kill()
@@ -532,7 +558,8 @@ def route(board, name, passes=40):
     if winner is None:                  # none fully routed: take a sound one with the fewest open connections
         sound = [(v[1] if v[1] is not None else 10 ** 6, k) for k, j in enumerate(jobs) for v in [verdict(j)] if v[0]]
         if not sound:
-            print(f"  {name}: no usable router output ({rejected} of {len(jobs)} wrote an earlier board)")
+            print(f"  {name}: no usable router output ({rejected} of {len(jobs)} wrote an earlier board, "
+                  f"{silent} wrote nothing: see {jobs[0].logf})")
             return None
         winner = jobs[min(sound)[1]]
     if winner.ses != ses:
