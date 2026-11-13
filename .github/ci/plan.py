@@ -29,7 +29,9 @@ def main():
         run = {s: True for s in SUITES}
         lines.append(f"All suites run: {why}.")
     else:
-        r = subprocess.run(["git", "diff", "--name-only", traced, "HEAD"], capture_output=True, text=True)
+        # --no-renames: a renamed file is listed under its old name and its new one. With rename detection only
+        # the new name shows, and a suite that read the old one would be skipped
+        r = subprocess.run(["git", "diff", "--name-only", "--no-renames", traced, "HEAD"], capture_output=True, text=True)
         if r.returncode != 0:
             run = {s: True for s in SUITES}
             lines.append(f"All suites run: can't diff against {traced[:9]} ({r.stderr.strip()}).")

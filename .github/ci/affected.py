@@ -4,8 +4,8 @@
 
 <deps.txt> is what `traced.py` recorded while the suite ran on a known commit: every repository file it
 imported or opened, and every directory it listed (ending in "/"). <changed-files.txt> lists the paths
-that differ between that commit and the one under test (`git diff --name-only <traced> <head>`), added,
-removed and renamed files included.
+that differ between that commit and the one under test (`git diff --name-only --no-renames <traced> <head>`):
+added and removed files included, and a renamed file under both its old name and its new one.
 
 The suite can only produce different results if one of the files it read changed, or a file appeared in or
 vanished from a directory it listed. Changes to the toolchain or to CI itself always run everything.
