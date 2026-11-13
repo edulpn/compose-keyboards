@@ -6,11 +6,14 @@ Independent of the net names the boards were built with:
   1. Copper connectivity of every routed board is rebuilt from geometry (pads, tracks, vias that touch).
   2. Parts are fitted the way a builder would, per half: the left half is the board switch-side-up (sockets,
      LEDs, capacitors and connector on the bottom face B), the right half the same board flipped (all of that
-     on F). Positions come from the plan and the parts' datasheets, not from pad nets:
-       switch      contacts at the MX pin positions (solder) or the socket tabs beside them (hotswap)
+     on F), and only copper on that face counts. Positions come from the plan and the parts' datasheets, not
+     from pad nets:
+       switch      contacts at the MX pin positions (solder) or the Kailh socket's nominal tabs (hotswap)
        diode       cathode = the band end (the square pad), anode = the other
        FFC         contacts at the physical slots: slot 1 = the back-most contact
-       MINI-E      pins 1-4 = VDD, DOUT, GND, DIN at their datasheet corners, seen from the pad side
+       MINI-E      pins 1-4 = VDD, DOUT, GND, DIN at the corners the board plan gives them
+                   (compose.pcb.rev2_half.LED_PINS, pad-side view). That table is the generator's own: this
+                   simulation doesn't check it against the SK6812 MINI-E drawing
   3. Per board: each key is a switch between its column's slot and its diode, the diode's cathode on its row's
      slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 18 on
      the fitted face, every LED and capacitor across slot 2/19 (5 V) and 1/4/20 (GND), the unfitted face's
@@ -50,6 +53,8 @@ FAIL = []
 OX, OY = 40.0, 60.0
 L = G.LAYOUT
 F, B = pcbnew.F_Cu, pcbnew.B_Cu
+KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socket: its tab beside MX pin 1 / pin 2,
+                                                            #   footprint coords (the values compose/sim/matrix.py uses)
 
 
 def ok(cond, msg):
@@ -79,10 +84,9 @@ class Half:
         self.s = H.plan(variant, rgb)
 
     def at(self, local_xy, layer=None):
-        n = self.cu.node_at(K(local_xy), layer if layer is not None else self.bottom)
-        if n is None and layer is None:
-            n = self.cu.node_at(K(local_xy), F if self.bottom == B else B)
-        return n
+        """Copper group at a plate-local point, on the fitted (bottom) face unless a layer is given. The other
+        face doesn't count: a part whose pads are only there can't be soldered where the builder fits it."""
+        return self.cu.node_at(K(local_xy), layer if layer is not None else self.bottom)
 
     def pad_nodes(self, ref, layer):
         out = []
@@ -129,8 +133,10 @@ class Half:
         for ks in self.s.keys:
             k = ks.k
             if self.variant == "hotswap":
-                # socket tabs on the bottom face; on the flipped board they're the mirrored copies
-                (c2, _), (c1, _) = PR.HS_PAD2, PR.HS_PAD1
+                # socket tabs on the bottom face, at the Kailh socket's nominal tab positions (as in the rev 1
+                # simulation), not at the pads' own centres: a pad moved off its tab fails. On the flipped board
+                # they're the mirrored copies
+                c1, c2 = KAILH_TAB1, KAILH_TAB2
                 if self.side == "R":
                     c1, c2 = mirror(c1), mirror(c2)
                 sa, sb = self.at(PL.fp2local(k, *c1)), self.at(PL.fp2local(k, *c2))
@@ -192,7 +198,8 @@ def board_checks(h):
     groups = {}
     for k_, g in sl.items():
         groups.setdefault(g, []).append(k_)
-    shared = [v for v in groups.values() if len(v) > 1 and set(v) not in ({1, 4, 20}, {2, 19}, {3, 18})]
+    allowed = [{1, 4, 20}, {2, 19}] + ([] if h.rgb else [{3, 18}])     # with LEDs, 3 joined to 18 shorts the chain out
+    shared = [v for v in groups.values() if len(v) > 1 and set(v) not in allowed]
     ok(not shared, f"no two connector slots joined except GND 1/4/20, 5 V 2/19{' and the pass-through 3/18' if not h.rgb else ''}"
        + (f" ({shared})" if shared else ""))
     anods = {k[5] for k in keys}
