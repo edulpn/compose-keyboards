@@ -687,8 +687,18 @@ CC col 0 {c_col}
         "5 ns (buffer / LED output). Victims at their lowest capacitance (shortest cable and half traces) "
         "and the stiffest 80k pull-up.\n")
     pairs = coupled_runs(segs)
-    agg_nets = set(rows_n) | {"RGB_L_IN", "RGB_LR", "RGB_BUF", "GP13", "GP14", "GP15", "GP26", "GP27", "GP28"}
+    # the RGB data nets (compose/controller/rev2.py), each by what drives it:
+    #   RGB_BUF, RGB_HOP_BUF   a 74HCT125 output, before its 330 ohm
+    #   RGB_L_IN, RGB_R_IN     the same, after the 330 ohm
+    #   RGB_L_RET              the left half's last LED output, back through its jumper
+    #   RGB_HOP_IN             that, after the 220 ohm (left out here: the edge is the LED's 5 ns either way)
+    rgb_kind = {"RGB_BUF": "led", "RGB_HOP_BUF": "led", "RGB_L_IN": "rgb", "RGB_R_IN": "rgb",
+                "RGB_L_RET": "led", "RGB_HOP_IN": "led"}
+    agg_nets = set(rows_n) | set(rgb_kind) | {"GP13", "GP14", "GP15", "GP26", "GP27", "GP28"}
     vic_nets = set(cols_n) | set(rows_n) | {"GP14", "GP15"}
+    stale = sorted(n for n in agg_nets | vic_nets if n not in length)
+    verdict(not stale, "every net named in the crosstalk sweep has tracks on the routed board"
+            + (f": not found {stale} (renamed in compose/controller/rev2.py?)" if stale else ""))
     c_col_min = RP["CIN"] + Lc * 1e3 * PCBZ["C_PER_MM"][0] + FFC["LEN"][0] * FFC["C_PER_M"][0] + 0.08e3 * PCBZ["C_PER_MM"][0]
     c_row_min = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (FFC["LEN"][0] * FFC["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
     cases = []
@@ -704,7 +714,7 @@ CC col 0 {c_col}
         for agg, vic in ((a, b), (b, a)):
             if agg in agg_nets and vic in vic_nets and agg != vic and not (agg in rows_n and vic in rows_n):
                 cm = L * PCBZ["CM_PER_MM_AT"](gap)
-                kind = "rgb" if agg in ("RGB_L_IN", "RGB_BUF") else ("led" if agg == "RGB_LR" else "gpio")
+                kind = rgb_kind.get(agg, "gpio")
                 vk = "row" if vic in rows_n else "col"
                 cases.append((f"board {agg} -> {vic} ({L:.1f} mm @ {gap:.2f} mm)", kind, vk, cm,
                               c_row_min if vk == "row" else c_col_min))
