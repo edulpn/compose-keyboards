@@ -118,6 +118,19 @@ def union(shapes):
     return out.clean()
 
 
+def distance(a, b):
+    """Minimum distance between two solids: the value cadquery's Shape.distance() gives, on every core.
+    (cadquery passes the shapes to BRepExtrema_DistShapeShape's constructor, which computes at once on one
+    thread, and only then asks for multi-threading.) Same face pairs, same minimum, bit for bit."""
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    e = BRepExtrema_DistShapeShape()
+    e.LoadS1(a.wrapped)
+    e.LoadS2(b.wrapped)
+    e.SetMultiThread(True)
+    e.Perform()
+    return e.Value()
+
+
 def loft(pts0, z0, pts1, z1):
     return (cq.Workplane("XY").workplane(offset=z0).polyline(pts0).close()
             .workplane(offset=z1 - z0).polyline(pts1).close().loft(ruled=True).val())

@@ -138,7 +138,7 @@ def problems(pts, parts):
     out = []
     for name, lim in CLEAR.items():
         if name in parts:
-            d = body.distance(parts[name])
+            d = G.distance(body, parts[name])
             if d < lim:
                 out.append(f"{name} {d:.2f} mm (>= {lim})")
     for name in NO_OVERLAP:

@@ -349,7 +349,7 @@ def run():
             if nm in moving and np.linalg.norm(mvw) > 0:      # (both halves move; only the left jumper is checked)
                 import cadquery as cq
                 other = other.translate(cq.Vector(*mvw))
-            row[nm] = sol.distance(other)
+            row[nm] = G.distance(sol, other)
         data["clearance"][label] = row
         line(f"| {label} | " + " | ".join(f"{row[n]:.2f}" if n in row else "-" for n in names)
              + " | " + " | ".join(f"{row[n + ' overlap']:.3f}" for n in touching) + " |")
