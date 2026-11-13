@@ -390,7 +390,20 @@ def describe(g):
             f"{SLACK} slack); top at z {g.z_max:.2f}")
 
 
+def drc_counts(rep):
+    """(errors, warnings, unconnected, finger-field mask bridges) in the jumper's DRC report.
+    The coverlay is open across each finger field (Molex: the whole contact area bare), so that one aperture
+    exposes all 20 nets by design: KiCad's "solder mask bridge" check doesn't apply to a cable end. KiCad 7's
+    Python DRC ignores the project's rule severities, so those entries are taken out of the error count here."""
+    import re
+    from compose.pcb import kicad as PK
+    err, warn, unc = PK.drc_counts(rep)
+    bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
+    return err - bridges, warn, unc, bridges
+
+
 def main(out=None):
+    """Builds the jumper; returns True when its DRC is clean (0 errors, 0 unconnected)."""
     import os
     import sys
     import pcbnew
@@ -405,13 +418,8 @@ def main(out=None):
     path = os.path.join(PK.PCB_OUT, name + ".kicad_pcb")
     pcbnew.SaveBoard(path, b)
     b = pcbnew.LoadBoard(path)
-    err, warn, unc, rep = PK.drc(b, name)
-    # the coverlay is open across each finger field (Molex: the whole contact area bare), so that one aperture
-    # exposes all 20 nets by design: KiCad's "solder mask bridge" check doesn't apply to a cable end. KiCad 7's
-    # Python DRC ignores the project's rule severities, so those entries are taken out of the count here
-    import re
-    bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
-    err -= bridges
+    rep = PK.drc(b, name)[-1]
+    err, warn, unc, bridges = drc_counts(rep)
     # conductors on one side; ordered as JLCPCB's 2-layer flex (much cheaper than 1-layer there): the back copper
     # is empty and its coverlay unbroken. Front copper, both coverlays (mask: the front one open over the finger
     # fields), outline and the PI stiffener areas (User.1)
@@ -424,7 +432,12 @@ def main(out=None):
     os.makedirs(png, exist_ok=True)
     plot_flat(os.path.join(png, "jumper_rev2_flat.png"), g)
     print(f"flat pattern: {os.path.join(png, 'jumper_rev2_flat.png')}")
+    clean = err <= 0 and unc == 0
+    if not clean:
+        print(f"{name}: DRC is not clean, see {rep}")
+    return clean
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(0 if main() else 1)

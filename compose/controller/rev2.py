@@ -517,4 +517,7 @@ def main():
 
 if __name__ == "__main__":
     import sys
-    resilk() if "--resilk" in sys.argv else main()
+    if "--resilk" in sys.argv:                 # (main() raises by itself when no attempt ends clean)
+        err, warn, unc = resilk()
+        sys.exit(1 if err or unc else 0)
+    main()

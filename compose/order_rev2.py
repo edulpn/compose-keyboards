@@ -2,7 +2,8 @@
 Compose58 rev 2 order folder:  C58_REV=2 python3 -m compose order-rev2 OUT
 
 Collects every rev 2 board's JLCPCB zip into a clean folder, ORDER_OUT (default out_order/), with ORDER.md (what to pick on JLCPCB's form for
-each), after checking that each zip is what its routed board exports today: the Gerbers are exported again
+each), after checking that each board's DRC report (<board>_drc.txt, beside it) ends at 0 errors and 0
+unconnected, and that each zip is what its routed board exports today: the Gerbers are exported again
 from the .kicad_pcb into a scratch folder and compared file by file (KiCad's date and version comment lines
 aside). It reads the boards the build commands left: the half boards and the jumper from OUT, the controller
 from CTRL_OUT (default out). It doesn't re-route anything; run the build commands and their checks first
@@ -63,6 +64,18 @@ def main():
         if not (os.path.exists(board) and os.path.exists(z)):
             bad.append(f"{stem}: not built ({board})")
             continue
+        # the board's own DRC report, left beside it by the command that built it: a board from a route attempt
+        # that didn't end clean still has a zip that matches it
+        rep = os.path.join(folder, "pcb", stem + "_drc.txt")
+        if not os.path.exists(rep):
+            print(f"  FAIL  {stem}: no DRC report beside the board ({rep})")
+            bad.append(f"{stem}: no DRC report ({rep})")
+            continue
+        counts = J.drc_counts(rep) if kw is None else PK.drc_counts(rep)     # the jumper's: less its finger fields
+        if counts[0] > 0 or counts[2] > 0:
+            print(f"  FAIL  {stem}: DRC {counts[0]} errors, {counts[2]} unconnected ({rep})")
+            bad.append(f"{stem}: DRC not clean ({counts[0]} errors, {counts[2]} unconnected)")
+            continue
         kw = J.EXPORT if kw is None else kw
         tmp = tempfile.mkdtemp()
         keep = PK.PCB_OUT
@@ -78,14 +91,15 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
         ok = not diff
         print(f"  {'ok  ' if ok else 'FAIL'}  {stem}_JLCPCB.zip {'matches' if ok else 'differs from'} {board} "
-              f"({len(na)} files{'' if ok else ': ' + ', '.join(diff[:4])})")
+              f"({len(na)} files{'; DRC clean' if ok else ': ' + ', '.join(diff[:4])})")
         if not ok:
             bad.append(f"{stem}: zip differs from the board ({', '.join(diff[:4])})")
             continue
         shutil.copy(z, dst)
         rows.append((stem, qty, notes))
     md = ["# Compose58 rev 2: what to order\n",
-          "Every zip here was checked against its routed board when this folder was made. Order the controller,",
+          "Every zip here was checked against its routed board when this folder was made, and that board's DRC",
+          "report shows 0 errors and 0 unconnected. Order the controller,",
           "one of the four half boards, and the jumper. Parts: see the BOM in layouts/lily58/rev2.md and",
           "docs/controller-rev2.md.\n",
           "| zip | per keyboard | JLCPCB |", "|---|---|---|"]

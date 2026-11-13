@@ -16,7 +16,8 @@ Scenarios, each checked against the case model (the parts gasket-checks builds):
                 the strip still reaches, the copper not strained past CU_INSERT
   gasket travel the half end moving with the plate on its foam: +-TRAVEL_CYCLE per keystroke (the copper's
                 strain amplitude against its fatigue limit), and rare excursions (down 0.5 / 1.0, up 0.5 mm)
-  length        the strip 0.5-1.5 mm longer or 0.5 mm shorter than designed (slack, and tolerance)
+  length        the strip 0.5 mm shorter or longer than designed (the tolerance: it must still settle and go in),
+                and 1.0 mm longer (information)
 Curvature is judged where the copper is (V_CU): the bare polyimide edge takes far tighter bends.
 Writes OUT/flex_sim/report.md and a JSON of every number.
 """
@@ -383,6 +384,10 @@ def run():
         best = min(per_slot[k] for k in ks)
         verdict(best <= CU_FATIGUE, f"per keystroke: the {rail} rail keeps a conductor under the fatigue limit "
                                     f"({', '.join(f'slot {k} {per_slot[k] * 100:.3f} %' for k in ks)})")
+    tol = [l_ for l_ in data["length"] if abs(l_["dl"]) <= LENGTH_TOL + 1e-9]       # (longer ones are information)
+    verdict(all(l_["ok"] and l_["insert_ok"] for l_ in tol),
+            f"length within +-{LENGTH_TOL} mm ({', '.join(format(l_['dl'], '+.1f') for l_ in tol)}): the strip settles and "
+            f"its end still reaches 4.1 mm above its seat")
     big = max(t["strain"] for t in tr if abs(t["travel"]) > TRAVEL_CYCLE + 1e-9)
     line(f"- info a rare 0.5-1.0 mm excursion strains the copper {big * 100:.2f} % (low-cycle; copper takes that "
          f"thousands of times)")
