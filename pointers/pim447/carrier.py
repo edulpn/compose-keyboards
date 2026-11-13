@@ -124,6 +124,8 @@ def solid(fp, tilt=None):
                                               cq.Vector(*n)))
         # trimmed flat at the base's underside (the cylinders' own end faces are tilted) and at the board's underside
         bosses = union(cyls).intersect(below).intersect(big_box(-60, 60, -60, 60, z0, zb + 40.0))
+        hd, hh = S.screw_head(fp)                                         # the footprint screws' heads, which a leaning boss meets
+        bosses = bosses.cut(union([cyl(*S.points(fp)[i], hd / 2 + 0.3, z1, z1 + hh + 0.3) for i in USES[fp]]))
     c = union([base, bosses])
     pts = S.points(fp)
     c = c.cut(union([cyl(*pts[i], S.screw_clear(fp) / 2, z0 - 1.0, z1 + 1.0) for i in USES[fp]]))   # footprint screws

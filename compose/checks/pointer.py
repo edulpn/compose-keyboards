@@ -178,7 +178,7 @@ def check_solids(ctx):
 
 def _insert_walls(pl, c):
     """([problems], floor) for the carrier solid `c` (footprint frame): round each board insert hole, along its whole
-    depth, a ring of POINTER_INSERT_BOSS_WALL must be material; under it, POINTER_INSERT_FLOOR."""
+    depth, a ring of POINTER_INSERT_BOSS_WALL must be material; tilted, under it POINTER_INSERT_FLOOR too."""
     import cadquery as cq
     dev, car, fp = pl.device, D.carrier(pl.device.name), pl.footprint
     depth = D.insert_depth(dev, car, fp, pl.tilt)
@@ -192,6 +192,8 @@ def _insert_walls(pl, c):
         lack = (ring.Volume() - hole.Volume()) - ring.intersect(c).Volume()
         if lack > 0.5:
             out.append(f"hole {i + 1}: {lack:.1f} mm3 of its wall missing")
+        if not pl.tilt:                                                  # a flat carrier keeps its own, older hole depth
+            continue
         fl = cq.Solid.makeCylinder(r, PR.POINTER_INSERT_FLOOR, start - axis * PR.POINTER_INSERT_FLOOR, axis)
         short = fl.Volume() - fl.intersect(c).Volume()
         if short > 0.1:
