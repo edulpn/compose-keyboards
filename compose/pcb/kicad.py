@@ -569,8 +569,12 @@ def route(board, name, passes=40):
             x, y = float(v[2]) * unit, -float(v[3]) * unit
             via = pcbnew.PCB_VIA(board)
             via.SetPosition(V(x, y))
-            via.SetWidth(MM(PR.VIA_D))
-            via.SetDrill(MM(PR.VIA_DRILL))
+            # the size the router placed and spaced it at: KiCad names a via padstack "Via[0-1]_800:400_um", and a
+            # net class with its own via (controller rev 2's Power class) gets its own padstack
+            m = re.search(r"_(\d+):(\d+)_um", v[1])
+            dia, drill = (int(m.group(1)) / 1000, int(m.group(2)) / 1000) if m else (PR.VIA_D, PR.VIA_DRILL)
+            via.SetWidth(MM(dia))
+            via.SetDrill(MM(drill))
             via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
             via.SetNet(ni)
             board.Add(via)
