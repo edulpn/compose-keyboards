@@ -55,6 +55,7 @@ def dist(a, b):
 # ---------------------------------------------------------------- the controller as placed (board frame -> P)
 H_TOP = {"U1": 8.5, "JL": CS.VFFC_H, "JR": CS.VFFC_H, "J4": 8.5, "J6": 8.5, "J5": 4.3}
 PLUG_TOP = {"J4": CS.TOP_PLUG_H, "J6": CS.TOP_PLUG_H, "J5": 10.0}
+UNDER_PORTS = ("J4",)      # the 2.54 mm header a pointer cable plugs into: soldered on the board's underside (cable.py)
 H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": CS.BOTTOM_PARTS_H, "R": 3.0}
 
 
@@ -81,6 +82,9 @@ def _controller_solids():
     hol = union([cyl(*to_P(x, y), CS.M_CLEAR / 2, bb - 1, bt + 1) for x, y in CS.STANDOFF_HOLES])
     out["ctrl board"] = prism(list(CT.outline_P.exterior.coords)[:-1], bb, bt).cut(hol)
     top, bot, tails = [], [], []
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    under = (cfg.port,) if cfg is not None and cfg.port in UNDER_PORTS else ()
     for fp in b.GetFootprints():
         ref = fp.GetReference()
         flipped = fp.IsFlipped()
@@ -95,14 +99,16 @@ def _controller_solids():
             bot.append(big_box(px0, px1, py0, py1, bb - h, bb))
         else:
             k = next((k for k in H_TOP if ref.startswith(k)), None)
-            if k:
+            if k and ref in under:                  # a pointer cable's J4: the header goes on the underside, plug below
+                out["pointer plug"] = big_box(px0, px1, py0, py1, bb - PLUG_TOP[k], bb)
+            elif k:
                 top.append(big_box(px0, px1, py0, py1, bt, bt + H_TOP[k]))
                 if k in PLUG_TOP:
                     top.append(big_box(px0, px1, py0, py1, bt + H_TOP[k] - 3.0, bt + PLUG_TOP[k]))
         for p in fp.Pads():
             if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
                 x, y = to_P(pcbnew.ToMM(p.GetPosition().x) - CV.CX, pcbnew.ToMM(p.GetPosition().y) - CV.CY)
-                if flipped:
+                if flipped or ref in under:                  # (a header on the underside: its tails come out on top)
                     tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bt, bt + CS.LEAD_ABOVE))
                 else:
                     tails.append(big_box(x - 0.4, x + 0.4, y - 0.4, y + 0.4, bb - CS.LEAD_BELOW, bb))
@@ -127,9 +133,10 @@ HALF_PART_H = {"sockets": PR.HS_HEIGHT, "diodes": PR.DIODE_BODY[1], "caps": 1.3,
                "pins": 2.0}
 
 
-def half_parts_local():
+def half_parts_local(no_switch=None):
     """Everything under a half board (left local frame), every variant at once: hotswap sockets, diode bodies,
-    capacitors, LEDs, the cable connector, M2 screw heads, solder-in switch pins."""
+    capacitors, LEDs, the cable connector, M2 screw heads, solder-in switch pins. `no_switch`: index of a key that
+    has no switch (a slot device stands there), so no socket and no switch pins either."""
     from compose.pcb import rev2_half as H2
     from compose.pcb import layout as PL
     from shapely.geometry import LineString as LS
@@ -143,9 +150,11 @@ def half_parts_local():
         "ffc": s.ffc.body,
         "leds": uu(s.ledcut),            # reverse-mount MINI-E: the body (3.2 x 2.8) within its cutout
         "heads": uu([Point(p).buffer(PR.M2_HEAD_D / 2) for p in s.posts]),
-        "pins": uu([Point(PL.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
+        "pins": uu([Point(PL.fp2local(k, *pp)).buffer(0.8) for i, k in enumerate(G.LAYOUT.keys) if i != no_switch
                     for p_ in (PR.MX_PIN1, PR.MX_PIN2) for pp in (p_, PL.mirror_fp(p_))]),
     }
+    if no_switch is not None:
+        shapes["sockets"] = shapes["sockets"].difference(H2.socket_shapes(G.LAYOUT.keys[no_switch]).buffer(0.01))
     sol = [poly_prism(g, z0 - HALF_PART_H[n], z0) for n, g in shapes.items() if not g.is_empty]
     return union(sol)
 
@@ -238,15 +247,33 @@ def mirror_pair(local):
 def parts_world(jumpers=True):
     """Every part of the assembled keyboard (world frame) as the checks use them: {name: solid}, plus the gasket
     pads (lower, upper)."""
+    from compose import pointer as PTR
+    cfg = PTR.active()
     case = C.case2_world()
-    plateL = C.plate2_local()
-    frameL = C.frame2_local()
-    plate = mirror_pair(plateL)
-    frame = mirror_pair(frameL)
     cover = G.P2W(C.cover2_P())
     hp = G.OUTLINE.buffer(-PR.PCB_INSET)
-    half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
-    half_parts = mirror_pair(half_parts_local())
+    if not C.sided():
+        plateL = C.plate2_local()
+        frameL = C.frame2_local()
+        plate = mirror_pair(plateL)
+        frame = mirror_pair(frameL)
+        half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
+        half_parts = mirror_pair(half_parts_local())
+    else:                                  # a pointer device or a one-sided bay: each side on its own
+        plate = G.L2W(C.plate2_local("L")).fuse(G.R2W(C.plate2_local("R")))
+        frame = G.L2W(C.frame2_local("L")).fuse(G.R2W(C.frame2_local("R")))
+    if cfg is None and C.sided():          # (an empty bay on one half: the boards are the same on both)
+        half_pcb = mirror_pair(prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0))
+        half_parts = mirror_pair(half_parts_local())
+    elif cfg is not None:
+        from compose.pointer import place as PPL
+        pl = PPL.place(cfg)
+        side_w = {"L": G.L2W, "R": G.R2W}
+        plain = [s for s in "LR" if s != cfg.side][0]
+        hp_m = hp if pl.kind == "bay" else hp.difference(Point(pl.frame[:2]).buffer(PR.MX_CENTER_D / 2))
+        half_pcb = side_w[plain](prism(list(hp.exterior.coords)[:-1], -PR.PCB_T, 0.0)).fuse(    # the cable's way
+            side_w[cfg.side](poly_prism(hp_m, -PR.PCB_T, 0.0)))                                    # down at the key
+        half_parts = side_w[plain](half_parts_local()).fuse(side_w[cfg.side](half_parts_local(pl.key_index)))
     ctrl = {k: G.P2W(v) for k, v in controller_solids().items()}
     lo, up = pads_local()
     pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
@@ -254,6 +281,13 @@ def parts_world(jumpers=True):
                  **ctrl)
     if jumpers:
         parts["jumpers"] = G.P2W(jumpers_P())
+    if cfg is not None:
+        from compose.pointer import solids as PS, cable as PC
+        to_w = side_w[cfg.side]
+        parts["pointer"] = to_w(PS.module_solid(pl).fuse(PS.screws_solid(pl)))
+        parts["pointer carrier"] = to_w(PS.carrier_solid(pl))
+        r = PC.route(pl, cfg, parts)
+        parts["pointer cable"] = PC.tube(r["pts"], PR.POINTER_CABLE_D / 2)
     return parts, case, pads_lo, pads_up
 
 
@@ -262,7 +296,8 @@ def main():
     from compose.pcb import jumper as J
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
-    plateL, frameL = C.plate2_local(), C.frame2_local()
+    sides = None if not C.sided() else {"plate": (C.plate2_local("L"), C.plate2_local("R")),     # a device:
+                                               "frame": (C.frame2_local("L"), C.frame2_local("R"))}    # as built
     plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
     ctrl = {k: parts[k] for k in controller_solids()}
 
@@ -270,7 +305,8 @@ def main():
     allowed = {("ctrl board", "standoffs"), ("ctrl board", "lead tails"), ("ctrl board", "pico"),
                ("lead tails", "pico"), ("lead tails", "top parts"), ("lead tails", "bottom parts"),
                ("pico", "top parts"), ("plate", "half pcb"),
-               ("ctrl board", "top parts"), ("ctrl board", "bottom parts")}
+               ("ctrl board", "top parts"), ("ctrl board", "bottom parts"),
+               ("pointer cable", "top parts")}      # the cable's end is in its plug (pointer-checks P4 holds the rest)
     names = list(parts)
     for i, a in enumerate(names):
         for b_ in names[i + 1:]:
@@ -294,7 +330,9 @@ def main():
                        ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5),
                        ("half parts", "case", 0.3), ("jumpers", "case", 0.5), ("jumpers", "plate", 1.0),
                        ("jumpers", "frame", 0.5), ("jumpers", "cover", 0.5), ("jumpers", "half pcb", 0.5),
-                       ("jumpers", "standoffs", 0.5), ("jumpers", "pico", 0.5), ("jumpers", "ctrl board", 0.5)):
+                       ("jumpers", "standoffs", 0.5), ("jumpers", "pico", 0.5), ("jumpers", "ctrl board", 0.5),
+                       ("pointer plug", "case", 0.3), ("pointer plug", "bottom parts", 0.5),
+                       ("pointer plug", "standoffs", 0.5)):
         if a not in parts_b or b_ not in parts_b:
             continue
         d = dist(parts_b[a], parts_b[b_])
@@ -336,14 +374,27 @@ def main():
     rec("C pad count / area per half", True, f"{len(centres)} pairs, {pad_area:.0f} mm2 each")
 
     # ---- D: assembly paths
+    unsided = {}
+
     def sweep_local(local, d0, d1, step):
         return [G.L2W(local.translate(cq.Vector(0, 0, z))) for z in np.arange(d0, d1 + 1e-9, step)]
+
+    def both_sides(name, d0, d1, step):
+        """Both halves' plate or frame swept along its normal: the left shape and its mirror, or with a pointer
+        device each side's own shape."""
+        if sides is None:
+            if name not in unsided:                          # built here, once: only this path uses them
+                unsided[name] = {"plate": C.plate2_local, "frame": C.frame2_local}[name]()
+            local = unsided[name]
+            return [s.fuse(s.mirror("YZ")) for s in sweep_local(local, d0, d1, step)]
+        l_, r_ = sides[name]
+        return [a.fuse(b.mirror("YZ")) for a, b in zip(sweep_local(l_, d0, d1, step), sweep_local(r_, d0, d1, step))]
     # plate in along its normal: never hits the case on the way (pads off)
-    bad = max(vol(case, s.fuse(s.mirror("YZ"))) for s in sweep_local(plateL, 2.0, 30.0, 4.0))
+    bad = max(vol(case, s) for s in both_sides("plate", 2.0, 30.0, 4.0))
     rec("D plate drops in along its normal (case)", bad < 1e-3, f"{bad:.3f} mm3")
-    bad = max(vol(case, s.fuse(s.mirror("YZ"))) for s in sweep_local(frameL, 1.0, 30.0, 3.0))
+    bad = max(vol(case, s) for s in both_sides("frame", 1.0, 30.0, 3.0))
     rec("D frame drops in along its normal (case)", bad < 1e-3, f"{bad:.3f} mm3")
-    bad = max(vol(plate, s.fuse(s.mirror("YZ"))) for s in sweep_local(frameL, 1.0, 30.0, 3.0))
+    bad = max(vol(plate, s) for s in both_sides("frame", 1.0, 30.0, 3.0))
     rec("D frame drops in along its normal (plates)", bad < 1e-3, f"{bad:.3f} mm3")
     # cover: drops straight down onto the standoffs
     cvP = C.cover2_P()
@@ -355,7 +406,7 @@ def main():
 
     # controller: drops straight in from above onto its four posts
     brd = controller_solids()
-    board_all = union([brd["ctrl board"], brd["top parts"], brd["bottom parts"], brd["lead tails"]])
+    board_all = union([brd[k] for k in ("ctrl board", "top parts", "bottom parts", "lead tails", "pointer plug") if k in brd])
     worst_b = max(vol(case, G.P2W(board_all.translate(cq.Vector(0, 0, dz)))) for dz in (0.0, 1.0, 4.0, 8.0, 12.0, 16.0))
     rec("D controller drops straight in onto its posts", worst_b < 1e-3, f"{worst_b:.3f} mm3")
 

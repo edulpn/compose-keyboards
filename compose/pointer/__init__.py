@@ -1,0 +1,67 @@
+"""
+Pointer modules (rev 2): a pointing device on a printed carrier that meets the pointer mount standard
+(compose/pointer/std.py), wired to the controller by its own cable (docs/pointer-modules.md). Devices live in
+pointers/<name>/. The footprint is one of the standard's: "slot" (on the plate, in place of a half's 1.5u thumb key,
+which is gone) or a bay such as "bay30" (on the case, in the thumb bay the layout declares; every key stays; the bay
+comes with it, compose/case/bay.py). Configured like the angles, by environment variables:
+
+    C58_POINTER=pim447:R             device : side (L or R) [: footprint, slot (default) or e.g. bay30]. Unset, "" or 0 = none.
+    C58_POINTER_TILT=15              the board's tilt, outward from the keys, in degrees, replacing the carrier's own (0 = flat).
+    C58_POINTER_PORT=J5              the controller connector an I2C device's cable plugs into: J5 (Qwiic, default) or J4 (the OLED header).
+"""
+import os
+from dataclasses import dataclass
+
+from compose.pointer import std as S
+
+PORTS = ("J5", "J4")
+OFF = ("", "0")          # values of C58_POINTER and C58_THUMB_BAY that mean "not set"
+
+
+@dataclass(frozen=True)
+class PointerConfig:
+    device: str
+    side: str
+    mount: str = "slot"
+    port: str = "J5"
+    tilt: object = None      # degrees, or None for the carrier's own
+
+
+def parse(spec, port=None, tilt=None):
+    """'pim447:R' or 'pim447:L:bay30' -> PointerConfig; '' or None -> None. Raises ValueError when malformed (an
+    unknown device is the checks' business: compose/pointer/device.py)."""
+    if spec in OFF or spec is None:
+        return None
+    parts = spec.split(":")
+    if len(parts) not in (2, 3) or not all(parts):
+        raise ValueError(f"C58_POINTER={spec!r}: expected device:side[:footprint], e.g. pim447:R or pim447:R:bay30")
+    device, side = parts[:2]
+    mount = parts[2] if len(parts) == 3 else "slot"
+    if side not in ("L", "R"):
+        raise ValueError(f"C58_POINTER={spec!r}: the side must be L or R")
+    if mount not in S.FOOTPRINTS:
+        raise ValueError(f"C58_POINTER={spec!r}: the footprint must be one of {', '.join(S.FOOTPRINTS)}")
+    port = port or "J5"
+    if port not in PORTS:
+        raise ValueError(f"C58_POINTER_PORT={port!r}: must be one of {', '.join(PORTS)}")
+    if tilt is None or tilt == "":
+        t = None
+    else:
+        try:
+            t = float(tilt)
+        except ValueError:
+            raise ValueError(f"C58_POINTER_TILT={tilt!r}: degrees, a number") from None
+        if not -45.0 <= t <= 45.0:
+            raise ValueError(f"C58_POINTER_TILT={tilt!r}: between -45 and 45 degrees")
+    return PointerConfig(device, side, mount, port, t)
+
+
+def active():
+    """The configured device, or None. Raises ValueError for a bad setting, or for a bay device that names a different
+    bay than C58_THUMB_BAY."""
+    cfg = parse(os.environ.get("C58_POINTER", ""), os.environ.get("C58_POINTER_PORT"),
+                os.environ.get("C58_POINTER_TILT"))
+    if cfg is not None and cfg.mount != "slot":
+        from compose.case import bay
+        bay.active()                                  # raises when C58_THUMB_BAY names another bay
+    return cfg

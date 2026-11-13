@@ -101,6 +101,10 @@ C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain 
 C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
 C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
 C58_REV=2 python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
+C58_REV=2 C58_POINTER=pim447:R python3 -m compose pointer-checks out_r2t      # a pointer device's checks (--fast: 2D only)
+C58_REV=2 C58_POINTER=pim447:R:bay30 python3 -m compose gasket-case out_r2t   # a trackball in the right half's thumb bay (the left has none)
+C58_REV=2 python3 -m compose pointer-checks --list                         # the devices in pointers/
+C58_REV=2 python3 -m compose pointer-checks --suggest-bay                  # thumb bay positions for a new layout
 ```
 
 `sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
@@ -136,11 +140,13 @@ compose/            the platform (Python package)
                       the rev 2 flex jumper (jumper.py), board art
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
   checks/             fit, assembly, gasket and printability checks; the flex jumper as an elastic strip (flex_sim.py)
+  pointer/            pointer mount standard (rev 2): std.py, devices, placement, solids, cable
   sim/                copper-level and ngspice simulations
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
   order_rev2.py       the rev 2 order folder (out_order/)
 layouts/<name>/     one folder per layout: its key list and hardware positions
+pointers/             pointer devices: one folder each (module.py, carrier.py, README.md)
 docs/               platform docs (this wiki), images
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
 ```

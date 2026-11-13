@@ -80,11 +80,11 @@ QMK `keyboard.json`, also written to `out/pcb/controller_rev2_qmk.json`:
 
 | connector | pins | notes |
 |---|---|---|
-| OLED-style header | 4: GND, VCC = 3.3 V, SCL, SDA (printed on the board) | also takes a PS/2 pointing stick (below) |
+| OLED-style header | 4: GND, VCC = 3.3 V, SCL, SDA (printed on the board) | also takes a PS/2 pointing stick (below). For a [pointer module's](pointer-modules.md#ports) cable, the header goes on the board's underside |
 | AUX header | 6 | see [Pins](#pins) |
 | Qwiic / STEMMA QT | JST SH 4-pin, top entry | the cable rises straight to a module in the cover |
 
-Modules mount in the bridge cover and plug in with short cables.
+Modules mount in the bridge cover and plug in with short cables. The OLED and AUX headers are through-hole and have silkscreen on both faces, so each can be fitted from either side, or wires can be soldered straight into the holes when space is tight.
 
 **PS/2 pointing stick** on the I2C header: power it from 3.3 V (the VCC pin), or remove the stick's own pull-ups. A 5 V stick with pull-ups would push the RP2040 pins past their 3.8 V limit.
 

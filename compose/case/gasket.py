@@ -33,6 +33,34 @@ O_OUTER = (G.OUTLINE.buffer(PR.FLOAT_GAP + W, join_style="round")   # bevel's to
            .buffer(-_R_OUT, join_style="round").buffer(_R_OUT, join_style="round").simplify(0.01))
 O_OUTER = _orient(O_OUTER, 1.0)                                # CCW: miter_offset insets a CCW ring
 O_CORE = G.OUTLINE.buffer(-PR.FLANGE_W, join_style="round")
+from compose.case import bay as _BAY
+# (C58_THUMB_BAY / C58_POINTER are read once, at import: a process builds one configuration)
+BAY = _BAY.solve() if _BAY.enabled() else None             # thumb bay, when on: its pocket's wall joins the case's
+BAY_SIDES = _BAY.sides() if BAY is not None else ()          # outer outline, on the halves that get one (bay.py);
+O_PLAIN = O_OUTER                                           # plate, ledge and gaskets don't change
+if BAY is not None and BAY_SIDES == ("L", "R"):             # a bay on both halves: one outline for both
+    O_OUTER = BAY.outer
+
+
+def one_sided():
+    """True when only one half has a bay: its case wall and frame differ from the other's (outer_for())."""
+    return BAY is not None and BAY_SIDES != ("L", "R")
+
+
+def sided():
+    """True when the two halves' plates / frames are built each on its own (a pointer device, or a bay on one half
+    only) rather than as a shape and its mirror."""
+    from compose import pointer as PTR
+    return PTR.active() is not None or one_sided()
+
+
+def outer_for(side):
+    """The case's outer outline (left local) of the half on `side`: with the bay's lobe, or plain."""
+    if not one_sided():
+        return O_OUTER
+    if side is None:
+        raise ValueError("a bay on one half only: the frame needs its side (\"L\" or \"R\")")
+    return BAY.outer if side in BAY_SIDES else O_PLAIN
 
 
 # ================================================================ layout of screws and pads
@@ -157,7 +185,20 @@ GL = gasket_layout()
 
 
 # ================================================================ plate
-def plate2_local():
+def _pointer_on(side):
+    """The pointer device's placement when it sits on `side` ("L"/"R"), else None (compose/pointer/)."""
+    if side is None:
+        return None
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    if cfg is None or cfg.side != side:
+        return None
+    from compose.pointer import place as PL
+    return PL.place(cfg)
+
+
+def plate2_local(side=None):
+    """One half's plate (left local). `side` matters only with a slot device: that side's plate gets the slot's inserts."""
     from compose.case import sandwich as PT
     core = prism(ring(O_CORE), 0.0, TH)
     flange = prism(ring(O_PLATE), PR.FLANGE_Z0, PR.FLANGE_Z0 + PR.FLANGE_T)
@@ -173,13 +214,22 @@ def plate2_local():
     plate = plate.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, -0.01, PR.M2_PLATE_INSERT_L) for x, y in hb.posts]))
     plate = plate.cut(poly_prism(hb.pockets, -1.0, PR.JOINT_POCKET_D))
     plate = plate.cut(union([cyl(x, y, PR.NOTCH_R, -1.0, TH + 1.0) for x, y in GL.screws_all]))
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "slot":          # the slot's inserts (compose/pointer/std.py)
+        from compose.pointer import solids as PS
+        plate = plate.cut(PS.slot_seat(pl.frame, pl.footprint))
     return plate.clean()
 
 
 # ================================================================ frame
-def _key_opening():
+def _key_opening(side=None):
     from compose.case import sandwich as PT
-    return PT.key_opening()
+    o = PT.key_opening()
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "slot":          # room for the slot's window
+        from compose.pointer import solids as PS
+        o = o.union(PS.slot_relief(pl.frame, pl.footprint))
+    return o
 
 
 def middle_side_local(gap):
@@ -188,10 +238,11 @@ def middle_side_local(gap):
     return G.bridge_zone_local(reach=-gap, z0=-60.0, z1=60.0)
 
 
-def frame2_local():
+def frame2_local(side=None):
     """Full ring around the key field (rev 1's bevelled look): skirt + trim lip down to the case wall on the
     outer edges; along the bridge an inner rail that ends at the interface plane (the cover continues it)."""
-    outer = ring(O_OUTER)
+    o_out = outer_for(side)
+    outer = ring(o_out)
     bevel = loft(outer, TH, G.miter_offset(outer, PR.BEZEL_BEVEL), PR.FRAME_TOP_Z)     # rev 1's bevel, from the plate top
     env = bevel.fuse(prism(outer, PR.SEAM_Z - PR.TRIM_LIP_H - 1.0, TH))                # the frame's outside, nothing pokes out
     body = bevel
@@ -199,12 +250,16 @@ def frame2_local():
     # faces are the bevel's own: no zero-thickness slivers between them
     skirt = prism(outer, PR.SEAM_Z, TH).cut(prism(ring(O_WALL_IN), PR.SEAM_Z - 1, TH + 1))
     lip = prism(outer, PR.SEAM_Z - PR.TRIM_LIP_H, PR.SEAM_Z + 0.3).cut(
-        prism(ring(O_OUTER.buffer(-PR.TRIM_LIP_T, join_style="round")), PR.SEAM_Z - PR.TRIM_LIP_H - 1, PR.SEAM_Z + 1))
+        prism(ring(o_out.buffer(-PR.TRIM_LIP_T, join_style="round")), PR.SEAM_Z - PR.TRIM_LIP_H - 1, PR.SEAM_Z + 1))
     body = union([body, skirt, lip])
     body = body.cut(prism(ring(O_WALL_IN), TH - 1.0, PR.FRAME_LIP_Z))                    # clear of the plate + top pads
     bosses = union([cyl(x, y, PR.FRAME_BOSS_R, PR.SEAM_Z, PR.FRAME_LIP_Z + 0.5) for x, y in GL.screws_all])
     body = body.fuse(bosses.intersect(env))
-    body = body.cut(poly_prism(_key_opening(), PR.FRAME_LIP_Z - 1, PR.FRAME_TOP_Z + 1))
+    body = body.cut(poly_prism(_key_opening(side), PR.FRAME_LIP_Z - 1, PR.FRAME_TOP_Z + 1))
+    pl = _pointer_on(side)
+    if pl is not None and pl.kind == "bay":           # the frame covers the bay's pocket: opened over the device
+        from compose.pointer import solids as PS
+        body = body.cut(PS.lid_opening(pl.frame, pl.footprint))
     body = body.cut(union([cyl(x, y, PR.M3_INSERT_D / 2, PR.SEAM_Z - 0.5, PR.SEAM_Z + PR.M3_INSERT_L) for x, y in GL.screws_all]))
     # the inner rail ends FLOAT_GAP short of the interface plane, square at the bridge's back and front faces:
     # one cut with the bridge's own block in the P frame (a second, local-frame cut along the same plane left
@@ -266,22 +321,35 @@ def case2_world():
     BW = PR.BRIDGE_WALL_T
     rv_w, rv_h = PR.TRIM_LIP_T + PR.REVEAL_SIDE_GAP, PR.TRIM_LIP_H + PR.REVEAL_SHADOW
     # ---- half tubs (local): wall up to the seam, reveal rebate on the outside, open inside
-    tub = prism(ring(O_OUTER), DEEP, PR.SEAM_Z)
-    rebate = poly_prism(O_OUTER.buffer(1.0).difference(O_OUTER.buffer(-rv_w, join_style="round")), PR.SEAM_Z - rv_h, PR.SEAM_Z + 1)
-    # where the rebate runs into the bridge walls (the only thing above the seam), the wall would hang over it:
-    # the cut carries on above as a 60-degree chamfer back out to the outline, so the wall slopes over the notch
-    # (the sloped face runs on past the cutter's outer edge, so it ends on a clean crossing, not a knife edge)
-    r0 = O_OUTER.buffer(-rv_w, join_style="round").simplify(0.05, preserve_topology=True)
-    r1 = O_OUTER.buffer(1.0, join_style="round")
-    over = rv_w + 3.0
-    r2 = O_OUTER.buffer(-rv_w + over, join_style="round").simplify(0.05, preserve_topology=True)
-    zc0 = PR.SEAM_Z + 1
-    zc2 = zc0 + over * math.tan(math.radians(PR.LEDGE_CHAMFER_DEG))
-    wire = lambda poly, z: cq.Wire.makePolygon([cq.Vector(x, y, z) for x, y in poly.exterior.coords], close=True)
-    rebate = rebate.fuse(poly_prism(r1, zc0, zc2).cut(cq.Solid.makeLoft([wire(r0, zc0), wire(r2, zc2)], True)))
-    cav = prism(ring(O_WALL_IN), DEEP, PR.SEAM_Z + 1)
-    tubL, tubR = _both(tub)
-    cavL, cavR = _both(cav)
+    def half(O, pocket):
+        """The half's tub, reveal rebate and cavity (left local) for outer outline O, with the bay's pocket or without."""
+        tub = prism(ring(O), DEEP, PR.SEAM_Z)
+        rebate = poly_prism(O.buffer(1.0).difference(O.buffer(-rv_w, join_style="round")), PR.SEAM_Z - rv_h, PR.SEAM_Z + 1)
+        # where the rebate runs into the bridge walls (the only thing above the seam), the wall would hang over it:
+        # the cut carries on above as a 60-degree chamfer back out to the outline, so the wall slopes over the notch
+        # (the sloped face runs on past the cutter's outer edge, so it ends on a clean crossing, not a knife edge)
+        r0 = O.buffer(-rv_w, join_style="round").simplify(0.05, preserve_topology=True)
+        r1 = O.buffer(1.0, join_style="round")
+        over = rv_w + 3.0
+        r2 = O.buffer(-rv_w + over, join_style="round").simplify(0.05, preserve_topology=True)
+        zc0 = PR.SEAM_Z + 1
+        zc2 = zc0 + over * math.tan(math.radians(PR.LEDGE_CHAMFER_DEG))
+        wire = lambda poly, z: cq.Wire.makePolygon([cq.Vector(x, y, z) for x, y in poly.exterior.coords], close=True)
+        rebate = rebate.fuse(poly_prism(r1, zc0, zc2).cut(cq.Solid.makeLoft([wire(r0, zc0), wire(r2, zc2)], True)))
+        cav = prism(ring(O_WALL_IN), DEEP, PR.SEAM_Z + 1)
+        if pocket:                                           # the bay's pocket, its own cavity beside the half's
+            cav = cav.fuse(poly_prism(BAY.pocket, DEEP, PR.SEAM_Z + 1))
+        return tub, rebate, cav
+    if one_sided():                                      # a bay on one half only: each half from its own outline
+        hv = {sd: half(BAY.outer if sd in BAY_SIDES else O_PLAIN, sd in BAY_SIDES) for sd in "LR"}
+        tubL, tubR = _both(hv["L"][0])[0], _both(hv["R"][0])[1]
+        cavL, cavR = _both(hv["L"][2])[0], _both(hv["R"][2])[1]
+        rbL, rbR = _both(hv["L"][1])[0], _both(hv["R"][1])[1]
+    else:
+        tub, rebate, cav = half(O_OUTER, BAY is not None)
+        tubL, tubR = _both(tub)
+        cavL, cavR = _both(cav)
+        rbL, rbR = _both(rebate)
     # ---- middle (P): back/front walls up to the cover underside, open between the plates' inner edges
     bridge = G.P2W(_bridge_block_P(yb, yf, DEEP, CT.cover_under, -PR.FLOAT_GAP))
     interior = G.P2W(_bridge_block_P(yb - BW, yf + BW, DEEP, CT.cover_under + 1, W + PR.FLOAT_GAP + 1.0))
@@ -317,8 +385,16 @@ def case2_world():
     # ---- middle (P): posts under the standoffs (from the floor to the board's underside)
     posts = union([cyl(x, y, CS.POST_R, DEEP, CT.board_bot) for x, y in CT.mounts])
     body = body.fuse(union([locL, locR, G.P2W(posts)]).intersect(top)).clean()
-    rbL, rbR = _both(rebate)               # reveal rebate last, so the frame-screw bosses don't fill it
-    body = body.cut(rbL).cut(rbR)
+    if BAY is not None:                                  # the bay's posts from the pocket floor, the cable's hole
+        from compose.pointer import solids as PS, place as PPL
+        fr = PPL.frame(BAY.name)[1]
+        bp, bh = _both(PS.bay_posts(fr, BAY.name)), _both(PS.wall_hole(fr))
+        on = [i for i, sd in enumerate("LR") if sd in BAY_SIDES]          # only the halves that have the bay
+        body = body.fuse(union([bp[i] for i in on]).intersect(top))
+        for i in on:
+            body = body.cut(bh[i])
+        body = body.clean()
+    body = body.cut(rbL).cut(rbR)          # reveal rebate last, so the frame-screw bosses don't fill it
     _dbg('fuse', body)
     # ---- holes
     cb = [cyl(x, y, PR.M3_CBORE_D / 2, DEEP - 10, PR.SEAM_Z - PR.SHELF_T) for x, y in GL.screws]
@@ -341,6 +417,9 @@ def case2_world():
     for x, y in L.feet:
         p = G.apply(G.M_LW, (x, y, 0))
         feet += [cyl(p[0], p[1], PR.FOOT_D / 2, -1, PR.FOOT_DEPTH), cyl(-p[0], p[1], PR.FOOT_D / 2, -1, PR.FOOT_DEPTH)]
+    if BAY is not None:                                  # and one under each bay
+        p = G.apply(G.M_LW, (BAY.x, BAY.y, 0))
+        feet += [cyl(sx * p[0], p[1], PR.FOOT_D / 2, -1, PR.FOOT_DEPTH) for sx, sd in ((1, "L"), (-1, "R")) if sd in BAY_SIDES]
     for sx in (-1, 1):
         y = yf + 8.0
         p = G.apply(G.M_PW, (sx * (abs(G.interface_x(y, G.Z0)) - 8.0), y, 0))
@@ -394,9 +473,21 @@ def export_print(out):
         shape = shape.translate(cq.Vector(-bb.center.x, -bb.center.y, -bb.zmin))
         cq.exporters.export(cq.Workplane().add(shape), os.path.join(d, name), **tol)
     save(case2_world(), "rev2_case.stl")
-    pl, fr = plate2_local(), frame2_local()
-    save(flip(pl), "rev2_plate_left.stl"); save(flip(pl.mirror("YZ")), "rev2_plate_right.stl")   # switch side down
-    save(flip(fr), "rev2_frame_left.stl"); save(flip(fr.mirror("YZ")), "rev2_frame_right.stl")
+    from compose import pointer as PTR
+    cfg = PTR.active()
+    if not sided():
+        pl, fr = plate2_local(), frame2_local()
+        save(flip(pl), "rev2_plate_left.stl"); save(flip(pl.mirror("YZ")), "rev2_plate_right.stl")   # switch side down
+        save(flip(fr), "rev2_frame_left.stl"); save(flip(fr.mirror("YZ")), "rev2_frame_right.stl")
+    else:                                         # one side carries a pointer device: build each side on its own
+        save(flip(plate2_local("L")), "rev2_plate_left.stl")
+        save(flip(plate2_local("R").mirror("YZ")), "rev2_plate_right.stl")
+        save(flip(frame2_local("L")), "rev2_frame_left.stl")
+        save(flip(frame2_local("R").mirror("YZ")), "rev2_frame_right.stl")
+        if cfg is not None:
+            from compose.pointer import device as PD
+            c = PD.carrier(cfg.device).solid(cfg.mount, cfg.tilt)   # the device's carrier: prints flat on its base
+            save(c if cfg.side == "L" else c.mirror("YZ"), f"rev2_pointer_carrier_{cfg.device}_{cfg.mount}.stl")
     save(flip(cover2_P()), "rev2_cover.stl")
 
 
