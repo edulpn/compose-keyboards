@@ -49,7 +49,7 @@ def vol(a, b):
 
 
 def dist(a, b):
-    return a.distance(b)
+    return G.distance(a, b)
 
 
 # ---------------------------------------------------------------- the controller as placed (board frame -> P)
