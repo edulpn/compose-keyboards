@@ -213,6 +213,12 @@ def initial(strip, n=N_RUL):
     return np.concatenate([s, tau, th])
 
 
+def length_ok(rows):
+    """The length scenario's verdict: every strip within LENGTH_TOL of the designed length settles and its end still
+    reaches the slot at the full lift. rows: [dict(dl, ok, insert_ok)]; longer or shorter ones are information."""
+    return all(r["ok"] and r["insert_ok"] for r in rows if abs(r["dl"]) <= LENGTH_TOL + 1e-9)
+
+
 def run():
     t_start = time.time()
     g = J.solve()
@@ -385,9 +391,13 @@ def run():
         verdict(best <= CU_FATIGUE, f"per keystroke: the {rail} rail keeps a conductor under the fatigue limit "
                                     f"({', '.join(f'slot {k} {per_slot[k] * 100:.3f} %' for k in ks)})")
     tol = [l_ for l_ in data["length"] if abs(l_["dl"]) <= LENGTH_TOL + 1e-9]       # (longer ones are information)
-    verdict(all(l_["ok"] and l_["insert_ok"] for l_ in tol),
+    verdict(length_ok(data["length"]),
             f"length within +-{LENGTH_TOL} mm ({', '.join(format(l_['dl'], '+.1f') for l_ in tol)}): the strip settles and "
             f"its end still reaches 4.1 mm above its seat")
+    verdict(not length_ok([dict(dl=-LENGTH_TOL, ok=True, insert_ok=False)]) and not length_ok([dict(dl=LENGTH_TOL, ok=False, insert_ok=False)])
+            and length_ok([dict(dl=2 * LENGTH_TOL, ok=False, insert_ok=False)]),
+            "negative control: a strip within the tolerance that doesn't settle, or doesn't reach its slot, is caught "
+            "(one beyond it is not held to this)")
     big = max(t["strain"] for t in tr if abs(t["travel"]) > TRAVEL_CYCLE + 1e-9)
     line(f"- info a rare 0.5-1.0 mm excursion strains the copper {big * 100:.2f} % (low-cycle; copper takes that "
          f"thousands of times)")
