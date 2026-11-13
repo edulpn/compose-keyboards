@@ -14,7 +14,7 @@ A 3–5 V I2C trackball (address 0x0A) with an RGBW LED under the ball. Its carr
 
 ## Tilt
 
-In `bay30` the carrier tilts the board 15° outward, away from the keys, so the pad of the thumb meets the ball instead of its side. The slot is flat. Try another angle with `C58_POINTER_TILT=<deg>` (0 = flat, as before). The checks pass up to 18°. From 19° no standard M2 screw fits the shallower insert holes, and from 20° the board's low side meets the carrier's base; the ball-top check (M6) would only start to warn above about 20°. The carrier prints flat on its base either way, no supports.
+In `bay30` the carrier tilts the board 15° outward, away from the keys, so the pad of the thumb meets the ball instead of its side. The slot is flat. Try another angle with `C58_POINTER_TILT=<deg>` (0 = flat, as before). The checks pass up to 18°. From 19° no standard M2 screw fits the shallower insert holes, and from 20° the parts under the board come within 0.8 mm of the carrier's base; toward the keys (negative) the tab end goes down and the checks fail from about −16°; the ball-top check (M6) would only start to warn above about 20°. The carrier prints flat on its base either way, no supports.
 
 ## What to buy
 

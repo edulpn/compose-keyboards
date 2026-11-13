@@ -9,7 +9,7 @@ slot  the board turned 90 deg (header tab toward the footprint's +x) and moved 3
       hole for the cable.
 bay30 the board turned the other way (header tab toward the footprint's -x, the keys' side: the tab is the high end
       of the tilted board and its pads sit next to the wall hole) and centred: the ball sits over the bay's centre. A
-      2 mm base on the four posts, screwed (M3) to all four (the heads clear the board's bosses by 1.5 mm), with a
+      2 mm base on the four posts, screwed (M3) to all four (the heads clear the flat board's bosses by 1.5 mm; a tilted one has them notched), with a
       channel from the pads out past the -x edge: there the cable drops into the pocket.
 
 Four bosses take the board's M2 screws in M2 heat-set inserts; the board's underside sits BOARD_Z above the plate
@@ -18,7 +18,7 @@ top, so the ball top is 3.5 + 1.6 + 7.9 = 13.0 above it.
 Tilt (TILT): the bay30 board is turned 15 deg about the footprint's y axis through the ball so its normal leans
 outward, toward +x and away from the keys (so the -x end, with the header tab, is the high one): the thumb meets the
 ball with the pad of the thumb, not the side. The base stays flat on the
-posts; the bosses end on the tilted underside (a wedge), their insert holes follow its normal. The ball top is then
+posts; the bosses run up to the tilted underside (a wedge), notched round the screw heads, their insert holes follow its normal. The ball top is then
 3.5 + 1.6 + 7.9 cos 15 = 12.7 above the plate top. The slot isn't tilted: its base is 1.5 mm on the plate and the
 board's low side would meet it. C58_POINTER_TILT=<deg> overrides the angle (0 = flat, as before).
 """
@@ -31,7 +31,6 @@ from compose import params as PR
 from compose.geom import poly_prism, cyl, union, big_box
 from compose.pointer import std as S
 from compose.pointer import device as D_
-from compose.pointer.device import pose_fn
 from pointers.pim447.module import DEVICE as D
 
 POSE = {"slot": (90.0, -3.0, 0.0), "bay30": (-90.0, 0.0, 0.0)}    # device frame -> footprint frame (turn, then shift)

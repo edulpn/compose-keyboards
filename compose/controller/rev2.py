@@ -464,7 +464,7 @@ def art(b):
     return rec
 
 
-def bsilk_header(b, x0, y0, x1, y1, w=0.15, ch=0.9):
+def bsilk_header(b, x0, y0, x1, y1, w=0.15, ch=0.5):
     """Bottom-face outline of a 1-row header whose pin 1 is at the low-x end (x0): the corner at (x0, y1) is cut off,
     the way a pin-1 mark is drawn on a header footprint."""
     pts = [(x0, y0), (x1, y0), (x1, y1), (x0 + ch, y1), (x0, y1 - ch)]

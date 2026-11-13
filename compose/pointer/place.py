@@ -273,7 +273,7 @@ def device_problems(pl):
             out.append(("M2", f"the {what} reaches {g.difference(pl.window).area:.1f} mm2 outside the window"))
     if pl.top_z > S.top(fp):
         out.append(("M2", f"the device's top {pl.top_z:.1f} mm above the plate (the footprint allows {S.top(fp)})"))
-    if pl.tilt and pl.base_clear < PR.POINTER_BOARD_BASE_CLR:   # a flat board sits where its carrier puts it; the tilt is what lowers a side
+    if pl.tilt and pl.base_clear < PR.POINTER_BOARD_BASE_CLR:   # a carrier that tilts: the turn lowers a side; a flat carrier keeps its own seat
         out.append(("M2", f"the board's low side {pl.base_clear:.2f} mm above the carrier's base (>= {PR.POINTER_BOARD_BASE_CLR})"))
     if len(set(pl.uses)) < S.MIN_POINTS:
         out.append(("M3", f"screwed to {len(set(pl.uses))} of the footprint's points (at least {S.MIN_POINTS})"))

@@ -164,7 +164,7 @@ def check_solids(ctx):
     worst, n_br, n_thin, _ = CK.overhangs(m)
     rec("P3 carrier prints flat on its base: watertight, every layer supported", m.is_watertight and worst is None,
         f"{n_br} bridges, {n_thin} thin lips" + ("" if worst is None else f"; unsupported {worst}"))
-    bad, floor = _insert_walls(pl, c)
+    bad, _ = _insert_walls(pl, c)
     rec(f"P3 insert holes keep >= {PR.POINTER_INSERT_BOSS_WALL:g} mm of wall and >= {PR.POINTER_INSERT_FLOOR:g} mm of floor",
         not bad, "; ".join(bad) or f"{len(pl.holes)} holes, along the board's normal")
     if pl.tilt:
@@ -190,7 +190,7 @@ def _insert_walls(pl, c):
         ring = cq.Solid.makeCylinder(r + PR.POINTER_INSERT_BOSS_WALL, h, start, axis)
         hole = cq.Solid.makeCylinder(r, h, start, axis)
         lack = (ring.Volume() - hole.Volume()) - ring.intersect(c).Volume()
-        if lack > 0.5:
+        if lack > 0.1:
             out.append(f"hole {i + 1}: {lack:.1f} mm3 of its wall missing")
         if not pl.tilt:                                                  # a flat carrier keeps its own, older hole depth
             continue

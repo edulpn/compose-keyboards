@@ -84,6 +84,9 @@ def tilt_of(car, fp, override=None):
     """(angle, azimuth) of the board's tilt on footprint fp; `override` (degrees) replaces the angle. A carrier with
     no TILT, or none for this footprint, is flat."""
     ang, az = getattr(car, "TILT", {}).get(fp, (0.0, 0.0))
+    if override is not None and float(override) and not ang:
+        raise ValueError(f"C58_POINTER_TILT: the {getattr(car, '__name__', 'carrier').split('.')[-2]} carrier does not tilt on "
+                         f"{fp} (its base is too thin for a wedge); only 0 or unset")
     return (ang if override is None else float(override)), az
 
 
