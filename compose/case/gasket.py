@@ -34,6 +34,7 @@ O_OUTER = (G.OUTLINE.buffer(PR.FLOAT_GAP + W, join_style="round")   # bevel's to
 O_OUTER = _orient(O_OUTER, 1.0)                                # CCW: miter_offset insets a CCW ring
 O_CORE = G.OUTLINE.buffer(-PR.FLANGE_W, join_style="round")
 from compose.case import bay as _BAY
+# (C58_THUMB_BAY / C58_POINTER are read once, at import: a process builds one configuration)
 BAY = _BAY.solve() if _BAY.enabled() else None             # thumb bay, when on: its pocket's wall joins the case's
 BAY_SIDES = _BAY.sides() if BAY is not None else ()          # outer outline, on the halves that get one (bay.py);
 O_PLAIN = O_OUTER                                           # plate, ledge and gaskets don't change
@@ -485,7 +486,7 @@ def export_print(out):
         save(flip(frame2_local("R").mirror("YZ")), "rev2_frame_right.stl")
         if cfg is not None:
             from compose.pointer import device as PD
-            c = PD.carrier(cfg.device).solid(cfg.mount)   # the device's carrier: prints flat on its base
+            c = PD.carrier(cfg.device).solid(cfg.mount, cfg.tilt)   # the device's carrier: prints flat on its base
             save(c if cfg.side == "L" else c.mirror("YZ"), f"rev2_pointer_carrier_{cfg.device}_{cfg.mount}.stl")
     save(flip(cover2_P()), "rev2_cover.stl")
 

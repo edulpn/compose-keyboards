@@ -23,13 +23,15 @@ posts; the bosses end on the tilted underside (a wedge), their insert holes foll
 board's low side would meet it. C58_POINTER_TILT=<deg> overrides the angle (0 = flat, as before).
 """
 import math
+import sys
 import cadquery as cq
 from shapely.geometry import box, Point
 from shapely.ops import unary_union
 from compose import params as PR
 from compose.geom import poly_prism, cyl, union, big_box
 from compose.pointer import std as S
-from compose.pointer.device import pose_fn, tilt_map
+from compose.pointer import device as D_
+from compose.pointer.device import pose_fn
 from pointers.pim447.module import DEVICE as D
 
 POSE = {"slot": (90.0, -3.0, 0.0), "bay30": (-90.0, 0.0, 0.0)}    # device frame -> footprint frame (turn, then shift)
@@ -41,67 +43,16 @@ BOSS_R = 2.5
 EDGE = 0.25                                                  # the base stays this far inside the window
 
 
-def tilt_of(fp, override=None):
-    """(angle, azimuth) of the board's tilt on footprint fp; `override` (degrees) replaces the angle."""
-    ang, az = TILT.get(fp, (0.0, 0.0))
-    return (ang if override is None else float(override)), az
-
-
-def pivot(fp):
-    """The turn's centre (footprint frame, z from the plate top): the device frame's origin on the board's top face."""
-    x, y = pose_fn(POSE[fp])(0.0, 0.0)
-    return (x, y, BOARD_Z[fp] + D.pcb_t)
-
-
-def tilt_fn(fp, tilt=None):
-    ang, az = tilt_of(fp, tilt)
-    return tilt_map(pivot(fp), ang, az)
-
-
-def _under(fp, tilt, pts):
-    """Device-frame points (x, y) -> footprint-frame (x, y, z) on the board's underside, tilted."""
-    f, T = pose_fn(POSE[fp]), tilt_fn(fp, tilt)
-    return [T(*f(*p), BOARD_Z[fp]) for p in pts]
+_ME = sys.modules[__name__]
 
 
 def holes(fp, tilt=None):
     """The board's mounting holes on its underside (footprint frame, top view), tilted."""
-    return [(x, y) for x, y, _ in _under(fp, tilt, D.holes)]
+    return D_.holes(D, _ME, fp, tilt)
 
 
 def pads(fp, tilt=None):
-    return [(x, y) for x, y, _ in _under(fp, tilt, [(x, y) for _, x, y in D.pads])]
-
-
-def pad_points(fp, tilt=None):
-    """The cable pads on the board's underside: (x, y, z) in the footprint frame, tilted."""
-    return _under(fp, tilt, [(x, y) for _, x, y in D.pads])
-
-
-def normal(fp, tilt=None):
-    """Unit normal of the board (footprint frame): +z turned by the tilt."""
-    T = tilt_fn(fp, tilt)
-    px, py, pz = pivot(fp)
-    q = T(px, py, pz + 1.0)
-    return (q[0] - px, q[1] - py, q[2] - pz)
-
-
-def board_low(fp, tilt=None):
-    """Height (above the plate top) of the board's underside at its lowest corner."""
-    return min(z for _, _, z in _under(fp, tilt, [(x, y) for x0, y0, x1, y1 in
-                                                  [r for r in D.rects] for x, y in
-                                                  ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]))
-
-
-def insert_depth(fp, tilt=None):
-    """Depth of the carrier's insert holes (along the board's normal): the old rule (4.5, or the room up to the seat),
-    less what the tilted board's low side leaves above POINTER_INSERT_FLOOR of base."""
-    z0, zb = S.seat_z(fp), BOARD_Z[fp]
-    if tilt_of(fp, tilt)[0] == 0.0:
-        return min(zb - z0, PR.M2_PLATE_INSERT_L + 1.0)
-    n = normal(fp, tilt)
-    low = min(z for _, _, z in _under(fp, tilt, D.holes))
-    return min(zb - z0, PR.M2_PLATE_INSERT_L + 1.0, (low - (z0 + PR.POINTER_INSERT_FLOOR)) / n[2])
+    return D_.pads(D, _ME, fp, tilt)
 
 
 def _cuts(fp, tilt=None):
@@ -118,40 +69,70 @@ def _cuts(fp, tilt=None):
     return channel
 
 
+def _boss_axes(fp, tilt=None):
+    """[(point on the board's underside, unit axis)] of the four bosses: each runs along the board's normal."""
+    n = D_.normal(D, _ME, fp, tilt)
+    return [((x, y, z), n) for x, y, z in D_.under(D, _ME, fp, tilt, D.holes)]
+
+
+def _boss_feet(fp, tilt=None):
+    """Top view of each boss: its radius where it meets the board, swept along the tilted axis down to the base."""
+    z0 = S.seat_z(fp)
+    r = BOSS_R / max(math.cos(math.radians(tilt_of(fp, tilt)[0])), 0.5)
+    out = []
+    for (x, y, z), n in _boss_axes(fp, tilt):
+        t = (z - z0) / n[2]
+        out.append(unary_union([Point(x, y).buffer(r), Point(x - n[0] * t, y - n[1] * t).buffer(r)]).convex_hull)
+    return out
+
+
+def tilt_of(fp, override=None):
+    return D_.tilt_of(_ME, fp, override)
+
+
+def insert_depth(fp, tilt=None):
+    return D_.insert_depth(D, _ME, fp, tilt)
+
+
 def outline(fp, tilt=None):
     """The carrier's top view (footprint frame): base and bosses."""
     x0, y0, x1, y1 = S.window(fp)
     base = box(x0 + EDGE, y0 + EDGE, x1 - EDGE, y1 - EDGE).difference(_cuts(fp, tilt))
-    return unary_union([base] + [Point(p).buffer(BOSS_R) for p in holes(fp, tilt)])
+    return unary_union([base] + _boss_feet(fp, tilt))
 
 
 def solid(fp, tilt=None):
-    """The carrier (footprint frame, z from the plate top). Tilted: a wedge, the bosses ending on the board's tilted
-    underside, the insert holes along its normal."""
+    """The carrier (footprint frame, z from the plate top). Tilted: a wedge, the bosses running along the board's normal
+    up to its tilted underside, the insert holes coaxial with them."""
     z0 = S.seat_z(fp)
     z1 = z0 + BASE_T[fp]
     zb = BOARD_Z[fp]
     x0, y0, x1, y1 = S.window(fp)
     base = poly_prism(box(x0 + EDGE, y0 + EDGE, x1 - EDGE, y1 - EDGE).difference(_cuts(fp, tilt)), z0, z1)
     ang, az = tilt_of(fp, tilt)
-    hs = holes(fp, tilt)
     if ang == 0.0:
-        bosses = union([cyl(x, y, BOSS_R, z1 - 0.1, zb) for x, y in hs])
+        bosses = union([cyl(x, y, BOSS_R, z1 - 0.1, zb) for x, y in holes(fp, tilt)])
     else:
-        px, py, pz = pivot(fp)
+        px, py, pz = D_.pivot(D, _ME, fp)
         phi = math.radians(az)
-        below = big_box(-60, 60, -60, 60, z0 - 1.0, zb).rotate(                  # everything under the tilted underside
+        below = big_box(-60, 60, -60, 60, z0 - 80.0, zb).rotate(                  # everything under the tilted underside
             cq.Vector(px, py, pz), cq.Vector(px - math.sin(phi), py + math.cos(phi), pz), ang)
-        bosses = union([cyl(x, y, BOSS_R, z1 - 0.1, zb + 12.0) for x, y in hs]).intersect(below)
+        cyls = []
+        for (x, y, z), n in _boss_axes(fp, tilt):
+            t = (z - z0) / n[2]                                           # the axis down to the base's underside
+            cyls.append(cq.Solid.makeCylinder(BOSS_R, t + 8.0, cq.Vector(x - n[0] * t, y - n[1] * t, z - n[2] * t),
+                                              cq.Vector(*n)))
+        # trimmed flat at the base's underside (the cylinders' own end faces are tilted) and at the board's underside
+        bosses = union(cyls).intersect(below).intersect(big_box(-60, 60, -60, 60, z0, zb + 40.0))
     c = union([base, bosses])
     pts = S.points(fp)
     c = c.cut(union([cyl(*pts[i], S.screw_clear(fp) / 2, z0 - 1.0, z1 + 1.0) for i in USES[fp]]))   # footprint screws
     depth = insert_depth(fp, tilt)
     if ang == 0.0:
-        c = c.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, zb - depth, zb + 1.0) for x, y in hs]))      # board's inserts
+        c = c.cut(union([cyl(x, y, PR.M2_INSERT_D / 2, zb - depth, zb + 1.0) for x, y in holes(fp, tilt)]))   # board's inserts
     else:
-        n = cq.Vector(*normal(fp, tilt))
-        cuts = [cq.Solid.makeCylinder(PR.M2_INSERT_D / 2, depth + 1.0, cq.Vector(x, y, z) - n * depth, n)
-                for x, y, z in _under(fp, tilt, D.holes)]
+        cuts = [cq.Solid.makeCylinder(PR.M2_INSERT_D / 2, depth + 1.0, cq.Vector(x - n[0] * depth, y - n[1] * depth,
+                                                                              z - n[2] * depth), cq.Vector(*n))
+                for (x, y, z), n in _boss_axes(fp, tilt)]
         c = c.cut(union(cuts))
     return c.clean()

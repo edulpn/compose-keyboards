@@ -45,7 +45,7 @@ class Placement:
     ball_top: float        # the touch surface above the plate top
     dev_screw: tuple       # (length, thread) of the board's M2 screws into the carrier's inserts, or None
     fp_screw: tuple        # (length, thread) of the carrier's screws into the footprint, or None
-    tilt: float = 0.0      # the board's tilt (degrees) about the horizontal axis through `pivot`, leaning toward `lean`
+    tilt: float = 0.0      # the board's tilt (degrees) about the horizontal axis through `pivot` (positive: outward, away from the keys)
     pivot: tuple = None    # that axis's point: the device frame's origin on the board's top face (left local x, y, z)
     axis: tuple = None     # the axis's direction (x, y), left local
     rot: object = None     # point map (x, y, z) -> (x, y, z) of that turn, left local
@@ -206,7 +206,7 @@ def screws(dev, car, fp, tilt=None):
     screws into the footprint's points); None where no standard length fits. The board's screws take 2.5 mm up to the
     insert hole's depth less 0.1; the carrier's take the footprint's thread range (std.thread)."""
     z0 = S.seat_z(fp)
-    depth = car.insert_depth(fp, tilt)                                  # the carrier's insert holes
+    depth = D.insert_depth(dev, car, fp, tilt)                          # the carrier's insert holes
     dev_s = next(((L, round(L - dev.pcb_t, 2)) for L in PR.STANDARD_SCREW_LENGTHS
                   if 2.5 <= L - dev.pcb_t <= depth - 0.1), None)
     lo, hi = S.thread(fp)
@@ -231,14 +231,14 @@ def place(cfg):
     fl = lambda x, y: f(*g(x, y))                       # device frame -> left local
     zb = car.BOARD_Z[cfg.mount]
     tl = getattr(cfg, "tilt", None)
-    ang, az = car.tilt_of(cfg.mount, tl)
+    ang, az = D.tilt_of(car, cfg.mount, tl)
     dev_s, fp_s = screws(dev, car, cfg.mount, tl)
     pts = points(cfg.mount, fr)
     ox, oy = fl(0.0, 0.0)
     phi = math.radians(az + fr[2])                      # the lean's direction, left local
     pivot = (ox, oy, PR.PLATE_T + zb + dev.pcb_t)
     rot = D.tilt_map(pivot, ang, az + fr[2])
-    px, py, pz = (sum(c) / len(dev.pads) for c in zip(*car.pad_points(cfg.mount, tl)))   # tilted pads' middle
+    px, py, pz = (sum(c) / len(dev.pads) for c in zip(*D.pad_points(dev, car, cfg.mount, tl)))   # tilted pads' middle
     pad_pt = (*f(px, py), PR.PLATE_T + pz)
     return Placement(device=dev, side=cfg.side, footprint=cfg.mount, kind=S.kind(cfg.mount), key_index=i, frame=fr,
                      window=window(cfg.mount, fr), points=pts, uses=[pts[j] for j in car.USES[cfg.mount]],
@@ -248,7 +248,7 @@ def place(cfg):
                      carrier=geom_to_local(car.outline(cfg.mount, tl), f), board_bot_z=PR.PLATE_T + zb,
                      ball_top=round(zb + dev.pcb_t + dev.top_h * math.cos(math.radians(ang)), 2), dev_screw=dev_s,
                      fp_screw=fp_s, tilt=ang, pivot=pivot, axis=(-math.sin(phi), math.cos(phi)), rot=rot, pad_pt=pad_pt,
-                     base_clear=round(car.board_low(cfg.mount, tl) - (S.seat_z(cfg.mount) + car.BASE_T[cfg.mount]), 3),
+                     base_clear=round(D.board_low(dev, car, cfg.mount, tl) - (S.seat_z(cfg.mount) + car.BASE_T[cfg.mount]), 3),
                      top_z=round(max(rot(*fl(x, y), PR.PLATE_T + zb + dev.pcb_t + dev.top_h)[2]
                                      for x, y in box(*dev.top_rect).exterior.coords) - PR.PLATE_T, 3))
 

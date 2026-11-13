@@ -167,7 +167,6 @@ def build():
                         rough=r, smooth=smooth, name=name))
     pair = K.mirror_pair
     add("case", stl(C.case2_world(), "case"))
-    from compose import pointer as PTR
     if not C.sided():
         add("plate", stl(pair(C.plate2_local()), "plate"))
         add("frame", stl(pair(C.frame2_local()), "frame"))

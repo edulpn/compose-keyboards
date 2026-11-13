@@ -55,6 +55,8 @@ def active():
     parts = os.environ.get("C58_POINTER", "").split(":")
     tb = _thumb_bay()
     if len(parts) == 3 and parts[2] in S.bays():
+        if parts[1] not in ("L", "R"):
+            raise ValueError(f"C58_POINTER={':'.join(parts)!r}: the side must be L or R")
         if tb is not None and tb[0] != parts[2]:
             raise ValueError(f"C58_POINTER={':'.join(parts)!r} brings its own bay, but C58_THUMB_BAY="
                              f"{os.environ.get('C58_THUMB_BAY')!r} asks for another: unset C58_THUMB_BAY or make them "

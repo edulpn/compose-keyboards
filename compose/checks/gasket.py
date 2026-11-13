@@ -296,7 +296,6 @@ def main():
     from compose.pcb import jumper as J
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
-    from compose import pointer as PTR
     sides = None if not C.sided() else {"plate": (C.plate2_local("L"), C.plate2_local("R")),     # a device:
                                                "frame": (C.frame2_local("L"), C.frame2_local("R"))}    # as built
     plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
@@ -407,7 +406,7 @@ def main():
 
     # controller: drops straight in from above onto its four posts
     brd = controller_solids()
-    board_all = union([brd["ctrl board"], brd["top parts"], brd["bottom parts"], brd["lead tails"]])
+    board_all = union([brd[k] for k in ("ctrl board", "top parts", "bottom parts", "lead tails", "pointer plug") if k in brd])
     worst_b = max(vol(case, G.P2W(board_all.translate(cq.Vector(0, 0, dz)))) for dz in (0.0, 1.0, 4.0, 8.0, 12.0, 16.0))
     rec("D controller drops straight in onto its posts", worst_b < 1e-3, f"{worst_b:.3f} mm3")
 

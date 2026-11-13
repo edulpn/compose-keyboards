@@ -90,6 +90,7 @@ def crossing_points(cfg, yc, z_under, port=None):
     y_up = max(py, -PR.BRIDGE_LEN + PR.BRIDGE_WALL_T + r + 0.5)
     z_low = C.CT.board_bot - CS.BOTTOM_PARTS_H - r - 0.5     # below everything under the controller board
     if ptop < C.CT.board_bot:                            # the plug hangs under the board: along below, up into it
+        assert z_low + r < ptop, "the run along below must pass under the plug (BOTTOM_PARTS_H > the plug's height)"
         X = CS.W2 + 2.5
         return [a, (s * X, yc, z_low), (t * X, y_up, z_low), (px, py, z_low), (px, py, ptop - r)]
     z_top = C.CT.cover_under - r - 0.6                   # just under the cover

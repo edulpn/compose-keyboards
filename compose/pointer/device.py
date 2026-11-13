@@ -3,7 +3,8 @@ Pointer devices as data. Each lives in its own folder, pointers/<name>/ (like la
 
     module.py    DEVICE = Device(...): the part's numbers, each with its source, and how it connects
     carrier.py   its printed carrier for each footprint it supports (compose/pointer/std.py): POSE, USES, BASE_T,
-                 BOARD_Z, TILT, outline(fp), solid(fp)
+                 BOARD_Z, optionally TILT, and outline(fp, tilt=None), solid(fp, tilt=None) (tilt: the angle in
+                 degrees, or None for the carrier's own; a carrier that never tilts ignores it)
     pcb.py       (optional) a board of its own, generated like compose/pcb/*
 
 Device frame: origin at the touch point's centre (the ball) on the board's top face, +y toward the board edge away
@@ -54,6 +55,8 @@ def outline(d):
 def tilt_map(pivot, angle, azimuth):
     """Point map (x, y, z) -> (x, y, z): a turn of `angle` degrees about the horizontal axis through `pivot` that leans
     the +z normal toward `azimuth` (degrees, from +x toward +y)."""
+    if not angle:
+        return lambda x, y, z: (x, y, z)
     a, phi = math.radians(angle), math.radians(azimuth)
     kx, ky = -math.sin(phi), math.cos(phi)
     c, s = math.cos(a), math.sin(a)
@@ -73,6 +76,81 @@ def pose_fn(pose):
     a = math.radians(rot)
     c, s = math.cos(a), math.sin(a)
     return lambda x, y: (c * x - s * y + dx, s * x + c * y + dy)
+
+
+# ---- the board on its carrier, tilted: the carrier module `car` gives POSE, BOARD_Z and (optionally) TILT; `dev` the
+# ---- Device. Footprint frame, z up from the plate's top face.
+def tilt_of(car, fp, override=None):
+    """(angle, azimuth) of the board's tilt on footprint fp; `override` (degrees) replaces the angle. A carrier with
+    no TILT, or none for this footprint, is flat."""
+    ang, az = getattr(car, "TILT", {}).get(fp, (0.0, 0.0))
+    return (ang if override is None else float(override)), az
+
+
+def pivot(dev, car, fp):
+    """The turn's centre: the device frame's origin on the board's top face."""
+    x, y = pose_fn(car.POSE[fp])(0.0, 0.0)
+    return (x, y, car.BOARD_Z[fp] + dev.pcb_t)
+
+
+def tilt_fn(dev, car, fp, tilt=None):
+    ang, az = tilt_of(car, fp, tilt)
+    return tilt_map(pivot(dev, car, fp), ang, az)
+
+
+def under(dev, car, fp, tilt, pts, dz=0.0):
+    """Device-frame points (x, y) -> footprint-frame (x, y, z) at height dz above the board's underside, tilted."""
+    f, T = pose_fn(car.POSE[fp]), tilt_fn(dev, car, fp, tilt)
+    return [T(*f(*p), car.BOARD_Z[fp] + dz) for p in pts]
+
+
+def holes(dev, car, fp, tilt=None):
+    """The board's mounting holes on its underside (footprint frame, top view), tilted."""
+    return [(x, y) for x, y, _ in under(dev, car, fp, tilt, dev.holes)]
+
+
+def pads(dev, car, fp, tilt=None):
+    return [(x, y) for x, y, _ in under(dev, car, fp, tilt, [(x, y) for _, x, y in dev.pads])]
+
+
+def pad_points(dev, car, fp, tilt=None):
+    """The cable pads on the board's underside: (x, y, z) in the footprint frame, tilted."""
+    return under(dev, car, fp, tilt, [(x, y) for _, x, y in dev.pads])
+
+
+def normal(dev, car, fp, tilt=None):
+    """Unit normal of the board (footprint frame): +z turned by the tilt."""
+    px, py, pz = pivot(dev, car, fp)
+    q = tilt_fn(dev, car, fp, tilt)(px, py, pz + 1.0)
+    return (q[0] - px, q[1] - py, q[2] - pz)
+
+
+def board_low(dev, car, fp, tilt=None):
+    """Height (above the plate top) of the lowest point under the board: its underside's corners and the parts'
+    envelope beneath it, tilted."""
+    pts = [(x, y) for x0, y0, x1, y1 in dev.rects for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+    bx0, by0, bx1, by1 = dev.back_rect
+    back = [(x, y) for x, y in ((bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1))]
+    return min(min(z for _, _, z in under(dev, car, fp, tilt, pts)),
+               min(z for _, _, z in under(dev, car, fp, tilt, back, -dev.back_h)))
+
+
+def insert_depth(dev, car, fp, tilt=None, insert_d=None, insert_l=None, floor=None):
+    """Depth of the carrier's insert holes along the board's normal: the flat rule (4.5, or the room up to the seat), less
+    what a tilted board's low side leaves: the hole's bottom face, its lowest rim point included, keeps `floor` of base."""
+    from compose import params as PR
+    from compose.pointer import std as S
+    insert_d = PR.M2_INSERT_D if insert_d is None else insert_d
+    floor = PR.POINTER_INSERT_FLOOR if floor is None else floor
+    z0, zb = S.seat_z(fp), car.BOARD_Z[fp]
+    flat = min(zb - z0, PR.M2_PLATE_INSERT_L + 1.0)
+    ang = tilt_of(car, fp, tilt)[0]
+    if ang == 0.0:
+        return flat
+    n = normal(dev, car, fp, tilt)
+    low = min(z for _, _, z in under(dev, car, fp, tilt, dev.holes))
+    rim = (insert_d / 2) * math.sin(math.radians(abs(ang)))
+    return min(flat, (low - rim - (z0 + floor)) / n[2])
 
 
 def _import(name, part):

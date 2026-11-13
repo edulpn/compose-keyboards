@@ -26,7 +26,6 @@ def mesh(shape):
 def assembly():
     parts = {}
     parts["case"] = (C.case2_world(), "#b9b2a6")
-    from compose import pointer as PTR
     if not C.sided():
         pl = G.L2W(C.plate2_local()); pl = pl.fuse(pl.mirror("YZ"))
         fr = G.L2W(C.frame2_local()); fr = fr.fuse(fr.mirror("YZ"))

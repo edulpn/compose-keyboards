@@ -231,6 +231,7 @@ POINTER_BALL_TOP = 13.0          # suggested touch-surface height above the plat
 POINTER_ENV_CLR = 0.5            # slot window to every other key's keycap square (KEYCAP_SIZE)
 POINTER_INSERT_WALL = 1.0        # slot insert hole to switch holes (and their notches) and to the plate core's edge
 POINTER_INSERT_UNDER = 0.8       # slot insert hole bottom to anything cut into the plate from below
+POINTER_INSERT_BOSS_WALL = 0.8    # carrier material round a board insert hole, along its whole depth
 POINTER_INSERT_FLOOR = 1.0       # carrier material left under a board insert hole (a tilted board's low side)
 POINTER_BOARD_BASE_CLR = 0.8     # the board's lowest underside point above the carrier base
 POINTER_CABLE_D = 1.8            # four loose 28 AWG wires, bundled, as a tube for the checks
@@ -239,11 +240,11 @@ POINTER_CABLE_STOCK = (50, 100, 150, 200, 300)   # off-the-shelf Qwiic / STEMMA 
 POINTER_CABLE_PF_M = 60.0        # loose 4-wire cable, conductor to conductor (pF/m)
 
 # ---------------------------------------------------------------- rev 2: thumb bay (compose/case/bay.py)
-# a pocket added to the case where the layout declares it for that size (Layout.bays), on both halves, when a bay is
+# a pocket added to the case where the layout declares it for that size (Layout.bays), on the halves that get one, when a bay is
 # on (C58_POINTER=…:bay30 or C58_THUMB_BAY=bay30:R). The frame covers it as a lid. Plates, gaskets and half boards don't
 # change. The bay's sizes are the standard's bay footprints (compose/pointer/std.py).
 BAY_POCKET_GAP = 1.0             # the bay's square (the footprint's w, l) to the pocket's walls
-BAY_WALL_GAP = 5.0               # between the two halves' outer walls, and from the bridge (no narrow slot)
+BAY_WALL_GAP = 5.0               # between the walls (lobe to lobe, or lobe to the other half's plain wall), and from the bridge
 BAY_ANGLE_STEP = 2.0             # --suggest-bay: search step round the thumb arc (deg)
 BAY_JOIN_R = 6.0                 # concave rounding where the pocket's wall meets the half's (the reveal rebate's chamfer reaches 3 mm out: a tighter join won't loft)
 BAY_FRAME_RIM = 2.0              # frame lid left between the bay's opening and the case's outer edge
