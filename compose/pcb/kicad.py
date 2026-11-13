@@ -634,15 +634,20 @@ def remove_dangling(board):
 
 
 # ---------------------------------------------------------------- DRC + exports
-def drc(board, name):
-    rep = os.path.join(PCB_OUT, name + "_drc.txt")
-    pcbnew.WriteDRCReport(board, rep, pcbnew.EDA_UNITS_MILLIMETRES, True)
+def drc_counts(rep):
+    """(errors, warnings, unconnected) in a DRC report that drc() wrote."""
     txt = open(rep).read()
     errors = len(re.findall(r"Severity: error", txt))
     # library-path notes only exist because the boards are generated outside a KiCad project
     warnings = len(re.findall(r"Severity: warning", txt)) - len(re.findall(r"\[lib_footprint_issues\]", txt))
     unc = int(re.search(r"\*\* Found (\d+) unconnected pads", txt).group(1))
-    return errors, warnings, unc, rep
+    return errors, warnings, unc
+
+
+def drc(board, name):
+    rep = os.path.join(PCB_OUT, name + "_drc.txt")
+    pcbnew.WriteDRCReport(board, rep, pcbnew.EDA_UNITS_MILLIMETRES, True)
+    return (*drc_counts(rep), rep)
 
 
 def export(board_path, name, layers=None, drill=True, rename=None):
