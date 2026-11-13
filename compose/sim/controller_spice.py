@@ -73,10 +73,27 @@ def spice(name, body, vecs, tran=None, op=False):
         return vals
     arr = np.loadtxt(data, skiprows=1)
     os.remove(data)
+    # a transient that ngspice gave up on part-way still leaves the samples up to there: don't analyse those
+    t_stop = seconds(tran.split()[1])
+    if arr[-1, 0] < 0.999 * t_stop:
+        raise RuntimeError(f"ngspice stopped {name} at {arr[-1, 0]:.3e} s of {t_stop:.3e} s:\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}")
     out = {"t": arr[:, 0]}
     for i, v in enumerate(vecs):
         out[v] = arr[:, i + 1]
     return out
+
+
+def seconds(s):
+    """A SPICE time such as "8.2u" or "400u" in seconds."""
+    for suffix, k in (("m", 1e-3), ("u", 1e-6), ("n", 1e-9), ("p", 1e-12)):
+        if s.endswith(suffix):
+            return float(s[:-1]) * k
+    return float(s)
+
+
+def not_routed(names, length):
+    """The names among `names` that no track of the routed board carries (length: net -> routed mm)."""
+    return sorted(n for n in names if n not in length)
 
 
 def crossings(t, v, level):
@@ -696,9 +713,11 @@ CC col 0 {c_col}
                 "RGB_L_RET": "led", "RGB_HOP_IN": "led"}
     agg_nets = set(rows_n) | set(rgb_kind) | {"GP13", "GP14", "GP15", "GP26", "GP27", "GP28"}
     vic_nets = set(cols_n) | set(rows_n) | {"GP14", "GP15"}
-    stale = sorted(n for n in agg_nets | vic_nets if n not in length)
+    stale = not_routed(agg_nets | vic_nets, length)
     verdict(not stale, "every net named in the crosstalk sweep has tracks on the routed board"
             + (f": not found {stale} (renamed in compose/controller/rev2.py?)" if stale else ""))
+    verdict(not_routed({"GP13", "RGB_LR"}, length) == ["RGB_LR"],
+            "negative control: a net the board doesn't have (RGB_LR, the hop's old name) is caught")
     c_col_min = RP["CIN"] + Lc * 1e3 * PCBZ["C_PER_MM"][0] + FFC["LEN"][0] * FFC["C_PER_M"][0] + 0.08e3 * PCBZ["C_PER_MM"][0]
     c_row_min = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (FFC["LEN"][0] * FFC["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
     cases = []
