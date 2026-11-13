@@ -48,16 +48,37 @@ def verdict(cond, msg, warn_only=False):
 
 
 # ------------------------------------------------------------------ ngspice runner
-def spice(name, body, vecs, tran=None, op=False):
-    """Run a deck; return dict of numpy arrays (time + vecs) or op values."""
-    deck = os.path.join(DECKS, name + ".cir")
-    data = os.path.join(DECKS, name + ".dat")
+def _deck(name, body, vecs, tran, op, data):
     ctl = ["set wr_singlescale", "set wr_vecnames", "option numdgt=7"]
     if op:
         ctl += ["op", "print " + " ".join(vecs) + f" > {data}"]
     else:
         ctl += [f"tran {tran}", f"wrdata {data} " + " ".join(vecs)]
-    txt = f"* {name}\n{body}\n.control\n" + "\n".join(ctl) + "\nquit\n.endc\n.end\n"
+    return f"* {name}\n{body}\n.control\n" + "\n".join(ctl) + "\nquit\n.endc\n.end\n"
+
+
+def spice_batch(name, jobs):
+    """Run independent decks side by side (ngspice is single-threaded); return their results in order.
+    jobs: list of (body, vecs, kw) with kw the keyword arguments of spice(). Each run gets its own files;
+    afterwards <name>.cir holds the last deck, exactly as a run of spice() calls one after another leaves it."""
+    from concurrent.futures import ThreadPoolExecutor
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    with ThreadPoolExecutor(max_workers=max(1, n)) as ex:
+        out = list(ex.map(lambda ij: spice(f"{name}.{ij[0]}", ij[1][0], ij[1][1], **ij[1][2]), enumerate(jobs)))
+    for i in range(len(jobs)):
+        os.remove(os.path.join(DECKS, f"{name}.{i}.cir"))
+    if jobs:
+        body, vecs, kw = jobs[-1]
+        open(os.path.join(DECKS, name + ".cir"), "w").write(
+            _deck(name, body, vecs, kw.get("tran"), kw.get("op", False), os.path.join(DECKS, name + ".dat")))
+    return out
+
+
+def spice(name, body, vecs, tran=None, op=False):
+    """Run a deck; return dict of numpy arrays (time + vecs) or op values."""
+    deck = os.path.join(DECKS, name + ".cir")
+    data = os.path.join(DECKS, name + ".dat")
+    txt = _deck(name, body, vecs, tran, op, data)
     open(deck, "w").write(txt)
     r = subprocess.run(["ngspice", "-b", deck], capture_output=True, text=True, timeout=60)
     if not os.path.exists(data) or "error" in r.stdout.lower() and "no error" not in r.stdout.lower():
@@ -270,10 +291,11 @@ def sim_rgb_first(facts):
     worst = None
     results = []
     n = 0
-    for (vc, vf), rg, (rh, tpd), zp, zf, lf, lh in itertools.product(
-            rails, RP["R_DRV"], [(30.0, 10e-9), (110.0, 25e-9)], PCBZ["Z0"], FFC["Z0"], FFC["LEN"], (0.03, 0.15)):
-        n += 1
-        body = MODELS + f"""
+    corners = list(itertools.product(
+            rails, RP["R_DRV"], [(30.0, 10e-9), (110.0, 25e-9)], PCBZ["Z0"], FFC["Z0"], FFC["LEN"], (0.03, 0.15)))
+
+    def deck(vc, vf, rg, rh, tpd, zp, zf, lf, lh):
+        return MODELS + f"""
 VCC vcc 0 {vc}
 VFAR vfar 0 {vf}
 VG g 0 {bit_pwl(bits, 3.3)}
@@ -298,7 +320,11 @@ CJH hj 0 1.5p
 {tline('hp', 'hj', 'din', 120, lh * PCBZ['TD_PER_M'])}
 {led_input('din', 'vfar', 'led')}
 """
-        res = spice("A_rgb", body, ["v(din)", "v(buf)", "v(u_in)"], tran="0.5n 8.2u")
+    ress = spice_batch("A_rgb", [(deck(vc, vf, rg, rh, tpd, zp, zf, lf, lh), ["v(din)", "v(buf)", "v(u_in)"],
+                                  dict(tran="0.5n 8.2u"))
+                                 for (vc, vf), rg, (rh, tpd), zp, zf, lf, lh in corners])
+    for ((vc, vf), rg, (rh, tpd), zp, zf, lf, lh), res in zip(corners, ress):
+        n += 1
         ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits, "A")
         over = d["vmax"] - vf
         under = -d["vmin"]
@@ -326,9 +352,10 @@ CJH hj 0 1.5p
     # comparison: GP13 straight into the LED (no buffer)
     rep("\nFor comparison, GP13 straight to the LEDs (3.3 V data, no buffer):")
     nd, okd = 0, 0
-    for (vc, vf), rg, zf, lf in itertools.product(rails, RP["R_DRV"], FFC["Z0"], FFC["LEN"]):
-        nd += 1
-        body = MODELS + f"""
+    corners = list(itertools.product(rails, RP["R_DRV"], FFC["Z0"], FFC["LEN"]))
+
+    def deck_direct(vc, vf, rg, zf, lf):
+        return MODELS + f"""
 VFAR vfar 0 {vf}
 VG g 0 {bit_pwl(bits, 3.3)}
 RG g gp {rg}
@@ -338,7 +365,10 @@ R3 gp r3o 330
 {tline('hp', 'hj', 'din', 120, 0.08 * PCBZ['TD_PER_M'])}
 {led_input('din', 'vfar', 'led')}
 """
-        res = spice("A_direct", body, ["v(din)"], tran="0.5n 8.2u")
+    ress = spice_batch("A_direct", [(deck_direct(vc, vf, rg, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
+                                    for (vc, vf), rg, zf, lf in corners])
+    for ((vc, vf), rg, zf, lf), res in zip(corners, ress):
+        nd += 1
         ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits, "A2")
         okd += ok
     rep(f"- (comparison only) without the buffer, 3.3 V data meets the LED's 0.7 x VDD threshold in just {okd}/{nd} "
@@ -375,11 +405,12 @@ def sim_rgb_hop(facts):
     n = n_in = n_out = 0
     worst_i, worst_v, worst_res = 0.0, 0.0, None
     widths = []
-    for v, rd, lr, zf, lf, (rh, tpd) in itertools.product(rails, (30.0, 200.0), (0.05, 0.30), FFC["Z0"], FFC["LEN"],
-                                                         [(30.0, 10e-9), (110.0, 25e-9)]):
-        n += 1
+    corners = list(itertools.product(rails, (30.0, 200.0), (0.05, 0.30), FFC["Z0"], FFC["LEN"],
+                                     [(30.0, 10e-9), (110.0, 25e-9)]))
+
+    def deck(v, rd, lr, zf, lf, rh, tpd):
         gate = HCT_GATE.format(g="g2", inp="hin", vth=HCT["VTH"], cd=tpd / 0.693 / 1e3, out="hbuf", rh=rh)
-        body = MODELS + f"""
+        return MODELS + f"""
 VCC vcc 0 {v}
 VG g 0 {bit_pwl(bits, v, t_r=6e-9)}
 RD g dout {rd}
@@ -399,7 +430,11 @@ R7 hbuf r7o 330
 {tline('hp', 'hr', 'din', 120, 0.15 * PCBZ['TD_PER_M'])}
 {led_input('din', 'vcc', 'led')}
 """
-        res = spice("B_hop", body, ["v(din)", "v(hin)", "v(c2)", "v(dout)"], tran="0.5n 8.2u")
+    ress = spice_batch("B_hop", [(deck(v, rd, lr, zf, lf, rh, tpd), ["v(din)", "v(hin)", "v(c2)", "v(dout)"],
+                                  dict(tran="0.5n 8.2u"))
+                                 for v, rd, lr, zf, lf, (rh, tpd) in corners])
+    for (v, rd, lr, zf, lf, (rh, tpd)), res in zip(corners, ress):
+        n += 1
         t = res["t"]
         hin = res["v(hin)"]
         # HCT input: one clean crossing of 2.0 V and 0.8 V per edge
@@ -433,9 +468,10 @@ R7 hbuf r7o 330
     # comparison: the same two cable runs wired straight through (what rev 2 would be without gate 2)
     nd = okd = 0
     worst_d = 0
-    for v, rd, lr, zf, lf in itertools.product(rails, (30.0, 200.0), (0.05, 0.30), FFC["Z0"], FFC["LEN"]):
-        nd += 1
-        body = MODELS + f"""
+    corners = list(itertools.product(rails, (30.0, 200.0), (0.05, 0.30), FFC["Z0"], FFC["LEN"]))
+
+    def deck_direct(v, rd, lr, zf, lf):
+        return MODELS + f"""
 VCC vcc 0 {v}
 VG g 0 {bit_pwl(bits, v, t_r=6e-9)}
 RD g dout {rd}
@@ -446,7 +482,10 @@ RD g dout {rd}
 {tline('hp', 'hr', 'din', 120, 0.15 * PCBZ['TD_PER_M'])}
 {led_input('din', 'vcc', 'led')}
 """
-        res = spice("B_direct", body, ["v(din)"], tran="0.5n 8.2u")
+    ress = spice_batch("B_direct", [(deck_direct(v, rd, lr, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
+                                    for v, rd, lr, zf, lf in corners])
+    for (v, rd, lr, zf, lf), res in zip(corners, ress):
+        nd += 1
         ok, d = analyse_bits(res["t"], res["v(din)"], v, bits, "B2")
         o = max(d["vmax"] - v, -d["vmin"])
         okd += ok and o < 0.5
@@ -461,9 +500,11 @@ def sim_i2c():
     rep("Open-drain low side 25-100 ohm (RP2040 4 mA drive: VOL <= 0.4 V at 4 mA). Module pull-ups in parallel; "
         "bus C = pins + traces + Qwiic cable + modules. Rise time 30 % -> 70 % (I2C spec definition).\n")
     rows = []
-    for rx, cb in itertools.product((None, 10e3, 4.7e3, 2.2e3), (30e-12, 60e-12, 100e-12, 200e-12)):
-        rpar = 4.7e3 if rx is None else 1 / (1 / 4.7e3 + 1 / rx)
-        body = f"""
+    corners = list(itertools.product((None, 10e3, 4.7e3, 2.2e3), (30e-12, 60e-12, 100e-12, 200e-12)))
+    rpar_ = lambda rx: 4.7e3 if rx is None else 1 / (1 / 4.7e3 + 1 / rx)
+
+    def deck(rpar, cb):
+        return f"""
 VDD vdd 0 3.3
 RPU vdd sda {rpar}
 CB sda 0 {cb}
@@ -471,7 +512,9 @@ SW sda 0 ctl 0 SWMOD
 VCTL ctl 0 PULSE(1 0 1u 1n 1n 20u 40u)
 .model SWMOD SW(RON=60 ROFF=1e9 VT=0.5 VH=0.1)
 """
-        res = spice("C_i2c", body, ["v(sda)"], tran="2n 6u")
+    ress = spice_batch("C_i2c", [(deck(rpar_(rx), cb), ["v(sda)"], dict(tran="2n 6u")) for rx, cb in corners])
+    for (rx, cb), res in zip(corners, ress):
+        rpar = rpar_(rx)
         t, v = res["t"], res["v(sda)"]
         c30 = [c[0] for c in crossings(t, v, 0.3 * 3.3) if c[1] > 0]
         c70 = [c[0] for c in crossings(t, v, 0.7 * 3.3) if c[1] > 0]
@@ -651,11 +694,11 @@ def sim_matrix(facts):
         f"jumper {LEN_TXT}, half row trace 120/250 mm, column 80/200 mm, cable C 30/60 pF/m, PCB 0.05/0.1 pF/mm.\n")
     worst = dict(vlow=0, t_sel=0, t_rec=0)
     corners = 0
-    for rdrv, rpu, lf, (lhr, lhc), cpm, cpp in itertools.product(RP["R_DRV"], RP["RPU"], FFC["LEN"], [(0.12, 0.08), (0.25, 0.20)],
-                                                                FFC["C_PER_M"], PCBZ["C_PER_MM"]):
-        corners += 1
-        c_row, c_col = caps(lf, lhr, lhc, cpm, cpp)
-        body = MODELS + f"""
+    sweep = list(itertools.product(RP["R_DRV"], RP["RPU"], FFC["LEN"], [(0.12, 0.08), (0.25, 0.20)],
+                                   FFC["C_PER_M"], PCBZ["C_PER_MM"]))
+
+    def deck(rdrv, rpu, c_row, c_col):
+        return MODELS + f"""
 VIO vio 0 3.3
 * row: GPIO output low during the strobe, input + pull-up after (QMK unselect = input high)
 VR rdrv 0 PULSE(3.3 0 1u 3n 3n 5u 100u)
@@ -670,7 +713,12 @@ D1 col row D1N4148
 RPC vio col {rpu}
 CC col 0 {c_col}
 """
-        r = spice("F1_scan", body, ["v(col)", "v(row)"], tran="2n 40u")
+    ress = spice_batch("F1_scan", [(deck(rdrv, rpu, *caps(lf, lhr, lhc, cpm, cpp)), ["v(col)", "v(row)"],
+                                    dict(tran="2n 40u"))
+                                   for rdrv, rpu, lf, (lhr, lhc), cpm, cpp in sweep])
+    for (rdrv, rpu, lf, (lhr, lhc), cpm, cpp), r in zip(sweep, ress):
+        corners += 1
+        c_row, c_col = caps(lf, lhr, lhc, cpm, cpp)
         t, vc = r["t"], r["v(col)"]
         on = (t > 3e-6) & (t < 5.9e-6)
         vlow = float(vc[on].max())
@@ -741,9 +789,9 @@ CC col 0 {c_col}
     rep("| aggressor -> victim | Cm | victim C | dip | level at QMK's sample | min level | limit |")
     rep("|---|---|---|---|---|---|---|")
     rows_out = []
-    for name, kind, vk, cm, c_vic in cases:
+    def deck(kind, cm, c_vic):
         swing, tr, rdrv = {"rgb": (5.25, 5e-9, 30 + 330), "led": (5.25, 5e-9, 30), "gpio": (3.3, 3e-9, 50)}[kind]
-        body = f"""
+        return f"""
 VIO vio 0 3.3
 VA a0 0 PULSE({swing} 0 1u {tr} {tr} 2u 10u)
 RA a0 agg {rdrv}
@@ -754,7 +802,9 @@ CV vic 0 {c_vic}
 DCL vic vio DCLAMP
 DCG 0 vic DCLAMP
 """ + MODELS
-        r = spice("F2_xtalk", body, ["v(vic)"], tran="0.5n 4u")
+    ress = spice_batch("F2_xtalk", [(deck(kind, cm, c_vic), ["v(vic)"], dict(tran="0.5n 4u"))
+                                    for name, kind, vk, cm, c_vic in cases])
+    for (name, kind, vk, cm, c_vic), r in zip(cases, ress):
         t, v = r["t"], r["v(vic)"]
         vmin = float(v[(t > 0.9e-6) & (t < 3e-6)].min())
         vs = float(np.interp(1e-6 + QMK["SELECT"], t, v))

@@ -10,7 +10,7 @@ You only need this to change the design. Ready-made files for each layout's reco
 |---|---|---|---|
 | Python | 3.11+ (3.12 with apt's KiCad) | everything | packages in `requirements.txt`: CadQuery, trimesh, manifold3d, shapely, numpy, scipy, matplotlib, networkx, rtree |
 | KiCad | **7** (developed on 7.0.11) | boards | its `pcbnew` module must import in that Python. KiCad 8 and 9 removed parts of the API the generators use (see [Porting to KiCad 8/9](#porting-to-kicad-89)). |
-| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java 17+, Freerouting **2.1.0** | routing | point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`. Not 2.5.0 (see [Routing](#routing)). |
+| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java **21+**, Freerouting **2.1.0** | routing | point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`. Not 2.5.0 (see [Routing](#routing)). Freerouting 2.1.0 is built for Java 21: with an older `java` first on PATH the routing commands stop and say so. |
 | ngspice | any recent | controller simulation only | |
 | Node | 20+ | renders and board previews only | Playwright needs 20; Ubuntu 24.04's apt Node is 18. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`. |
 
@@ -64,12 +64,7 @@ Then compare `/tmp/r1/print/*.stl` with the STLs in the `compose58-rev1` release
 
 A mismatch doesn't mean the geometry changed: compare the meshes (volume, bounds, symmetric difference). Check your own changes against a build of the unchanged code on the same machine (see [Checking a change](#checking-a-change)).
 
-**Memory:**
-
-- On x86_64, rev 1's `checks` runs in 8 GB.
-- Under Docker on Apple silicon it peaks at about 42 GB (not tied to the core count or to the trimesh and numpy versions). Give the VM 48 GB if you have 64; with Colima: `colima start --cpu 14 --memory 48`.
-- `gasket-checks` peaks at 2.4 GB.
-- Colima shares only your home folder with containers, so keep the repo under it.
+**Memory:** on 4 cores every command fits in 8 GB. The largest peaks: routing an RGB half board 5.4 GB, rev 1's `checks` 4.1 GB, `gasket-checks` 2.6 GB. Routing runs one Freerouting job per two cores (see [Routing](#routing)), so more cores take more memory there. Colima shares only your home folder with containers, so keep the repo under it.
 
 ## Commands
 
@@ -179,6 +174,14 @@ Every design change goes through the existing checks (case checks, DRC, the copp
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
 - **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards; `flex-sim` passes. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
+
+## Continuous integration
+
+`.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs: rev 1 (build, model, checks, and the byte-for-byte comparison with the pull request's base), rev 2 (case, `gasket-checks`, firmware), and the boards (controller, the four half boards, the jumper, then `sim-half-rev2` and `order-rev2`). The `checks-passed` job sums them up: it's the one status to require.
+
+Routing is random, and on 4 cores an RGB half board can miss a clean route for 30 attempts in a row. So each RGB board routes in three parallel jobs of four Freerouting runs per attempt, for up to 55 minutes each, and `sim-half-rev2` takes the first that came out DRC-clean. The bar is the same as on your machine.
+
+A pull request runs only the suites its changes can reach. Each full run on `main` records the repository files every suite read: modules imported (and module names it tried to import), files opened, folders listed (`.github/ci/traced.py`). The `plan` job compares those with the files the pull request changes (`.github/ci/plan.py`) and lists the reasons in the run summary. A docs-only change runs nothing; a change to rev 2 code alone skips rev 1. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record.
 
 ## Notes for working on the code
 
