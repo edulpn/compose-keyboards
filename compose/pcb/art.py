@@ -137,6 +137,8 @@ def plan_half_art(plan, variant="hotswap"):
         tb = widest_box(free, th, (8.0, 11.0), w_max=40.0, w_min=28.0)
         if tb is not None:
             break
+    if tb is None:
+        raise RuntimeError("board art: no free box for the title near the top-left margin (art.widest_box anchors)")
     x0, y0, x1, y1 = tb.bounds
     h = y1 - y0
     r = h * 0.42
@@ -151,6 +153,8 @@ def plan_half_art(plan, variant="hotswap"):
 
     # 2. tagline + credit, silkscreen, the band between the last key row and the thumbs
     bb = widest_box(free, 5.4, (58.0, -65.5), w_max=58.0, w_min=30.0)
+    if bb is None:
+        raise RuntimeError("board art: no free box for the tagline between the last key row and the thumbs")
     x0, y0, x1, y1 = bb.bounds
     credit_txt = f"{PR.HANDLE} · {PR.REVISION} · {PR.YEAR} · {PR.CREDIT}"
     credit, k2 = fit(text_shape(credit_txt, PR.ART_TEXT_FONT), x0, y0, x1 - x0, 2.0)
@@ -172,6 +176,8 @@ def plan_half_art(plan, variant="hotswap"):
         lb = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), lh, anc, w_max=34.0, w_min=20.0)
         if lb is not None:                           # rev 1 fits the first; rev 2's denser boards may not
             break
+    if lb is None:
+        raise RuntimeError("board art: no free box for the lhs / rhs build labels")
     x0, y0, x1, y1 = lb.bounds
     for face, sw, parts in (("F", lhs, rhs), ("B", rhs, lhs)):
         t1 = text_shape(f"{sw} → switches on this side", PR.ART_TEXT_FONT)
