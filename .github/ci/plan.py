@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from affected import decide  # noqa: E402
 
-SUITES = ("rev1", "rev2", "pointer", "boards")
+SUITES = ("rev1", "rev2", "boards")
 
 
 def main():

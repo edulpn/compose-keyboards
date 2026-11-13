@@ -177,7 +177,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
 ## Continuous integration
 
-`.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs: rev 1 (build, model, checks, and the byte-for-byte comparison with the pull request's base), rev 2 (case, `gasket-checks`, firmware), the pointer configurations, and the boards (controller, the four half boards, the jumper, then `sim-half-rev2` and `order-rev2`). The `checks-passed` job sums them up: it's the one status to require.
+`.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs: rev 1 (build, model, checks, and the byte-for-byte comparison with the pull request's base), rev 2 (case, `gasket-checks`, firmware), and the boards (controller, the four half boards, the jumper, then `sim-half-rev2` and `order-rev2`). The `checks-passed` job sums them up: it's the one status to require.
 
 Routing is random, and on 4 cores an RGB half board can miss a clean route for 30 attempts in a row. So each RGB board routes in three parallel jobs of four Freerouting runs per attempt, for up to 55 minutes each, and `sim-half-rev2` takes the first that came out DRC-clean. The bar is the same as on your machine.
 

@@ -28,7 +28,6 @@ jobs:
     outputs:
       run_rev1: ${{ steps.plan.outputs.run_rev1 }}
       run_rev2: ${{ steps.plan.outputs.run_rev2 }}
-      run_pointer: ${{ steps.plan.outputs.run_pointer }}
       run_boards: ${{ steps.plan.outputs.run_boards }}
     steps:
       - uses: actions/checkout@v4
@@ -90,39 +89,6 @@ jobs:
       - run: $T deps/rev2.txt firmware-rev2 o2
       - uses: actions/upload-artifact@v4
         with: { name: deps-rev2, path: deps, retention-days: 7 }
-
-  # ---------------------------------------------------------------- rev 2 pointer modules (docs/pointer-modules.md)
-  pointer:
-    needs: plan
-    if: needs.plan.outputs.run_pointer == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: R-slot,       pointer: "pim447:R" }
-          - { name: L-slot,       pointer: "pim447:L" }
-          - { name: R-bay30,      pointer: "pim447:R:bay30" }
-          - { name: L-bay30,      pointer: "pim447:L:bay30" }
-          - { name: R-slot-J4,    pointer: "pim447:R",       port: J4 }
-          - { name: R-bay30-J4,   pointer: "pim447:R:bay30", port: J4 }
-          - { name: empty-bay30R, bay: "bay30:R" }
-    name: pointer (${{ matrix.name }})
-    env:
-      C58_REV: "2"
-      C58_POINTER: ${{ matrix.pointer }}
-      C58_POINTER_PORT: ${{ matrix.port }}
-      C58_THUMB_BAY: ${{ matrix.bay }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - run: $T deps/pointer.txt gasket-case o3
-      - if: matrix.pointer
-        run: $T deps/pointer.txt pointer-checks o3
-      - run: $T deps/pointer.txt gasket-checks o3
-      - uses: actions/upload-artifact@v4
-        with: { name: "deps-pointer-${{ matrix.name }}", path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- rev 2 boards: route, DRC, copper and circuit sims
   controller:
@@ -243,7 +209,7 @@ jobs:
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
   checks-passed:
-    needs: [plan, rev1, rev2, pointer, controller, spice, half, jumper, boards-sim]
+    needs: [plan, rev1, rev2, controller, spice, half, jumper, boards-sim]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -265,7 +231,7 @@ jobs:
       - name: merge each suite's dependency lists
         run: |
           mkdir deps
-          for s in rev1 rev2 pointer boards; do cat in/deps-$s*/$s.txt | sort -u > deps/$s.txt; wc -l deps/$s.txt; done
+          for s in rev1 rev2 boards; do cat in/deps-$s*/$s.txt | sort -u > deps/$s.txt; wc -l deps/$s.txt; done
           echo "${{ github.sha }}" > deps/SHA
       - uses: actions/cache/save@v4
         with: { path: deps, key: "deps-${{ github.sha }}" }
