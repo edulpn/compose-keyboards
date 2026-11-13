@@ -11,9 +11,10 @@ Independent of the net names the boards were built with:
        switch      contacts at the MX pin positions (solder) or the Kailh socket's nominal tabs (hotswap)
        diode       cathode = the band end (the square pad), anode = the other
        FFC         contacts at the physical slots: slot 1 = the back-most contact
-       MINI-E      pins 1-4 = VDD, DOUT, GND, DIN at the corners the board plan gives them
-                   (compose.pcb.rev2_half.LED_PINS, pad-side view). That table is the generator's own: this
-                   simulation doesn't check it against the SK6812 MINI-E drawing
+       MINI-E      what each of its four leads carries is read from the copper under the part's own lead
+                   positions (5 V, GND, the chain's data in and out) and compared with where the SK6812 MINI-E
+                   has VDD, DOUT, VSS and DIN, seen from its pad side (MINI_E_PADSIDE, from two published
+                   footprints, not from the board plan's LED_PINS)
   3. Per board: each key is a switch between its column's slot and its diode, the diode's cathode on its row's
      slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 18 on
      the fitted face, every LED and capacitor across slot 2/19 (5 V) and 1/4/20 (GND), the unfitted face's
@@ -55,6 +56,14 @@ L = G.LAYOUT
 F, B = pcbnew.F_Cu, pcbnew.B_Cu
 KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socket: its tab beside MX pin 1 / pin 2,
                                                             #   footprint coords (the values compose/sim/matrix.py uses)
+# SK6812 MINI-E, reverse-mounted, seen from the side its pads are on (x right, y down): which lead sits at which
+# corner. Taken from two published footprints, not from this repo's board plan (rev2_half.LED_PINS):
+#   ebastler/marbastlib  LED_6028R with its SK6812MINI-E symbol: VDD (2.725, -0.75), DOUT (2.725, 0.75),
+#                        DIN (-2.725, -0.75), VSS (-2.725, 0.75)
+#   foostan/kbd          YS-SK6812MINI-E: pads 1-4 (VDD, DOUT, VSS, DIN) at (2.8, -0.7), (2.8, 0.7), (-2.8, 0.7),
+#                        (-2.8, -0.7)
+MINI_E_PADSIDE = {"VDD": (1, -1), "DOUT": (1, 1), "VSS": (-1, 1), "DIN": (-1, -1)}
+MINI_E_LEAD = (2.75, 0.75)                                  # lead centres from the LED's centre (x, y), mm
 
 
 def ok(cond, msg):
@@ -154,21 +163,67 @@ class Half:
             out.append((ks.i, ks.row, ks.col, sa, sb, an, cath))
         return out
 
-    def leds(self):
-        """Fitted LEDs in chain order: [(VDD, DOUT, GND, DIN)] groups, located by plan position and datasheet
-        corner (pad-side view), not by pad number."""
+    def leds(self, layer=None):
+        """Fitted LEDs in chain order: [(VDD, DOUT, GND, DIN)] groups, located by the plan's pad positions for
+        the fitted face, not by pad number. layer: read the copper on that layer instead (negative control)."""
         face = "B" if self.side == "L" else "F"
         out = []
         for i in self.s.led_order:
             k = L.keys[i]
             pads = H.led_pads(k, face)               # plan: pin -> pad polygon on that face
-            g = {pin: self.at(poly.centroid.coords[0]) for pin, poly in pads.items()}
+            g = {pin: self.at(poly.centroid.coords[0], layer) for pin, poly in pads.items()}
             out.append((g["1"], g["2"], g["3"], g["4"]))
         return out
 
-    def caps(self):
+    def led_leads(self, light_side=False):
+        """Fitted LEDs in chain order: {(sx, sy): copper group} under each of the four leads, the corner named as
+        it's seen from the pad side of the fitted face (x right, y down). Positions are the part's own lead
+        positions about the LED's centre, not the plan's pads. light_side: name the corners as seen from the other
+        side instead, i.e. the part mirrored (negative control)."""
+        X, Y = MINI_E_LEAD
+        mir = (self.bottom == B) != light_side          # footprint coords are drawn from F: B's own view is mirrored
+        out = []
+        for i in self.s.led_order:
+            k = L.keys[i]
+            out.append({(-sx if mir else sx, sy): self.at(H.fp2local(k, H.LED_AT[0] + sx * X, H.LED_AT[1] + sy * Y))
+                        for sx in (-1, 1) for sy in (-1, 1)})
+        return out
+
+    def caps(self, layer=None):
         face = "B" if self.side == "L" else "F"
-        return [tuple(self.at(p) for p in H.cap_pads(L.keys[i], face)) for i in self.s.caps]
+        return [tuple(self.at(p, layer) for p in H.cap_pads(L.keys[i], face)) for i in self.s.caps]
+
+
+def joined_slots(sl, rgb):
+    """Connector slots that share copper and shouldn't: GND 1/4/20 and 5 V 2/19 may, and on a board without LEDs
+    the pass-through 3/18. With LEDs, 3 joined to 18 shorts the chain out."""
+    groups = {}
+    for k_, g in sl.items():
+        groups.setdefault(g, []).append(k_)
+    allowed = [{1, 4, 20}, {2, 19}] + ([] if rgb else [{3, 18}])
+    return [v for v in groups.values() if len(v) > 1 and set(v) not in allowed]
+
+
+def led_lead_problems(leads, sl):
+    """What each LED lead carries, read from the copper (5 V, GND, the chain's data in; the fourth is data out),
+    against where the SK6812 MINI-E has them (MINI_E_PADSIDE). A LED can sit either way round (turned 180
+    degrees), never mirrored. Returns the problems found."""
+    gnd, vdd, cur, bad = sl[1], sl[2], sl[3], []
+    turned = {f: (-x, -y) for f, (x, y) in MINI_E_PADSIDE.items()}
+    for j, c in enumerate(leads):
+        at = {}
+        for xy, n in c.items():
+            f = None if n is None else "VDD" if n == vdd else "VSS" if n == gnd else "DIN" if n == cur else "DOUT"
+            at.setdefault(f, []).append(xy)
+        if sorted(at, key=str) != ["DIN", "DOUT", "VDD", "VSS"] or any(len(v) != 1 for v in at.values()):
+            bad.append(f"LED {j + 1}: its leads don't read as one each of VDD, DOUT, VSS, DIN "
+                       f"({ {str(f): v for f, v in at.items()} })")
+            break                                        # the chain can't be followed past it
+        got = {f: v[0] for f, v in at.items()}
+        if got != MINI_E_PADSIDE and got != turned:
+            bad.append(f"LED {j + 1}: {got}")
+        cur = c[got["DOUT"]]
+    return bad
 
 
 def board_checks(h):
@@ -193,13 +248,14 @@ def board_checks(h):
         if cath != row[r]:
             bad.append(f"key {i}: diode cathode not on ROW{r} (slot {12 + r})")
     ok(not bad, "every key: column slot -> switch -> diode anode, cathode -> row slot" + (f" ({bad[:3]})" if bad else ""))
+    if h.variant == "hotswap":                                   # a tab 2.1 mm further out is past its pad's end
+        off = (KAILH_TAB1[0] + 2.1, KAILH_TAB1[1])
+        bare = sum(h.at(PL.fp2local(ks.k, *(mirror(off) if h.side == "R" else off))) is None for ks in h.s.keys)
+        ok(bare >= len(keys) // 2, f"negative control: a socket tab just off its pad is caught ({bare} of {len(keys)} "
+                                   f"land on bare board; the tab test isn't trivially true)")
     used = {5 + c for c in {k.col for k in L.keys}} | {12 + r for r in {k.row for k in L.keys}}
     spare = [k for k in range(5, 18) if k not in used]
-    groups = {}
-    for k_, g in sl.items():
-        groups.setdefault(g, []).append(k_)
-    allowed = [{1, 4, 20}, {2, 19}] + ([] if h.rgb else [{3, 18}])     # with LEDs, 3 joined to 18 shorts the chain out
-    shared = [v for v in groups.values() if len(v) > 1 and set(v) not in allowed]
+    shared = joined_slots(sl, h.rgb)
     ok(not shared, f"no two connector slots joined except GND 1/4/20, 5 V 2/19{' and the pass-through 3/18' if not h.rgb else ''}"
        + (f" ({shared})" if shared else ""))
     anods = {k[5] for k in keys}
@@ -231,6 +287,18 @@ def board_checks(h):
        "LED data lines touch nothing of the matrix or power")
     cps = h.caps()
     ok(all(set(c_) == {vdd, gnd} for c_ in cps), f"every capacitor across 5 V / GND ({len(cps)}, one per {H.CAP_EVERY} LEDs)")
+    bad = led_lead_problems(h.led_leads(), sl)
+    ok(not bad, "every LED's leads, seen from its pad side, are VDD, DOUT, VSS, DIN where the SK6812 MINI-E has them "
+                "(from published footprints, not from this board's plan), either way round" + (f": {bad[:2]}" if bad else ""))
+    # negative controls: each of these broken readings must be caught
+    ok(bool(led_lead_problems(h.led_leads(light_side=True), sl)),
+       "negative control: the LEDs' leads read mirrored (the part seen from its light side) are caught")
+    other = F if h.bottom == B else B
+    ok(not all(l_[0] == vdd and l_[2] == gnd for l_ in h.leds(other)),
+       "negative control: the LEDs' pads read on the other face aren't their 5 V and GND")
+    ok(not all(set(c_) == {vdd, gnd} for c_ in h.caps(other)),
+       "negative control: the capacitors' pads read on the other face aren't across 5 V / GND")
+    ok(bool(joined_slots({**sl, 18: sl[3]}, True)), "negative control: slot 3 joined to slot 18 on a board with LEDs is caught")
 
 
 # ---------------------------------------------------------------- the flex jumpers
@@ -376,6 +444,21 @@ def main():
     exp_m = {(s_, ks.i): [ks.row, ks.col if s_ == "L" else 13 - ks.col] for s_ in ("L", "R") for ks in H.plan().keys}
     ok(sorted(e["matrix"] for e in fw["layouts"]["LAYOUT"]["layout"]) == sorted(exp_m.values()),
        "keyboard.json lists every key at the matrix position the scan reads it")
+    # ... and each key by itself: its legend and the half it's drawn on (left or right of the middle) against the
+    # matrix position of the key with that legend on that half; along each main row the columns rise with x
+    lay = fw["layouts"]["LAYOUT"]["layout"]
+    mid = (min(e["x"] for e in lay) + max(e["x"] for e in lay)) / 2
+    got = {("L" if e["x"] < mid else "R", e["label"]): e["matrix"] for e in lay}
+    want = {(s_, ks.k.label_l if s_ == "L" else ks.k.label_r): exp_m[(s_, ks.i)] for s_ in ("L", "R") for ks in H.plan().keys}
+    ok(len(got) == len(lay) and got == want,
+       "keyboard.json: every key, by its legend and the half it's drawn on, has the matrix position the scan reads it at"
+       + ("" if got == want else f": {sorted(k for k in set(got) | set(want) if got.get(k) != want.get(k))[:4]}"))
+    rows_ok = all([e["matrix"][1] for e in sorted((e for e in lay if e["matrix"][0] == r), key=lambda e: e["x"])]
+                  == sorted(e["matrix"][1] for e in lay if e["matrix"][0] == r) for r in range(4))
+    ok(rows_ok, "keyboard.json: along each of the four main rows the matrix columns rise with x")
+    a_, b_ = sorted(got)[:2]
+    swapped = {**got, a_: got[b_], b_: got[a_]}
+    ok(swapped != want, "negative control: two keys' matrix positions swapped in keyboard.json are caught")
     pcb = os.path.join(OUT, "pcb")
     jpath = lambda s_: os.path.join(pcb, "jumper_rev2.kicad_pcb")         # one part, both sides
     g = J.solve()
