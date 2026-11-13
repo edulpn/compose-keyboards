@@ -1,0 +1,235 @@
+# The check suites from docs/building.md ("Checking a change"), on GitHub's standard runners.
+#
+# A pull request runs only the suites its changes can affect: every full run on main records which repository
+# files each suite read (.github/ci/traced.py), and the plan job compares that list with the files the pull
+# request changes (.github/ci/plan.py). A docs-only change runs nothing; a rev 2 change skips rev 1.
+# Pushes to main and manual runs always run everything.
+name: checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONUNBUFFERED: "1"
+  T: python3 .github/ci/traced.py
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_rev1: ${{ steps.plan.outputs.run_rev1 }}
+      run_rev2: ${{ steps.plan.outputs.run_rev2 }}
+      run_pointer: ${{ steps.plan.outputs.run_pointer }}
+      run_boards: ${{ steps.plan.outputs.run_boards }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/cache/restore@v4
+        with: { path: deps, key: "deps-${{ github.sha }}", restore-keys: "deps-" }
+      - run: python3 .github/ci/test_affected.py
+      - id: plan
+        run: python3 .github/ci/plan.py deps
+
+  # ---------------------------------------------------------------- Compose58 rev 1 (released: must not change)
+  rev1:
+    needs: plan
+    if: needs.plan.outputs.run_rev1 == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: build the base for comparison (in the background)
+        if: github.event_name == 'pull_request'
+        run: |
+          git worktree add -q --detach "$RUNNER_TEMP/base" ${{ github.event.pull_request.base.sha }}
+          (cd "$RUNNER_TEMP/base" && python3 -m compose build "$RUNNER_TEMP/b1" && python3 -m compose firmware "$RUNNER_TEMP/b1") \
+              > "$RUNNER_TEMP/base.log" 2>&1 &
+      - name: build, firmware, model
+        run: |
+          $T deps/rev1.txt build o1
+          $T deps/rev1.txt firmware o1
+          $T deps/rev1.txt model o1
+      - name: checks
+        run: $T deps/rev1.txt checks o1
+      - name: build outputs byte-identical to the base (STLs, BOM, keyboard.json)
+        if: github.event_name == 'pull_request'
+        run: |
+          while [ ! -f "$RUNNER_TEMP/b1/firmware/keyboard.json" ] && pgrep -f "compose (build|firmware) $RUNNER_TEMP/b1" >/dev/null; do sleep 5; done
+          tail -3 "$RUNNER_TEMP/base.log"
+          diff <(ls o1/print) <(ls "$RUNNER_TEMP/b1/print")
+          for f in o1/print/*.stl; do cmp "$f" "$RUNNER_TEMP/b1/print/$(basename "$f")"; done
+          cmp o1/bom.txt "$RUNNER_TEMP/b1/bom.txt"
+          cmp o1/firmware/keyboard.json "$RUNNER_TEMP/b1/firmware/keyboard.json"
+          echo "rev 1 outputs identical to ${{ github.event.pull_request.base.sha }}"
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-rev1, path: deps, retention-days: 7 }
+
+  # ---------------------------------------------------------------- Compose58 rev 2: case, fit checks, firmware
+  rev2:
+    needs: plan
+    if: needs.plan.outputs.run_rev2 == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env: { C58_REV: "2" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: $T deps/rev2.txt gasket-case o2
+      - run: $T deps/rev2.txt gasket-checks o2
+      - run: $T deps/rev2.txt firmware-rev2 o2
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-rev2, path: deps, retention-days: 7 }
+
+  # ---------------------------------------------------------------- rev 2 pointer modules (docs/pointer-modules.md)
+  pointer:
+    needs: plan
+    if: needs.plan.outputs.run_pointer == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: R-slot,       pointer: "pim447:R" }
+          - { name: L-slot,       pointer: "pim447:L" }
+          - { name: R-bay30,      pointer: "pim447:R:bay30" }
+          - { name: L-bay30,      pointer: "pim447:L:bay30" }
+          - { name: R-slot-J4,    pointer: "pim447:R",       port: J4 }
+          - { name: R-bay30-J4,   pointer: "pim447:R:bay30", port: J4 }
+          - { name: empty-bay30R, bay: "bay30:R" }
+    name: pointer (${{ matrix.name }})
+    env:
+      C58_REV: "2"
+      C58_POINTER: ${{ matrix.pointer }}
+      C58_POINTER_PORT: ${{ matrix.port }}
+      C58_THUMB_BAY: ${{ matrix.bay }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: $T deps/pointer.txt gasket-case o3
+      - if: matrix.pointer
+        run: $T deps/pointer.txt pointer-checks o3
+      - run: $T deps/pointer.txt gasket-checks o3
+      - uses: actions/upload-artifact@v4
+        with: { name: "deps-pointer-${{ matrix.name }}", path: deps, retention-days: 7 }
+
+  # ---------------------------------------------------------------- rev 2 boards: route, DRC, copper and circuit sims
+  controller:
+    needs: plan
+    if: needs.plan.outputs.run_boards == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env: { C58_REV: "2" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: $T deps/boards.txt controller o2
+      - run: $T deps/boards.txt sim-controller o2
+      - uses: actions/upload-artifact@v4
+        with: { name: board-controller, path: o2/pcb, retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-boards-controller, path: deps, retention-days: 7 }
+
+  spice:
+    needs: controller
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env: { C58_REV: "2" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: board-controller, path: o2/pcb }
+      - uses: ./.github/actions/setup
+      - run: $T deps/boards.txt spice-controller o2
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-boards-spice, path: deps, retention-days: 7 }
+
+  half:
+    needs: plan
+    if: needs.plan.outputs.run_boards == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180          # the RGB boards retry until DRC is clean; normally 1-12 minutes
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [half_rev2_hotswap, half_rev2_solder, half_rev2_hotswap_rgb, half_rev2_solder_rgb]
+    env: { C58_REV: "2" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}
+      - uses: actions/upload-artifact@v4
+        with: { name: "board-${{ matrix.board }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
+      - uses: actions/upload-artifact@v4
+        with: { name: "deps-boards-${{ matrix.board }}", path: deps, retention-days: 7 }
+
+  jumper:
+    needs: plan
+    if: needs.plan.outputs.run_boards == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env: { C58_REV: "2" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: $T deps/boards.txt flex-jumper o2
+      - uses: actions/upload-artifact@v4
+        with: { name: board-jumper, path: "o2/pcb/jumper_rev2*", retention-days: 7 }
+      - run: $T deps/boards.txt flex-sim o2
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-boards-jumper, path: deps, retention-days: 7 }
+
+  boards-sim:
+    needs: [controller, half, jumper]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env: { C58_REV: "2", CTRL_OUT: o2 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: "board-*", path: o2/pcb, merge-multiple: true }
+      - uses: ./.github/actions/setup
+      - run: $T deps/boards.txt sim-half-rev2 o2
+      - run: $T deps/boards.txt order-rev2 o2
+      - uses: actions/upload-artifact@v4
+        with: { name: deps-boards-sim, path: deps, retention-days: 7 }
+
+  # ---------------------------------------------------------------- one status to require, and the record for PRs
+  checks-passed:
+    needs: [plan, rev1, rev2, pointer, controller, spice, half, jumper, boards-sim]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: every suite that ran passed
+        run: |
+          echo '${{ toJSON(needs) }}' | python3 -c "
+          import json, sys
+          bad = {k: v['result'] for k, v in json.load(sys.stdin).items() if v['result'] not in ('success', 'skipped')}
+          print('failed:', bad) if bad else print('all suites that ran passed')
+          sys.exit(1 if bad else 0)"
+
+  record-deps:
+    needs: checks-passed
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: "deps-*", path: in }
+      - name: merge each suite's dependency lists
+        run: |
+          mkdir deps
+          for s in rev1 rev2 pointer boards; do cat in/deps-$s*/$s.txt | sort -u > deps/$s.txt; wc -l deps/$s.txt; done
+          echo "${{ github.sha }}" > deps/SHA
+      - uses: actions/cache/save@v4
+        with: { path: deps, key: "deps-${{ github.sha }}" }

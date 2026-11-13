@@ -1,0 +1,39 @@
+name: Compose toolchain
+description: >
+  The stack in docs/building.md on the runner itself: apt KiCad 7 and its Python 3.12, OpenJDK 21 first on
+  PATH (the image defaults to Java 17, which Freerouting 2.1.0 can't run on), Freerouting 2.1.0, ngspice,
+  requirements.txt.
+runs:
+  using: composite
+  steps:
+    - name: apt packages
+      shell: bash
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends kicad kicad-footprints kicad-symbols \
+            python3-pip python3-dev openjdk-21-jre-headless ngspice fonts-dejavu-core
+        J21=/usr/lib/jvm/java-21-openjdk-$(dpkg --print-architecture)/bin
+        echo "$J21" >> "$GITHUB_PATH"
+    - name: Freerouting cache
+      uses: actions/cache@v4
+      with:
+        path: ~/tools/freerouting.jar
+        key: freerouting-2.1.0
+    - name: Freerouting 2.1.0
+      shell: bash
+      run: |
+        mkdir -p ~/tools
+        [ -f ~/tools/freerouting.jar ] || curl -fsSL -o ~/tools/freerouting.jar \
+            https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
+        echo "FREEROUTING=$HOME/tools/freerouting.jar" >> "$GITHUB_ENV"
+    - name: pip cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements.txt') }}
+    - name: Python packages
+      shell: bash
+      run: |
+        pip3 install -q --user --break-system-packages -r requirements.txt
+        python3 -c "import pcbnew, cadquery; print('pcbnew', pcbnew.Version())"
+        java -version
