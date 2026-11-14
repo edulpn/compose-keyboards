@@ -32,9 +32,9 @@ Independent of the net names the boards were built with:
      order and a half connector 0.5 mm off along its row are caught.
   7. RGB boards: the 5 V rail's resistance, read from its copper as a resistor network (1 oz copper, as
      board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 19 to the
-     farthest fitted LED. A rail the layout pre-routes (layouts/<layout>/preroute.py) is held to RAIL_R_MAX, the
-     figure the power simulation assumes; an autorouted one is reported. Negative control: the same copper
-     read at the signal width is over the limit.
+     farthest fitted LED. A rail the layout pre-routes on that board (layouts/<layout>/preroute.py) is held to
+     RAIL_R_MAX, the figure the power simulation assumes; an autorouted one is reported. Negative control: the
+     same copper read at the signal width is over the limit.
 """
 import os
 import sys
@@ -344,14 +344,16 @@ def board_checks(h):
     worst, far, shared = h.rail()
     msg = (f"5 V rail, slots 2 + 19 to the farthest LED (chain position {far + 1}): {worst * 1e3:.0f} mohm of copper "
            f"(with every LED drawing the same, the far LED drops {shared * 1e3:.0f} mV per ampere of the half's total)")
-    if PRE.hook("half_rev2"):
+    name = next(n for n, v in H.BOARDS.items() if v == (h.variant, h.rgb))
+    laid = H.laid(name)[1]
+    if laid is not None and "+5V" in laid.nets():
         ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm, as the power simulation assumes")
         thin = h.rail(width=PR.TRACE_W)[0]
         ok(thin > RAIL_R_MAX, f"negative control: the same rail read at the signal width ({PR.TRACE_W} mm) is over the limit "
                               f"({thin * 1e3:.0f} mohm)")
     else:
         print(f"  note  {msg}; autorouted, so not held to the {RAIL_R_MAX * 1e3:.0f} mohm the power simulation assumes "
-              f"(a layout's preroute.py can lay the rail out)")
+              f"(the layout's preroute.py doesn't lay this board's rail)")
 
 
 # ---------------------------------------------------------------- the flex jumpers
