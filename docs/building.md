@@ -181,6 +181,8 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
 Routing is random, and on 4 cores an RGB half board can miss a clean route for 30 attempts in a row. So each RGB board routes in three parallel jobs of four Freerouting runs per attempt, for up to 55 minutes each, and `sim-half-rev2` takes the first that came out DRC-clean. The bar is the same as on your machine.
 
+A half board is routed only when something its routing reads has changed. Every clean route is cached with a record of what it read: the files it imported or opened, the folders it listed and the module names it looked for, plus the setup action (which pins the router), `requirements.txt` and the workflow (`.github/ci/routed.py`). When none of those has changed, KiCad is the same version and the cached board still passes DRC on the runner, that board is used instead; `sim-half-rev2` and `order-rev2` then run on it as on a fresh one. The run summary says for each board whether it was routed or reused, and why.
+
 A pull request runs only the suites its changes can reach. Each full run on `main` records the repository files every suite read: modules imported (and module names it tried to import), files opened, folders listed (`.github/ci/traced.py`). The `plan` job compares those with the files the pull request changes (`.github/ci/plan.py`) and lists the reasons in the run summary. A docs-only change runs nothing; a change to rev 2 code alone skips rev 1. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record.
 
 ## Notes for working on the code
