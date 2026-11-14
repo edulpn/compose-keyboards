@@ -30,6 +30,11 @@ Independent of the net names the boards were built with:
      ghosting.
   6. Negative controls: a cut column track, a diode fitted backwards, a jumper with its fingers in reverse
      order and a half connector 0.5 mm off along its row are caught.
+  7. RGB boards: the 5 V rail's resistance, read from its copper as a resistor network (1 oz copper, as
+     board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 19 to the
+     farthest fitted LED. A rail the layout pre-routes (layouts/<layout>/preroute.py) is held to RAIL_R_MAX, the
+     figure the power simulation assumes; an autorouted one is reported. Negative control: the same copper
+     read at the signal width is over the limit.
 """
 import os
 import sys
@@ -45,6 +50,7 @@ from compose import params as PR
 from compose import geom as G
 from compose.pcb import layout as PL
 from compose.pcb import rev2_half as H
+from compose.pcb import preroute as PRE
 from compose.sim import matrix as SP
 from compose.sim import controller_copper as CC
 from compose.pcb import jumper as J
@@ -64,6 +70,9 @@ KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socke
 #                        (-2.8, -0.7)
 MINI_E_PADSIDE = {"VDD": (1, -1), "DOUT": (1, 1), "VSS": (-1, 1), "DIN": (-1, -1)}
 MINI_E_LEAD = (2.75, 0.75)                                  # lead centres from the LED's centre (x, y), mm
+RAIL_R_MAX = 0.15                                           # ohm, a half's 5 V rail from its connector to the farthest
+                                                            #   LED: what compose/sim/controller_spice.py (E2) allows for
+                                                            #   the half's rail and its return
 
 
 def ok(cond, msg):
@@ -193,6 +202,39 @@ class Half:
         face = "B" if self.side == "L" else "F"
         return [tuple(self.at(p, layer) for p in H.cap_pads(L.keys[i], face)) for i in self.s.caps]
 
+    def rail(self, width=None):
+        """The 5 V rail as a resistor network (compose.pcb.preroute.rail_resistance): every track and via in
+        the copper group of the fitted connector's slot 2, whatever its net is called. Returns (worst resistance
+        from slots 2 + 19 to a fitted LED's 5 V pad, that LED's place in the chain, the far LED's drop per ampere
+        of total current when every LED draws the same). width: read the tracks at that width instead."""
+        face = "B" if self.side == "L" else "F"
+        ref = "J1B" if self.side == "L" else "J1F"
+        cp = sorted((p for p in self.fp[ref].Pads() if p.GetNumber() != "MP"), key=lambda p: p.GetPosition().y)
+        xy = lambda p: (ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
+        vdd = self.slots()[2]
+        name = {F: "F", B: "B"}
+        items = self.cu.items
+        k = next(i for i, it in enumerate(items) if it[2] in ("via", "track"))       # Copper lists pads, then tracks
+        segs, vias = [], []
+        for t in self.b.GetTracks():
+            if t.GetClass() == "PCB_VIA":
+                assert items[k][2] == "via"
+                if self.cu.find(k) == vdd:
+                    vias.append(xy(t))
+                k += 2
+            else:
+                assert items[k][2] == "track"
+                if self.cu.find(k) == vdd:
+                    a, c = t.GetStart(), t.GetEnd()
+                    segs.append(((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
+                k += 1
+        pads = [(s, name[lay]) for i, (s, lay, lab) in enumerate(items)
+                if lab not in ("via", "track", "zone") and self.cu.find(i) == vdd]
+        loads = [(K(H.led_pads(L.keys[i], face)["1"].centroid.coords[0]), face) for i in self.s.led_order]
+        worst, far, _, shared = PRE.rail_resistance(segs, vias, pads, [(xy(cp[1]), face), (xy(cp[18]), face)], loads,
+                                                    PR.VIA_D, PR.VIA_DRILL, board_t=PR.PCB_T, width=width)
+        return worst, far, shared
+
 
 def joined_slots(sl, rgb):
     """Connector slots that share copper and shouldn't: GND 1/4/20 and 5 V 2/19 may, and on a board without LEDs
@@ -299,6 +341,17 @@ def board_checks(h):
     ok(not all(set(c_) == {vdd, gnd} for c_ in h.caps(other)),
        "negative control: the capacitors' pads read on the other face aren't across 5 V / GND")
     ok(bool(joined_slots({**sl, 18: sl[3]}, True)), "negative control: slot 3 joined to slot 18 on a board with LEDs is caught")
+    worst, far, shared = h.rail()
+    msg = (f"5 V rail, slots 2 + 19 to the farthest LED (chain position {far + 1}): {worst * 1e3:.0f} mohm of copper "
+           f"(with every LED drawing the same, the far LED drops {shared * 1e3:.0f} mV per ampere of the half's total)")
+    if PRE.hook("half_rev2"):
+        ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm, as the power simulation assumes")
+        thin = h.rail(width=PR.TRACE_W)[0]
+        ok(thin > RAIL_R_MAX, f"negative control: the same rail read at the signal width ({PR.TRACE_W} mm) is over the limit "
+                              f"({thin * 1e3:.0f} mohm)")
+    else:
+        print(f"  note  {msg}; autorouted, so not held to the {RAIL_R_MAX * 1e3:.0f} mohm the power simulation assumes "
+              f"(a layout's preroute.py can lay the rail out)")
 
 
 # ---------------------------------------------------------------- the flex jumpers
