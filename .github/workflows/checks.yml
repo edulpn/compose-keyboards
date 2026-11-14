@@ -4,6 +4,10 @@
 # files each suite read (.github/ci/traced.py), and the plan job compares that list with the files the pull
 # request changes (.github/ci/plan.py). A docs-only change runs nothing; a rev 2 change skips rev 1.
 # Pushes to main and manual runs always run everything.
+#
+# A rev 2 half board is routed only when something its routing reads has changed since it was last routed
+# clean (.github/ci/routed.py); otherwise that board is taken from the cache and goes through DRC, the copper
+# simulation and the order check like a fresh one.
 name: checks
 on:
   pull_request:
@@ -35,6 +39,7 @@ jobs:
       - uses: actions/cache/restore@v4
         with: { path: deps, key: "deps-${{ github.sha }}", restore-keys: "deps-" }
       - run: python3 .github/ci/test_affected.py
+      - run: python3 .github/ci/test_routed.py
       - id: plan
         run: python3 .github/ci/plan.py deps
 
@@ -143,21 +148,67 @@ jobs:
           - { board: half_rev2_solder_rgb,  shard: 2, shards: 3 }
           - { board: half_rev2_solder_rgb,  shard: 3, shards: 3 }
     name: half (${{ matrix.board }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
-    env: { C58_REV: "2" }
+    env: { C58_REV: "2", BOARD: "${{ matrix.board }}" }
     steps:
       - uses: actions/checkout@v4
+      # The board as an earlier run routed it (this branch's newest, else main's), with the record of everything
+      # that route read. It stands in for a fresh route only if none of that has changed (.github/ci/routed.py),
+      # KiCad is the same version and the board still passes DRC here. Otherwise the board is routed as before.
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            o2/pcb/${{ matrix.board }}*
+            o2/routed
+          key: routed-${{ matrix.board }}-newest          # nothing is saved under this name: the newest below is taken
+          restore-keys: routed-${{ matrix.board }}-
+      - id: cached
+        run: python3 .github/ci/routed.py verify o2/routed/$BOARD.json board=$BOARD quiet=1
       - uses: ./.github/actions/setup
-      - id: route
+      - id: reuse
+        if: steps.cached.outputs.reuse == 'true'
         run: |
+          python3 .github/ci/routed.py verify o2/routed/$BOARD.json board=$BOARD deps=deps/boards.txt \
+              kicad="$(python3 -c 'import pcbnew; print(pcbnew.Version())')" | tee verdict.txt
+          grep -q ": reused" verdict.txt || exit 0
+          python3 - <<'EOF'
+          import os, sys
+          sys.argv = ["drc", "o2"]
+          import pcbnew
+          from compose.pcb import kicad as PK
+          name = os.environ["BOARD"]
+          err, warn, unc, rep = PK.drc(pcbnew.LoadBoard(os.path.join(PK.PCB_OUT, name + ".kicad_pcb")), name)
+          print(f"{name}, reused: DRC {err} errors, {warn} warnings, {unc} unconnected")
+          if err == 0 and unc == 0:
+              open(os.environ["GITHUB_OUTPUT"], "a").write("clean=true\n")
+          else:
+              open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(f"**{name}**: the reused board fails DRC here ({err} errors, {unc} unconnected): routing it again\n")
+          EOF
+      - id: route
+        if: steps.reuse.outputs.clean != 'true'
+        run: |
+          rm -rf o2 deps
           if [ "${{ matrix.shards }}" = 1 ]; then
-            $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}
+            $T deps/boards.txt half-rev2 o2 $BOARD
             echo "routed=true" >> "$GITHUB_OUTPUT"
-          elif ROUTER_JOBS=4 timeout --signal=INT 55m $T deps/boards.txt half-rev2 o2 ${{ matrix.board }}; then
+          elif ROUTER_JOBS=4 timeout --signal=INT 55m $T deps/boards.txt half-rev2 o2 $BOARD; then
             echo "routed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::${{ matrix.board }} shard ${{ matrix.shard }}: no clean route in 55 minutes; boards-sim takes another shard's"
+            echo "::notice::$BOARD shard ${{ matrix.shard }}: no clean route in 55 minutes; boards-sim takes another shard's"
           fi
-      - if: steps.route.outputs.routed == 'true'
+      - id: record
+        if: steps.route.outputs.routed == 'true'
+        run: |
+          python3 .github/ci/routed.py record deps/boards.txt o2/routed/$BOARD.json \
+              commit=${{ github.event.pull_request.head.sha || github.sha }} run=${{ github.run_id }} \
+              kicad="$(python3 -c 'import pcbnew; print(pcbnew.Version())')"
+      - if: steps.record.outputs.key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            o2/pcb/${{ matrix.board }}*
+            o2/routed
+          key: routed-${{ matrix.board }}-${{ steps.record.outputs.key }}
+      - if: steps.route.outputs.routed == 'true' || steps.reuse.outputs.clean == 'true'
         uses: actions/upload-artifact@v4
         with: { name: "board-${{ matrix.board }}-s${{ matrix.shard }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
       - if: always()
