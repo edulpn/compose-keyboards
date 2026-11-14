@@ -88,6 +88,7 @@ python3 -m compose spice-controller out # ngspice simulation
 # Compose58 rev 2 (layouts/lily58/rev2.md): set C58_REV=2
 C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
 C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
+C58_REV=2 python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
 C58_REV=2 python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
 C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
 C58_REV=2 python3 -m compose flex-sim out_r2t        # the jumper as an elastic strip: seated, insertion, gasket travel, length
@@ -108,7 +109,18 @@ How `route()` in `compose/pcb/kicad.py` drives Freerouting:
 - A job is dropped when it stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with. Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one; on the RGB boards that happens in most runs.
 - Attempts retry until DRC is clean. The router's output is kept as `<outdir>/pcb/<board>_freerouting.log`.
 - On a 2-core machine, set `ROUTER_JOBS=1` and expect the RGB boards to need many attempts.
-- **Stay on Freerouting 2.1.0.** 2.5.0 has no restore problem and routes much faster, but it is deterministic and can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included.
+- **Stay on Freerouting 2.1.0.** 2.5.0 was tried again in CI (November 2026) and can't finish the hotswap RGB board. What it does do:
+  - It needs Java 25, and its fan-out stage has to be off (`--router.fanout.enabled=false`): left on, it lays 0.19 mm tracks at the connector pads, under the 0.2 mm minimum.
+  - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s, and gives the same board on every run.
+  - On the hotswap RGB board it stops with 5 connections open (ROW2 and the RGB data return) after each of 30 attempts.
+
+**Pre-routed nets.** Autorouting everything is the default, and a new layout needs nothing more. A layout can also lay chosen nets out itself before the router runs, in `layouts/<name>/preroute.py` (the mechanism is `compose/pcb/preroute.py`):
+
+- The rev 2 half boards call the layout's `half_rev2(field, plan)`. `field` holds the board's pads with their nets, its holes, keep-outs and outline, built from the plan; the function adds tracks and vias to it. `field.route()` joins two points with a track that steps round whatever is in the way, and gives the same copper every time.
+- The copper is checked before routing, against the plan and then against the KiCad board's own pads: clearance to other nets, holes, edges and keep-outs, no loose ends, each net in one piece on all its pads. A broken rule stops the build there. `half-rev2 --preroute` runs the plan-level check without KiCad and draws the copper.
+- A pre-routed net leaves the router's job: the Specctra file carries its tracks as keep-outs and its vias as fixed vias, the same way the RGB boards' GND fan-out goes in. DRC and the simulations then see it like any other copper.
+- With no `preroute.py`, or with `C58_PREROUTE=0`, the boards are built and routed exactly as without the mechanism.
+- Compose58 pre-routes two nets ([`layouts/lily58/preroute.py`](../layouts/lily58/preroute.py)): ROW4, the thumb row, on all four boards, and the 5 V rail on the solder RGB board. The hotswap RGB board's rail stays with the router: with the rail laid that board didn't route. With Freerouting 2.1.0 this hasn't made the RGB boards quicker or steadier to route: over five CI jobs each, the hotswap RGB board took 1 to 9 attempts (4 to 47 minutes) and the solder RGB board 1 to 3 (4 to 18 minutes), about as before. What it gives is a 5 V rail of known resistance on the solder RGB board, and three of the four boards that Freerouting 2.5.0 can now route.
 
 **Board previews** (realistic renders from a board's Gerbers, needs Node):
 
@@ -128,14 +140,15 @@ compose/            the platform (Python package)
   geom.py, layout.py  frames and transforms; the Layout/Key types
   case/               sandwich.py (rev 1 case), gasket.py (rev 2 case), build, coupons, tilt risers
   pcb/                rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py),
-                      the rev 2 flex jumper (jumper.py), board art
+                      the rev 2 flex jumper (jumper.py), board art, nets laid out before the router (preroute.py)
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
   checks/             fit, assembly, gasket and printability checks; the flex jumper as an elastic strip (flex_sim.py)
   sim/                copper-level and ngspice simulations
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
   order_rev2.py       the rev 2 order folder (out_order/)
-layouts/<name>/     one folder per layout: its key list and hardware positions
+layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); optionally the nets it
+                    routes itself (preroute.py)
 docs/               platform docs (this wiki), images
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
 ```
@@ -156,6 +169,8 @@ docs/               platform docs (this wiki), images
   - a bridge that's too long for the inner edge;
   - screws too close to the edge.
 
+- **Routing is automatic.** A new layout's boards are placed and autorouted with no routing code of its own. `layouts/<name>/preroute.py` is optional: nets worth laying out by hand (a power rail whose resistance should be a design value, a net the router struggles with), see [Routing](#routing).
+
 After a change, re-run the build, then the checks. The checks are what tell you the change still fits and prints.
 
 ## Checking a change
@@ -173,7 +188,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards; `flex-sim` passes. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
+- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance from the copper); `flex-sim` passes. After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
 
 ## Continuous integration
 

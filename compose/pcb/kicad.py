@@ -575,8 +575,8 @@ def route(board, name, passes=40):
     netout = next(_find(routes, "network_out"))
     n_tracks = n_vias = 0
     for nn in _find(netout, "net"):
-        if nn[1] == "GNDFIX":                       # fixed GND fanout (rev 2 RGB boards): already on the board
-            continue
+        if nn[1] in ("GNDFIX", "PREROUTED"):        # fixed copper (rev 2: the GND fanout, pre-routed nets): already
+            continue                                #   on the board
         ni = nets[nn[1]]
         for w in _find(nn, "wire"):
             for pth in _find(w, "path"):
@@ -629,10 +629,13 @@ def remove_dangling(board):
     fewer than two tracks. Returns the number of vias removed."""
     removed_v = 0
     # boards poured with GND after routing (rev 2 RGB): their GND copper is pre-placed fanout, joined by the pour
-    poured = board.GetNetsByName()["GND"].GetNetCode() if getattr(board, "kb2_gnd_pour", False) else None
+    # ... and nets laid out before routing (compose.pcb.preroute) were checked as laid: none of it is the router's
+    fixed = {board.GetNetsByName()[n].GetNetCode() for n in getattr(board, "kb2_prerouted", ())}
+    if getattr(board, "kb2_gnd_pour", False):
+        fixed.add(board.GetNetsByName()["GND"].GetNetCode())
     while True:
-        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA" and t.GetNetCode() != poured]
-        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and t.GetNetCode() != poured]
+        tracks = [t for t in board.GetTracks() if t.GetClass() != "PCB_VIA" and t.GetNetCode() not in fixed]
+        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and t.GetNetCode() not in fixed]
         pads = [p for fp in board.GetFootprints() for p in fp.Pads()]
         by_net, seg = {}, {}
         for i, t in enumerate(tracks):

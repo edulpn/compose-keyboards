@@ -3,6 +3,8 @@ Rev 2 half boards (controller rev 2 standard):  C58_REV=2 python3 -m compose hal
 
   half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 18)
   half_rev2_hotswap_rgb / half_rev2_solder_rgb   an SK6812 MINI-E under every switch, chained, 100 nF per 3 LEDs
+  --plan       the placement drawing only          --preroute   the layout's pre-routed copper laid, checked against
+                                                                the plan and drawn (neither needs KiCad)
 
 One reversible board serves both halves, as on rev 1: the left half has its switches on F and everything else
 on B; the right half is the same board flipped (switches on B, the rest on F). So every one-sided part has a
@@ -32,6 +34,7 @@ from compose import params as PR
 from compose import geom as G
 from compose import layout as layouts
 from compose.pcb import layout as PL
+from compose.pcb import preroute as PRE
 from compose.controller import rev2_std as CS
 
 L = G.LAYOUT
@@ -412,10 +415,84 @@ def slot_of_pad_xy(s):
     return {s.ffc.pads[i]: k + 1 for k, i in enumerate(order)}
 
 
+def slot_net(sl, rgb):
+    """The net on connector slot sl of a board with or without LEDs (None: nothing)."""
+    nm = SLOT_NET[sl]
+    if nm in ("COL6", "ROW5"):
+        return None                                               # the matrix's spare line: unused here
+    if not rgb and nm in ("RGB_IN", "RGB_OUT"):
+        return "RGB_PASS"                                         # no LEDs: data straight back
+    if not rgb and nm in ("+5V", "GND"):
+        return None
+    return nm
+
+
+FFC_PAD = (1.0, 0.4)                 # contact pad: across the row x along it (library footprint)
+FFC_MP = (2.7, 12.3, 1.3, 2.0)       # mounting pads: toward the cable side / along the row from the row's centre, size
+DIODE_PAD = 1.6                      # DO-35 pads: the cathode's square, the anode's round
+CAP_PAD = (1.8, 1.15)                # 1206 pad: across the part x along it
+
+
+def field(s, keepouts=()):
+    """The board's fixed copper-level geometry from the plan, for pre-routing (compose.pcb.preroute.Field,
+    plate-local coordinates): every pad on each face with the net build() gives it, the unplated holes, the
+    outline with the LED cutouts, and `keepouts` (the board art's). No KiCad needed: build() checks the copper
+    laid against this once more against the KiCad board's own pads."""
+    f = PRE.Field(s.outline.difference(unary_union(s.ledcut)) if s.rgb else s.outline)
+    rect = lambda k, c, w, h: Polygon([fp2local(k, c[0] + dx * w / 2, c[1] + dy * h / 2)
+                                       for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+    for ks in s.keys:
+        k, col, dn = ks.k, f"COL{ks.col}", f"D{ks.i + 1}"
+        if s.variant == "hotswap":
+            (c2, s2), (c1, s1) = PR.HS_PAD2, PR.HS_PAD1
+            f.pad("B", rect(k, c2, *s2), col, f"{ks.ref}.2")
+            f.pad("B", rect(k, c1, *s1), dn, f"{ks.ref}.1")
+            f.pad("F", rect(k, PL.mirror_fp(c2), *s2), col, f"{ks.ref}.2")
+            f.pad("F", rect(k, PL.mirror_fp(c1), *s1), dn, f"{ks.ref}.1")
+        else:
+            for p, n, num in ((PR.MX_PIN1, dn, 1), (PL.mirror_fp(PR.MX_PIN1), dn, 1),
+                              (PR.MX_PIN2, col, 2), (PL.mirror_fp(PR.MX_PIN2), col, 2)):
+                f.pad("FB", Point(fp2local(k, *p)).buffer(PR.MX_PTH_PAD / 2), n, f"{ks.ref}.{num}")
+        for h in PL.key_holes(k, s.variant)[:5 if s.variant == "hotswap" else 3]:    # centre, pegs, socket slots
+            f.hole(h)
+        c, a = np.array(ks.cathode), np.array(ks.anode)
+        u = (a - c) / np.linalg.norm(a - c)
+        n = np.array([-u[1], u[0]])
+        r = DIODE_PAD / 2
+        f.pad("FB", Polygon([tuple(c + u * i * r + n * j * r) for i, j in ((-1, -1), (1, -1), (1, 1), (-1, 1))]),
+              f"ROW{ks.row}", f"{ks.dref}.1")
+        f.pad("FB", Point(ks.anode).buffer(r), dn, f"{ks.dref}.2")
+    n_led = len(s.led_order)
+    for face, tag in (("B", "LB"), ("F", "LF")):
+        for j, i in enumerate(s.led_order):
+            nets = {"1": "+5V", "2": "RGB_OUT" if j == n_led - 1 else f"{tag}_{j + 1}", "3": "GND",
+                    "4": "RGB_IN" if j == 0 else f"{tag}_{j}"}
+            for pin, poly in led_pads(L.keys[i], face).items():
+                f.pad(face, poly, nets[pin], f"{tag}{j + 1}.{pin}")
+        for m, i in enumerate(s.caps):
+            x0 = CAP_AT[0] * (-1 if face == "F" else 1)
+            for num, net, dy in (("1", "+5V", -1.475), ("2", "GND", 1.475)):
+                f.pad(face, rect(L.keys[i], (x0, CAP_AT[1] + dy), *CAP_PAD), net, f"C{m + 1}{face}.{num}")
+    u, n = np.array(s.ffc.u), np.array(s.ffc.n)
+    quad = lambda c, a, b: Polygon([tuple(np.array(c) + n * i * a / 2 + u * j * b / 2) for i, j in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+    slot = slot_of_pad_xy(s)
+    for face in ("B", "F"):
+        for p in s.ffc.pads:
+            f.pad(face, quad(p, *FFC_PAD), slot_net(slot[p], s.rgb), f"J1{face}.slot{slot[p]}")
+        for sg in (-1, 1):
+            f.pad(face, quad(np.array(s.ffc.c) + n * FFC_MP[0] + u * sg * FFC_MP[1], *FFC_MP[2:]), None, f"J1{face}.MP")
+    for x, y in s.posts:
+        f.hole(Point(x, y).buffer(PR.M2_CLEAR / 2))
+    for k_ in keepouts:
+        f.keepout(k_)
+    return f
+
+
 # ---------------------------------------------------------------- KiCad
 POWER_NETS = ("+5V", "GND")
 POWER_W = PR.TRACE_W         # power at the signal width: brightness is capped at 32/255, so a half draws ~0.13 A,
-                             #   and 0.4 mm power tracks to 116 pads per rail left the router stuck
+                             #   and 0.4 mm power tracks to 116 pads per rail left the router stuck. That is the
+                             #   autorouted rail: a layout can lay +5V out itself, wider (compose.pcb.preroute)
 
 
 def _pc():
@@ -564,14 +641,7 @@ def build(name):
             xy = (pcbnew.ToMM(p.GetPosition().x) - PK.OX, PK.OY - pcbnew.ToMM(p.GetPosition().y))
             k_ = [q for q in slot if math.dist(q, xy) < 1e-3]
             assert k_, f"FFC pad {p.GetNumber()} off the planned row"
-            sl = slot[k_[0]]
-            nm = SLOT_NET[sl]
-            if nm in ("COL6", "ROW5"):
-                nm = None                                             # the matrix's spare line: unused here
-            elif not rgb and nm in ("RGB_IN", "RGB_OUT"):
-                nm = "RGB_PASS"                                       # no LEDs: data straight back
-            elif not rgb and nm in ("+5V", "GND"):
-                nm = None
+            nm = slot_net(slot[k_[0]], rgb)
             if nm:
                 p.SetNet(net(nm))
         # the library footprint's body outline runs to the cable side, which may stand proud of the board edge:
@@ -604,6 +674,17 @@ def build(name):
         PK.text(b, "1", K(tuple(float(t) for t in p1 + u * 1.3 - n * 1.6)), lay, 1.0, mirror=mir)
         pl = np.array(s.ffc.pads[-1])                            # past the body's front end, mid-depth
         PK.text(b, nm, K(tuple(float(t) for t in pl - u * 5.0 + n * 2.4)), lay, 1.0, mirror=mir, angle=90)
+    # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
+    pre = PRE.hook("half_rev2")
+    if pre:
+        f = field(s, [art.keepout])
+        pre(f, s)
+        probs = f.problems()                                     # against the plan, then against the KiCad board's own pads
+        if probs:
+            raise RuntimeError(f"{name}: pre-routed copper breaks the board's rules:\n  " + "\n  ".join(probs[:40]))
+        nt, nv = PRE.place(b, f, PK.K)
+        PRE.check_board(b)
+        print(f"  pre-routed {', '.join(f.nets())}: {nt} track segments, {nv} vias")
     if rgb:
         _clear_switch_silk(b)
         gnd_fanout(b)
@@ -633,7 +714,8 @@ def gnd_fanout(b):
     """Before routing (RGB boards): every SMD GND pad gets its own via on a short stub, so it reaches the GND
     pours on both faces whatever the router does around it. Without this, the pour couldn't reach ~30 pads
     (mostly LED GND pads boxed in by the tracks round the LED cutouts). Each via takes the closest spot
-    clear of every other pad, hole, art, edge and via; the stub runs on the pad's own face."""
+    clear of every other pad, hole, art, edge and via, and of any copper already laid (pre-routed nets); the
+    stub runs on the pad's own face."""
     pcbnew, PK = _pc()
     from shapely.geometry import Point as P_, LineString as LS_, Polygon as Pg_
     from shapely.ops import unary_union as uu
@@ -682,6 +764,14 @@ def gnd_fanout(b):
                 ka = Pg_([(ToMM(ln.CPoint(j).x), ToMM(ln.CPoint(j).y)) for j in range(ln.PointCount())]).buffer(0)
                 for f in obst:
                     obst[f].append((ka.buffer(0.05), False))
+    for t in b.GetTracks():                                      # copper already on the board (pre-routed nets)
+        if t.GetClass() == "PCB_VIA":
+            q = t.GetPosition()
+            sh = P_(ToMM(q.x), ToMM(q.y)).buffer(ToMM(t.GetWidth()) / 2)
+            obst["F"].append((sh, False)); obst["B"].append((sh, False))
+        elif t.GetLayer() in lay_of:
+            a, c = t.GetStart(), t.GetEnd()
+            obst[lay_of[t.GetLayer()]].append((LS_([(ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y))]).buffer(ToMM(t.GetWidth()) / 2), False))
     ol, ox, oy = b.kb2_outline                                   # plate-local, LED cutouts already holes
     inner = Pg_([PK.K(p, ox, oy) for p in ol.exterior.coords], [[PK.K(p, ox, oy) for p in r.coords] for r in ol.interiors])
     via_inner = inner.buffer(-(PR.CLEARANCE + 0.25 + PR.CLEARANCE + 0.05))   # the router sees the edges and LED
@@ -866,6 +956,10 @@ def _export_dsn_power(board, path):
         k = min(x for x in (t.find("\n    (keepout", st), t.find("\n    (via ", st)) if x > 0) + 1
         t = t[:k] + "".join(keep) + t[k:]
         open(path, "w").write(t)
+    pre = getattr(board, "kb2_prerouted", ())                # nets the layout laid itself: not the router's job either
+    if pre:
+        t = PRE.dsn_fix(t, pre, *PRE.board_copper(board))
+        open(path, "w").write(t)
     m = re.search(r"\(class kicad_default ([^(]*)", t)
     if m and "(class Power" in t:
         names = m.group(1).split()
@@ -891,6 +985,95 @@ def main(which=None):
         PK.JOB_TIMEOUT_MIN = 45 if rgb else 8                     # ceiling; stalls are stopped much sooner
         res[nm] = PK.make(nm, lambda nm=nm: build(nm), passes=100 if rgb else 60, attempts=30 if rgb else 10)
     return res
+
+
+# ---------------------------------------------------------------- pre-routed copper, without KiCad
+def laid(name):
+    """(plan, Field) of one board with the layout's pre-routed copper laid against the plan, or (plan, None) if
+    the layout has none. The same call build() makes, so this is the copper the board gets."""
+    variant, rgb = BOARDS[name]
+    s = plan(variant, rgb)
+    pre = PRE.hook("half_rev2")
+    if not pre:
+        return s, None
+    from compose.pcb import art as pcb_art
+    PR.REVISION = "rev 2"
+    f = field(s, [pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else "")).keepout])
+    pre(f, s)
+    return s, f
+
+
+def rail_points(s, face):
+    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 2 and 19, every LED's
+    5 V pad. Plate-local points for Field.resistance."""
+    slot = {v: k for k, v in slot_of_pad_xy(s).items()}
+    return ([(slot[2], face), (slot[19], face)],
+            [(led_pads(L.keys[i], face)["1"].centroid.coords[0], face) for i in s.led_order])
+
+
+def preroute_report(out, which=None):
+    """half-rev2 OUT --preroute: every board's pre-routed copper laid and checked against the plan, and drawn
+    (OUT/pcb/<board>_preroute.png). Returns the number of rules broken."""
+    import copy
+    bad = 0
+    for name in BOARDS:
+        if which and name not in which:
+            continue
+        s, f = laid(name)
+        if f is None:
+            print(f"{name}: the layout pre-routes nothing (no layouts/{PR.LAYOUT}/preroute.py, or C58_PREROUTE=0)")
+            continue
+        probs = f.problems()
+        bad += len(probs)
+        print(f"{name}: {', '.join(f.nets())} pre-routed, {len(f.segments())} track segments, {len(f.vias)} vias | "
+              f"closest to another net's pad {f.worst['pad']:.2f} mm, to an unplated hole {f.worst['hole']:.2f}, "
+              f"to the edge {f.worst['edge']:.2f} | {len(probs)} rules broken")
+        for p_ in probs[:20]:
+            print("   ", p_)
+        g = copy.copy(f)                                         # negative control: the same copper 0.3 mm off
+        g.tracks = [(n, fc, (a[0] + 0.3, a[1] + 0.3), (b[0] + 0.3, b[1] + 0.3), w) for n, fc, a, b, w in f.tracks]
+        g.vias = [(n, (p_[0] + 0.3, p_[1] + 0.3)) for n, p_ in f.vias]
+        caught = len(g.problems())
+        bad += not caught
+        print(f"    negative control: the same copper moved 0.3 mm breaks {caught} rules" + ("" if caught else ": NOT CAUGHT"))
+        if "+5V" in f.nets():
+            for face, half in (("B", PR.HALF_NAMES[0]), ("F", PR.HALF_NAMES[1])):
+                feeds, loads = rail_points(s, face)
+                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 2 + 19 to the "
+                      f"farthest LED ({f.resistance('+5V', feeds, loads, width=PR.TRACE_W) * 1e3:.0f} at the signal width)")
+        draw_laid(f, os.path.join(out, "pcb", f"{name}_preroute.png"))
+    return bad
+
+
+def draw_laid(f, path):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(16, 12))
+
+    def P(g, **kw):
+        for p in getattr(g, "geoms", [g]):
+            if p.is_empty or p.geom_type != "Polygon":
+                continue
+            ax.fill(*p.exterior.xy, **kw)
+            for r in p.interiors:
+                ax.fill(*r.xy, fc="white", ec="k", lw=0.4)
+    P(f.outline, fc="#e8efe8", ec="k", lw=0.6)
+    for h in f.holes:
+        P(h, fc="#222")
+    for k in f.keepouts:
+        P(k, fc="#bbb", alpha=0.6)
+    mine = set(f.nets())
+    for sh, faces, net, _ in f.pads:
+        P(sh, fc={"F": "#d33", "B": "#36c"}.get(faces, "#a3a"), alpha=0.85 if net in mine else 0.3)
+    for _, face, a, b, w in f.tracks:
+        P(LineString([a, b]).buffer(w / 2), fc="#f80" if face == "F" else "#08f", alpha=0.8)
+    for _, p in f.vias:
+        P(Point(p).buffer(f.via_d / 2), fc="#0a0", ec="k", lw=0.3)
+    ax.set_aspect("equal")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------- debug drawing
@@ -947,5 +1130,7 @@ if __name__ == "__main__":
         print("diodes in one common spot:", s.diode_common, "| ffc shift/back", s.ffc.shift, s.ffc.back,
               "| posts", [tuple(round(v, 1) for v in p) for p in s.posts], "| caps", len(s.caps))
         _M.draw(s, os.path.join(out, "pcb", "half_rev2_plan.png"))
+    elif "--preroute" in sys.argv:
+        sys.exit(1 if _M.preroute_report(sys.argv[1] if len(sys.argv) > 1 else "out_r2t", args or None) else 0)
     else:
         _M.main(args or None)
