@@ -109,7 +109,10 @@ How `route()` in `compose/pcb/kicad.py` drives Freerouting:
 - A job is dropped when it stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with. Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one; on the RGB boards that happens in most runs.
 - Attempts retry until DRC is clean. The router's output is kept as `<outdir>/pcb/<board>_freerouting.log`.
 - On a 2-core machine, set `ROUTER_JOBS=1` and expect the RGB boards to need many attempts.
-- **Stay on Freerouting 2.1.0.** 2.5.0 has no restore problem and routes much faster, but it is deterministic and can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included.
+- **Stay on Freerouting 2.1.0.** 2.5.0 was tried again in CI (November 2026) and can't finish the hotswap RGB board. What it does do:
+  - It needs Java 25, and its fan-out stage has to be off (`--router.fanout.enabled=false`): left on, it lays 0.19 mm tracks at the connector pads, under the 0.2 mm minimum.
+  - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s, and gives the same board on every run.
+  - On the hotswap RGB board it stops with 5 connections open (ROW2 and the RGB data return) after each of 30 attempts.
 
 **Pre-routed nets.** Autorouting everything is the default, and a new layout needs nothing more. A layout can also lay chosen nets out itself before the router runs, in `layouts/<name>/preroute.py` (the mechanism is `compose/pcb/preroute.py`):
 
@@ -117,7 +120,7 @@ How `route()` in `compose/pcb/kicad.py` drives Freerouting:
 - The copper is checked before routing, against the plan and then against the KiCad board's own pads: clearance to other nets, holes, edges and keep-outs, no loose ends, each net in one piece on all its pads. A broken rule stops the build there. `half-rev2 --preroute` runs the plan-level check without KiCad and draws the copper.
 - A pre-routed net leaves the router's job: the Specctra file carries its tracks as keep-outs and its vias as fixed vias, the same way the RGB boards' GND fan-out goes in. DRC and the simulations then see it like any other copper.
 - With no `preroute.py`, or with `C58_PREROUTE=0`, the boards are built and routed exactly as without the mechanism.
-- Compose58 pre-routes two nets ([`layouts/lily58/preroute.py`](../layouts/lily58/preroute.py)): ROW4, the thumb row, on all four boards, and the RGB boards' 5 V rail.
+- Compose58 pre-routes two nets ([`layouts/lily58/preroute.py`](../layouts/lily58/preroute.py)): ROW4, the thumb row, on all four boards, and the 5 V rail on the solder RGB board. Laid out like that, every board routed in one attempt with Freerouting 2.1.0 in a CI trial of two runs each: the plain boards in 34 to 76 s, the hotswap RGB board in under 5 minutes (before: 8 to 53 minutes, and 2 of 12 jobs ran out their 55), the solder RGB board in 4 to 7. The hotswap RGB board's rail stays with the router: with the rail laid that board didn't route.
 
 **Board previews** (realistic renders from a board's Gerbers, needs Node):
 
