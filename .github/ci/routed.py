@@ -21,6 +21,7 @@ reuse=true|false to $GITHUB_OUTPUT and a line to the job summary (quiet=1: only 
 import hashlib
 import json
 import os
+import subprocess
 import sys
 
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -45,8 +46,26 @@ def fingerprint(entry, root=ROOT):
     return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
 
 
+def tracked_tops(root=ROOT):
+    """The repository's top-level names (git's, else whatever is there but out*/ and the hidden folders)."""
+    try:
+        r = subprocess.run(["git", "-C", root, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True)
+        names = set(r.stdout.split("\n")) - {""} if r.returncode == 0 else set()
+    except OSError:
+        names = set()
+    return names or {n for n in os.listdir(root) if not n.startswith((".", "out"))} | {".github"}
+
+
+def is_input(entry, tops):
+    """A recorded path that belongs to the repository. The record also holds what the command itself wrote
+    and read back (its output folder: the .dsn, the router's .ses): those are results, not inputs."""
+    path = entry[len("import:"):].replace(".", "/") if entry.startswith("import:") else entry
+    return path.split("/")[0] in tops or path.split("/")[0] + ".py" in tops
+
+
 def inputs(deps, root=ROOT):
-    return {e: fingerprint(e, root) for e in sorted(set(deps) | set(TOOLCHAIN))}
+    tops = tracked_tops(root)
+    return {e: fingerprint(e, root) for e in sorted({d for d in deps if is_input(d, tops)} | set(TOOLCHAIN))}
 
 
 def compare(manifest, extra, root=ROOT):
@@ -55,7 +74,10 @@ def compare(manifest, extra, root=ROOT):
     for k, v in sorted(extra.items()):
         if manifest.get("extra", {}).get(k) != v:
             why.append(f"{k}: {manifest.get('extra', {}).get(k)} when routed, {v} now")
+    tops = tracked_tops(root)
     for e, was in sorted(manifest.get("inputs", {}).items()):
+        if not is_input(e, tops) and e not in TOOLCHAIN:
+            continue
         now = fingerprint(e, root)
         if now != was:
             why.append(f"{e}: " + ("gone" if now == "absent" else "new" if was == "absent" else "changed"))

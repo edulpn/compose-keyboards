@@ -7,10 +7,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 import routed  # noqa: E402
 
 DEPS = ["compose/pcb/rev2_half.py", "compose/params.py", "layouts/lily58/layout.py", "layouts/",
-        "import:layouts.lily58.preroute", "import:compose.pcb.rev2_half"]
+        "import:layouts.lily58.preroute", "import:compose.pcb.rev2_half",
+        "o2/pcb/half.ses", "o2/pcb/", "out_cache/jumper_row_y.json"]         # what the command wrote and read back
 FILES = {"compose/pcb/rev2_half.py": "board", "compose/params.py": "params", "layouts/lily58/layout.py": "keys",
          "compose/sim/half_rev2.py": "sim", "docs/building.md": "docs",
-         ".github/actions/setup/action.yml": "freerouting-2.1.0", ".github/workflows/checks.yml": "jobs", "requirements.txt": "shapely"}
+         ".github/actions/setup/action.yml": "freerouting-2.1.0", ".github/workflows/checks.yml": "jobs", "requirements.txt": "shapely",
+         "o2/pcb/half.ses": "routes"}
+TOPS = {"compose", "layouts", "docs", ".github", "requirements.txt"}
 
 
 def write(root, path, text):
@@ -29,6 +32,8 @@ CASES = [
     ("a layout folder appeared in a folder it listed", lambda r: write(r, "layouts/planck/layout.py", "keys"), {}, False),
     ("a file appeared deeper, in a folder it didn't list", lambda r: write(r, "layouts/lily58/notes.txt", "x"), {}, True),
     ("a module it looked for appeared", lambda r: write(r, "layouts/lily58/preroute.py", "copper"), {}, False),
+    ("its own output differs (another run's .ses)", lambda r: write(r, "o2/pcb/half.ses", "other routes"), {}, True),
+    ("its own output is gone", lambda r: os.remove(os.path.join(r, "o2/pcb/half.ses")), {}, True),
     ("the router version changed", lambda r: write(r, ".github/actions/setup/action.yml", "freerouting-2.5.0"), {}, False),
     ("the workflow changed", lambda r: write(r, ".github/workflows/checks.yml", "jobs 2"), {}, False),
     ("requirements changed", lambda r: write(r, "requirements.txt", "shapely>=3"), {}, False),
@@ -39,6 +44,7 @@ CASES = [
 
 def main():
     bad = 0
+    routed.tracked_tops = lambda root=None: TOPS             # the temporary trees below aren't git checkouts
     for name, change, extra, want in CASES:
         with tempfile.TemporaryDirectory() as r:
             for p, text in FILES.items():
@@ -48,6 +54,13 @@ def main():
             got = not routed.compare(m, extra, r)
         bad += got != want
         print(("ok    " if got == want else "WRONG ") + f"{name}: {'reuse' if got else 'route'}")
+    with tempfile.TemporaryDirectory() as r:
+        for p, text in FILES.items():
+            write(r, p, text)
+        got = sorted(routed.inputs(DEPS, r))
+        want = sorted(set(DEPS[:6]) | set(routed.TOOLCHAIN))
+        bad += got != want
+        print(("ok    " if got == want else "WRONG ") + "the command's own outputs aren't recorded as inputs")
     with tempfile.TemporaryDirectory() as r:                 # a manifest without the toolchain can't be trusted
         got = not routed.compare({"inputs": {}, "extra": {}}, {}, r)
         bad += got
