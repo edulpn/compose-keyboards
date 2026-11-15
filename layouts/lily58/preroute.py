@@ -19,10 +19,16 @@ Optional: delete this file, or set C58_PREROUTE=0, and the autorouter routes eve
 
 Everything is placed from the plan (key frames, the connector's slots, the diodes), and every stretch between
 two such points goes through Field.route, which steps round whatever the plan put in the way.
+
+  ROUTER  the boards routed with Freerouting 2.5.0 instead of the default 2.1.0. With ROW4 laid here 2.5.0
+          finishes these three in one attempt and gives the same board on every run. The hotswap RGB board stays
+          with 2.1.0: 2.5.0 leaves 5 connections open on it.
 """
 import math
 import numpy as np
 from compose.pcb import rev2_half as H
+
+ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_solder_rgb": "2.5.0"}
 
 ROW = "ROW4"
 ROW_W = 0.25                 # signal width

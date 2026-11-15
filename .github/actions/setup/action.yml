@@ -2,10 +2,16 @@ name: Compose toolchain
 description: >
   The stack in docs/building.md on the runner itself: apt KiCad 7 and its Python 3.12, OpenJDK 21 first on
   PATH (the image defaults to Java 17, which Freerouting 2.1.0 can't run on), Freerouting 2.1.0, ngspice,
-  requirements.txt.
+  requirements.txt. Also Java 25 and Freerouting 2.5.0, for the boards a layout routes with that version:
+  compose/pcb/kicad.py finds them by JAVA_HOME_25_<arch> and beside the default jar.
 runs:
   using: composite
   steps:
+    - name: Java 25 (before the apt step, which puts Java 21 first on PATH again)
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "25"
     - name: apt packages
       shell: bash
       run: |
@@ -26,6 +32,16 @@ runs:
         [ -f ~/tools/freerouting.jar ] || curl -fsSL -o ~/tools/freerouting.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
         echo "FREEROUTING=$HOME/tools/freerouting.jar" >> "$GITHUB_ENV"
+    - name: Freerouting 2.5.0 cache
+      uses: actions/cache@v4
+      with:
+        path: ~/tools/freerouting-2.5.0.jar
+        key: freerouting-2.5.0
+    - name: Freerouting 2.5.0
+      shell: bash
+      run: |
+        [ -f ~/tools/freerouting-2.5.0.jar ] || curl -fsSL -o ~/tools/freerouting-2.5.0.jar \
+            https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
     - name: pip cache
       uses: actions/cache@v4
       with:

@@ -37,6 +37,14 @@ OX, OY = 40.0, 60.0            # half board: plate-local (x, y) -> KiCad (x + OX
 JOB_TIMEOUT_MIN = 8            # Freerouting job limit per attempt (minutes)
 STALL_PASSES = 40              # stop the router when its best unrouted count hasn't improved for this many passes
 ROUTER_JOBS = int(os.environ.get("ROUTER_JOBS", max(1, (os.cpu_count() or 2) // 2)))   # parallel router runs
+ROUTER = "2.1.0"               # the Freerouting version every board is routed with unless its layout names another
+ROUTERS = {                    # the versions a board can be routed with: the Java each needs, its extra arguments,
+    #                            and how many runs go side by side (None: ROUTER_JOBS)
+    "2.1.0": dict(java=21, args=[], jobs=None),          # randomized: several runs, and attempts until one is clean
+    "2.5.0": dict(java=25, jobs=1,                       # routes the same way every time: one run says it all.
+                  args=["--router.fanout.enabled=false",          #   Its fan-out stage lays 0.19 mm tracks at the
+                        "--router.optimizer.max_threads=1"]),     #   connector pads, under the 0.2 mm minimum
+}
 
 
 def K(p, ox=OX, oy=OY):
@@ -446,32 +454,67 @@ def _router_stats(log):
         return None
 
 
-_JAVA_OK = False
+_ROUTER = {}
 
 
-def check_java():
-    """Freerouting 2.1.0 is built for Java 21 (class files version 65): an older `java` exits at once without
-    writing a .ses, which would look like a board that never routes. Fail early with the reason instead."""
-    global _JAVA_OK
-    if _JAVA_OK:
-        return
+def _java_major(exe):
+    """(major version, first line of its banner) of a `java` executable; (0, why) if it can't be run."""
     try:
-        r = subprocess.run(["java", "-version"], capture_output=True, text=True)
+        r = subprocess.run([exe, "-version"], capture_output=True, text=True)
     except OSError:
-        raise RuntimeError("Freerouting needs Java 21+, and `java` isn't on PATH")
-    m = re.search(r'version "(\d+)(?:\.(\d+))?', r.stderr + r.stdout)
+        return 0, f"`{exe}` can't be run"
+    out = (r.stderr + r.stdout).strip()
+    m = re.search(r'version "(\d+)(?:\.(\d+))?', out)
     major = int(m.group(1)) if m else 0
     major = int(m.group(2)) if major == 1 and m.group(2) else major          # "1.8" -> 8
-    if major < 21:
-        first = (r.stderr + r.stdout).strip().splitlines()[0] if (r.stderr + r.stdout).strip() else "?"
-        raise RuntimeError(f"Freerouting 2.1.0 needs Java 21+, but `java` on PATH is: {first}")
-    if not os.path.exists(FREEROUTING):
-        raise RuntimeError(f"Freerouting jar not found at {FREEROUTING}: set FREEROUTING")
-    _JAVA_OK = True
+    return major, out.splitlines()[0] if out else "?"
 
 
-def route(board, name, passes=40):
-    check_java()
+def router(version=None):
+    """(java, jar, extra arguments, runs side by side) for a Freerouting version, looked up once.
+    The default version's jar is FREEROUTING and its Java the `java` on PATH; without them nothing routes, so
+    that fails here with the reason (an older `java` exits at once without writing a .ses, which would look
+    like a board that never routes). Another version's jar is FREEROUTING_<version, dots as underscores> or
+    freerouting-<version>.jar beside the default one, and its Java is JAVA<major>, a JAVA_HOME_<major>_<arch>
+    (GitHub's runners set those) or the `java` on PATH; if either is missing this returns None, and the board
+    is routed with the default instead."""
+    version = version or ROUTER
+    if version not in _ROUTER:
+        spec = ROUTERS[version]
+        if version == ROUTER:
+            jar, javas = FREEROUTING, ["java"]
+        else:
+            jar = os.environ.get("FREEROUTING_" + version.replace(".", "_"),
+                                 os.path.join(os.path.dirname(FREEROUTING), f"freerouting-{version}.jar"))
+            javas = [os.environ.get(f"JAVA{spec['java']}")]
+            javas += [os.path.join(v, "bin", "java") for k, v in sorted(os.environ.items())
+                      if re.fullmatch(rf"JAVA_HOME_{spec['java']}_\w+", k)]
+            javas = [j for j in javas if j] + ["java"]
+        seen = [(j,) + _java_major(j) for j in javas]
+        java = next((j for j, major, _ in seen if major >= spec["java"]), None)
+        why = None
+        if java is None:
+            why = f"Freerouting {version} needs Java {spec['java']}+, but found: " + "; ".join(f"{j}: {b}" for j, _, b in seen)
+        elif not os.path.exists(jar):
+            why = f"Freerouting {version}: no jar at {jar}" + (": set FREEROUTING" if version == ROUTER else "")
+        if why and version == ROUTER:
+            raise RuntimeError(why)
+        if why:
+            print(f"  {why}. Routing with Freerouting {ROUTER} instead")
+        _ROUTER[version] = None if why else (java, jar, spec["args"], spec["jobs"])
+    return _ROUTER[version]
+
+
+def route(board, name, passes=40, default=False):
+    """Route the board with the Freerouting version its layout names for it (board.kb2_router), else, or with
+    `default`, with ROUTER."""
+    version = (not default and getattr(board, "kb2_router", None)) or ROUTER
+    if version != ROUTER and router(version) is None:
+        version = ROUTER
+    java, jar, extra, n_jobs = router(version)
+    n_jobs = n_jobs or ROUTER_JOBS
+    if version != ROUTER:
+        print(f"  {name}: routing with Freerouting {version}")
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
     poly, ox, oy = board.kb2_outline
@@ -496,17 +539,17 @@ def route(board, name, passes=40):
     fixed = len(re.findall(r"\(via [^\n]*\(type fix\)", open(dsn).read()))     # pre-placed, not in the .ses
     base = os.path.splitext(ses)[0]
     jobs = []
-    for i in range(ROUTER_JOBS):        # independent router runs side by side; the first good one wins
-        out = ses if ROUTER_JOBS == 1 else f"{base}_job{i + 1}.ses"
-        logf = (base if ROUTER_JOBS == 1 else f"{base}_job{i + 1}") + "_freerouting.log"
+    for i in range(n_jobs):             # independent router runs side by side; the first good one wins
+        out = ses if n_jobs == 1 else f"{base}_job{i + 1}.ses"
+        logf = (base if n_jobs == 1 else f"{base}_job{i + 1}") + "_freerouting.log"
         for f in (out, logf):
             if os.path.exists(f):
                 os.remove(f)
-        cmd = ["java", "-Djava.awt.headless=true", "-jar", FREEROUTING, "-de", dsn, "-do", out, "-mp", str(passes),
+        cmd = [java, "-Djava.awt.headless=true", "-jar", jar, "-de", dsn, "-do", out, "-mp", str(passes),
                "--gui.enabled=false", "--router.optimizer.max_passes=5",
                "--router.automatic_neckdown=false",       # no tracks below the 0.2 mm minimum
                f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
-               "--usage_and_diagnostic_data.disable_analytics=true"]
+               "--usage_and_diagnostic_data.disable_analytics=true"] + extra
         log = open(logf, "w")
         jobs.append(SimpleNamespace(ses=out, logf=logf, log=log, best=None, best_pass=0, done=False,
                                     proc=subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)))
@@ -720,17 +763,19 @@ def export(board_path, name, layers=None, drill=True, rename=None):
 
 
 def make(name, builder, passes=60, attempts=10):
-    """Route from a fresh board until DRC is clean (Freerouting is randomized)."""
+    """Route from a fresh board until DRC is clean (Freerouting 2.1 is randomized). A board whose layout names
+    another router gets one attempt with it: that one routes the same way every time, so the attempts after it
+    use the default."""
     for attempt in range(1, attempts + 1):
-        err, unc = _make_once(name, builder(), passes)
+        err, unc = _make_once(name, builder(), passes, default=attempt > 1)
         if err == 0 and unc == 0:
             return err, unc
         print(f"  {name}: attempt {attempt} not clean, rerouting")
     raise RuntimeError(f"{name}: no clean route after {attempts} attempts")
 
 
-def _make_once(name, board, passes):
-    r = route(board, name, passes)
+def _make_once(name, board, passes, default=False):
+    r = route(board, name, passes, default)
     if r is None:
         print(f"  {name}: router gave no result")
         return 1, 1

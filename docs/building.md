@@ -10,7 +10,7 @@ You only need this to change the design. Ready-made files for each layout's reco
 |---|---|---|---|
 | Python | 3.11+ (3.12 with apt's KiCad) | everything | packages in `requirements.txt`: CadQuery, trimesh, manifold3d, shapely, numpy, scipy, matplotlib, networkx, rtree |
 | KiCad | **7** (developed on 7.0.11) | boards | its `pcbnew` module must import in that Python. KiCad 8 and 9 removed parts of the API the generators use (see [Porting to KiCad 8/9](#porting-to-kicad-89)). |
-| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java **21+**, Freerouting **2.1.0** | routing | point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`. Not 2.5.0 (see [Routing](#routing)). Freerouting 2.1.0 is built for Java 21: with an older `java` first on PATH the routing commands stop and say so. |
+| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java **21+**, Freerouting **2.1.0** (optional: Java 25 and Freerouting 2.5.0, see [Routing](#routing)) | routing | point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`. Not 2.5.0 (see [Routing](#routing)). Freerouting 2.1.0 is built for Java 21: with an older `java` first on PATH the routing commands stop and say so. |
 | ngspice | any recent | controller simulation only | |
 | Node | 20+ | renders and board previews only | Playwright needs 20; Ubuntu 24.04's apt Node is 18. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`. |
 
@@ -109,10 +109,11 @@ How `route()` in `compose/pcb/kicad.py` drives Freerouting:
 - A job is dropped when it stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with. Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one; on the RGB boards that happens in most runs.
 - Attempts retry until DRC is clean. The router's output is kept as `<outdir>/pcb/<board>_freerouting.log`.
 - On a 2-core machine, set `ROUTER_JOBS=1` and expect the RGB boards to need many attempts.
-- **Stay on Freerouting 2.1.0.** 2.5.0 was tried again in CI (November 2026) and can't finish the hotswap RGB board. What it does do:
-  - It needs Java 25, and its fan-out stage has to be off (`--router.fanout.enabled=false`): left on, it lays 0.19 mm tracks at the connector pads, under the 0.2 mm minimum.
-  - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s, and gives the same board on every run.
-  - On the hotswap RGB board it stops with 5 connections open (ROW2 and the RGB data return) after each of 30 attempts.
+- **Freerouting 2.1.0 is the default**, and what a new layout's boards are routed with. A layout can name Freerouting 2.5.0 for a board it has made routable for it (`ROUTER = {board: "2.5.0"}` in its `preroute.py`, below). 2.5.0 gives the same board on every run, so such a board routes once, in one router run, instead of in attempts:
+  - It needs Java 25 and its own jar: `JAVA25=/path/to/java` (or a `JAVA_HOME_25_<arch>`, or a `java` 25 on PATH) and `freerouting-2.5.0.jar` beside the default jar (or `FREEROUTING_2_5_0`). Where either is missing the board is routed with 2.1.0 as before, and says so. If 2.5.0's one attempt isn't DRC-clean, the attempts after it use 2.1.0.
+  - Its fan-out stage is off (`--router.fanout.enabled=false`): left on, it lays 0.19 mm tracks at the connector pads, under the 0.2 mm minimum.
+  - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s: Compose58 routes those three with it.
+  - On the hotswap RGB board it stops with 5 connections open (ROW2 and the RGB data return), so that board stays with 2.1.0.
 
 **Pre-routed nets.** Autorouting everything is the default, and a new layout needs nothing more. A layout can also lay chosen nets out itself before the router runs, in `layouts/<name>/preroute.py` (the mechanism is `compose/pcb/preroute.py`):
 
