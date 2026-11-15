@@ -538,6 +538,7 @@ def build(name):
     if rgb:
         ol = ol.difference(unary_union(s.ledcut))
     b.kb2_outline = (ol, PK.OX, PK.OY)
+    b.kb2_router = PRE.router(name)                           # None: the default router
     PK.outline(b, ol, PK.OX, PK.OY)
     if rgb:
         b.kb2_gnd_pour = True

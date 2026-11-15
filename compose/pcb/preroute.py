@@ -4,7 +4,7 @@ Pre-routed copper: nets a layout lays out itself, by construction, before the au
 Autorouting alone is the default, and a new layout needs nothing here. A layout opts in by adding
 layouts/<name>/preroute.py with one function per board family (the rev 2 half boards call
 `half_rev2(field, plan)`); with no such file, or with C58_PREROUTE=0, the boards are built, exported and routed
-exactly as before.
+exactly as before. The same file can name another Freerouting version for a board (`ROUTER`, see router()).
 
   Field        a board's fixed geometry per copper face: pads with their nets, unplated holes, keep-out areas,
                the outline. It is what pre-routed copper has to keep clear of, by the board's own rules. The
@@ -41,20 +41,31 @@ TURN = 0.15                  # route(): what a 45-degree bend costs, as extra le
 RHO_CU = 1.72e-8             # ohm m
 
 
-def hook(name):
-    """The current layout's pre-routing function `name` (layouts/<layout>/preroute.py), or None: no such file,
-    no such function, or C58_PREROUTE=0."""
+def _layout():
+    """The current layout's routing module (layouts/<layout>/preroute.py), or None: no such file, or
+    C58_PREROUTE=0."""
     if os.environ.get("C58_PREROUTE", "1") == "0":
         return None
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
     mod = f"layouts.{PR.LAYOUT}.preroute"
     try:
-        return getattr(importlib.import_module(mod), name, None)
+        return importlib.import_module(mod)
     except ModuleNotFoundError as e:
         if e.name != mod:
             raise
         return None
+
+
+def hook(name):
+    """The current layout's pre-routing function `name`, or None: no routing module, or no such function."""
+    return getattr(_layout(), name, None)
+
+
+def router(board):
+    """The Freerouting version the current layout names for a board (ROUTER = {board name: version} in its
+    routing module), or None: the default (compose.pcb.kicad.ROUTER)."""
+    return getattr(_layout(), "ROUTER", {}).get(board)
 
 
 class Field:
