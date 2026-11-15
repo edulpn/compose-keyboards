@@ -22,6 +22,7 @@ two such points goes through Field.route, which steps round whatever the plan pu
 """
 import math
 import numpy as np
+from compose import params as PR
 from compose.pcb import rev2_half as H
 
 ROW = "ROW4"
@@ -35,13 +36,24 @@ TRUNK_FY = 2.725             # row trunk: footprint y, midway between the centre
 TRUNK_X = 6.6                # ... from -TRUNK_X to +TRUNK_X in each key, joined across the column gaps
 CAP_VIA_X = 7.3              # ... or to here on a key with capacitors, so the vias at its ends stand clear of their
                              #   pads; the one at +CAP_VIA_X also feeds the back-face capacitor
-GAP_FACE = "B"               # the face the trunk crosses the column gaps on. "B": a via at each end of every key's
-                             #   stretch, so the front copper is open in the column gaps and the back copper under
-                             #   the keys; "F": no vias in the trunk, and the front copper walled off along every row
-RAIL_ON = ("solder",)        # the RGB boards whose rail is laid here (see above for the hotswap one)
+GAP_FACE = {"solder": "B", "hotswap": "FB"}
+                             # how the trunk crosses a column gap, per switch variant.
+                             #   "B": on the back copper, through a via at each end of every key's stretch, so the
+                             #   front copper is open in the column gaps and the back copper under the keys.
+                             #   "FB": front copper as far as a via on the axis of the gap's diode, back copper from
+                             #   there to a via at the next key's stretch. On a hotswap board each gap has one way
+                             #   through for a track going up or down the board on the back copper (left of the
+                             #   gap's diode) and one on the front (right of it): the socket pads close the rest.
+                             #   "FB" crosses each of those two ways on the other face, so both stay open.
+                             #   "F": front copper all the way, no vias in the trunk.
+RAIL_ON = ("solder", "hotswap")   # the RGB boards whose rail is laid here
 SPUR_W = 0.4                 # trunk to an LED or capacitor pad; connector pad to its via (the pads are 0.4 wide)
 SPINE_OUT_W = 1.0            # the spine down the outer edge
 SPINE_IN_W = 0.8             # the spine down the inner edge
+D_W = 0.25                   # a hotswap key's D net: its two socket pads to its diode
+TOP_FY = -7.2                # ... over the top of the switch: footprint y, clear of the socket's slots
+D_SIDE_X, D_DOWN_X, D_OUT_X = 6.6, 4.1, 6.9   # ... a diode in the row gap: down the side of the switch outside its peg
+                             #   hole, then between the LED's pads and the capacitor's, or outside the capacitor
 LANE = 1.45                  # a connector pad's via: this far from the pad's centre, on the board side of the row
 UNDER = 1.3                  # ... or under the connector, on the cable side
 
@@ -59,6 +71,8 @@ def half_rev2(f, s):
     row4(f, s, slot)
     if s.rgb and s.variant in RAIL_ON:
         rail(f, s, slot)
+    if s.rgb and s.variant == "hotswap":
+        dnets(f, s)
 
 
 def row4(f, s, slot):
@@ -97,6 +111,36 @@ def row4(f, s, slot):
             f.track(ROW, "B", [foot, at], ROW_W)
 
 
+def dnets(f, s):
+    """Every key's D net on a hotswap board: its socket pad on each face to its diode's anode, laid the way the
+    router lays it on a board it finishes. The pad beside the diode goes straight to the anode on its own face,
+    and on over the top of the switch, still on that face, to a via above the other pad. The front copper at
+    the right-hand edge of every key stays clear for the column's trunk, which the router runs there."""
+    L = lambda k, x, y: H.fp2local(k, x, y)
+    px, py = PR.HS_PAD1[0]                                        # the B pad; the F pad is at -px
+    for ks in s.keys:
+        k, net = ks.k, f"D{ks.i + 1}"
+        ax, ay = _fp(k, ks.anode)
+        upright = abs(ax) > 8.0                                   # the diode stands in the column gap on that side
+        sg = (1 if ax > 0 else -1) if upright else 1
+        near, far = ("B", "F") if sg > 0 else ("F", "B")          # the faces of the pads at +sg and -sg
+        pad = L(k, sg * px, py)
+        if upright:
+            f.route(net, near, pad, ks.anode, D_W)
+        else:                                                     # a diode lying in the row gap in front of the key:
+            side = [pad, L(k, D_SIDE_X, -3.0), L(k, D_SIDE_X, 0.0)]     # down the side of the switch, then between
+            down = [L(k, D_DOWN_X, 3.2), L(k, D_DOWN_X, ay - 1.5), ks.anode]     # the LED and the capacitor, or
+            if not f.can_track(net, near, side + down, D_W):      #   outside the capacitor where its 5 V runs between
+                down = [L(k, D_OUT_X, 1.5), L(k, D_OUT_X, ay - 1.9), ks.anode]
+            f.through(net, near, side + down, D_W)
+        via = next((v for v in (L(k, -sg * px, TOP_FY), L(k, -sg * px, TOP_FY + 0.2)) if f.can_via(net, v)), None)
+        if via is None:
+            raise RuntimeError(f"pre-route: no room for the via of {net}")
+        f.via(net, via)
+        f.track(net, far, [via, L(k, -sg * px, py)], D_W)
+        f.through(net, near, [pad, L(k, sg * px, TOP_FY), L(k, -sg * (px - 1.0), TOP_FY), via], D_W)
+
+
 def rail(f, s, slot):
     L = lambda k, x, y: H.fp2local(k, x, y)
     n = np.array(s.ffc.n)
@@ -104,8 +148,16 @@ def rail(f, s, slot):
     capx, capy = H.CAP_AT[0], H.CAP_AT[1] - 1.475                 # the capacitors' 5 V pads: +capx on B, -capx on F
     last = max((ks for ks in s.keys if ks.row == 4), key=lambda ks: ks.k.x)       # the key beside the inner column:
     cap = lambda ks: ks.i in s.caps                                               #   nothing joins its far end
-    xr = lambda ks: CAP_VIA_X if cap(ks) else px if ks is last else TRUNK_X
-    end = lambda ks, sg: L(ks.k, xr(ks) if sg > 0 else -(CAP_VIA_X if cap(ks) else TRUNK_X), TRUNK_FY)
+    rows = {r: sorted((ks for ks in s.keys if ks.row == r), key=lambda ks: ks.k.x) for r in range(5)}
+    inner = rows[4].pop()                                         # the key beside the inner column
+    thumbs = rows[4]
+    fb = GAP_FACE[s.variant] == "FB"
+    fed = {b.i for r in rows for b in rows[r][1:]} if fb else set()     # "FB": the keys reached across a gap on the
+    #   back copper, at the via of their back-face LED. Their front stretch starts there (or at the capacitor's
+    #   spur), and no stretch has a via at its end: the ways through the gaps stay as wide as the parts leave them
+    xr = lambda ks: px if ks is last else TRUNK_X if fb or not cap(ks) else CAP_VIA_X
+    xl = lambda ks: (capx if cap(ks) else px) if ks.i in fed else CAP_VIA_X if cap(ks) else TRUNK_X
+    end = lambda ks, sg: L(ks.k, xr(ks) if sg > 0 else -xl(ks), TRUNK_FY)
     vias = set()
 
     def via(p):
@@ -120,17 +172,34 @@ def rail(f, s, slot):
         f.track(RAIL, "B", [L(k, -px, TRUNK_FY), L(k, -px, py)], SPUR_W)
         if cap(ks):
             f.track(RAIL, "F", [L(k, -capx, TRUNK_FY), L(k, -capx, capy)], SPUR_W)
-            via(end(ks, 1))
-            f.track(RAIL, "B", [end(ks, 1), L(k, capx, capy)], SPUR_W)
-    rows = {r: sorted((ks for ks in s.keys if ks.row == r), key=lambda ks: ks.k.x) for r in range(5)}
-    inner = rows[4].pop()                                         # the key beside the inner column
-    thumbs = rows[4]
+            if fb:                                                # the back-face capacitor from the LED's via, under
+                f.track(RAIL, "B", [L(k, -px, TRUNK_FY), L(k, capx, TRUNK_FY), L(k, capx, capy)], SPUR_W)     # the trunk
+            else:
+                via(end(ks, 1))
+                f.track(RAIL, "B", [end(ks, 1), L(k, capx, capy)], SPUR_W)
+    def between(a, b):
+        """Where the trunk changes face between two keys of a row: on the axis of the diode standing in their
+        gap, between its pads (under its body), else midway."""
+        for ks, sg in ((a, 1), (b, -1)):
+            (cx, cy), (ax, ay) = _fp(ks.k, ks.cathode), _fp(ks.k, ks.anode)
+            if sg * cx > 8.0 and abs(cx - ax) < 0.5:              # an upright diode on that side of the key
+                lo, hi = min(cy, ay) + 1.6, max(cy, ay) - 1.6
+                return L(ks.k, cx, min(max(TRUNK_FY, lo), hi))
+        (x0, y0), (x1, y1) = end(a, 1), end(b, -1)
+        return ((x0 + x1) / 2, (y0 + y1) / 2)
     for r in range(5):                                            # along each row, across the column gaps
         for a, b in zip(rows[r][:-1], rows[r][1:]):
-            if GAP_FACE == "B":
+            face = GAP_FACE[s.variant]
+            if face == "B":
                 via(end(a, 1))
                 via(end(b, -1))
-            f.route(RAIL, GAP_FACE, end(a, 1), end(b, -1), TRUNK_W)
+            if face in ("F", "B"):
+                f.route(RAIL, face, end(a, 1), end(b, -1), TRUNK_W)
+                continue
+            mid = between(a, b)
+            via(mid)
+            f.route(RAIL, "F", end(a, 1), mid, TRUNK_W)
+            f.route(RAIL, "B", mid, L(b.k, -px, TRUNK_FY), TRUNK_W)
     # the outer edge: a spine joining the four rows' outer ends
     xo = s.outline.bounds[0] + 2.9
     tops = [end(rows[r][0], -1) for r in range(4)]

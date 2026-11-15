@@ -533,8 +533,12 @@ def board_field(board):
     for fp in board.GetFootprints():
         for p in fp.Pads():
             q = p.GetPosition()
-            if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:      # a slot as the circle round it
-                f.hole(Point(ToMM(q.x), ToMM(q.y)).buffer(max(ToMM(p.GetDrillSize().x), ToMM(p.GetDrillSize().y)) / 2))
+            if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:      # a round hole, or a slot: what its drill sweeps
+                c, dx, dy = (ToMM(q.x), ToMM(q.y)), ToMM(p.GetDrillSize().x), ToMM(p.GetDrillSize().y)
+                a, h = math.radians(p.GetOrientation().AsDegrees()), abs(dx - dy) / 2
+                ux, uy = (math.cos(a), -math.sin(a)) if dx >= dy else (math.sin(a), math.cos(a))     # the long axis
+                f.hole(LineString([(c[0] - ux * h, c[1] - uy * h), (c[0] + ux * h, c[1] + uy * h)]).buffer(min(dx, dy) / 2)
+                       if h > 1e-6 else Point(c).buffer(dx / 2))
                 continue
             on = [(c, lay) for c, lay in lays if p.IsOnLayer(lay)]
             if on:
