@@ -10,6 +10,7 @@ Gerbers + drill zipped for JLCPCB, SVG previews. Needs KiCad 7 (pcbnew) and
 java + tools/freerouting.jar.
 """
 import os
+import random
 import re
 import sys
 import json
@@ -40,8 +41,10 @@ ROUTER_JOBS = int(os.environ.get("ROUTER_JOBS", max(1, (os.cpu_count() or 2) // 
 ROUTER = "2.1.0"               # the Freerouting version every board is routed with unless its layout names another
 ROUTERS = {                    # the versions a board can be routed with: the Java each needs, its extra arguments,
     #                            and how many runs go side by side (None: ROUTER_JOBS)
-    "2.1.0": dict(java=21, args=[], jobs=None),          # randomized: several runs, and attempts until one is clean
-    "2.5.0": dict(java=25, jobs=1,                       # routes the same way every time: one run says it all.
+    #                            and whether it gives the same board every time it is put the same job (seeds)
+    "2.1.0": dict(java=21, args=[], jobs=None, seeds=False),      # randomized: several runs, and attempts until one
+    #                                                               is clean
+    "2.5.0": dict(java=25, jobs=1, seeds=True,           # routes the same way every time: one run says it all.
                   args=["--router.fanout.enabled=false",          #   Its fan-out stage lays 0.19 mm tracks at the
                         "--router.optimizer.max_threads=1"]),     #   connector pads, under the 0.2 mm minimum
 }
@@ -505,20 +508,43 @@ def router(version=None):
     return _ROUTER[version]
 
 
-def route(board, name, passes=40, default=False):
-    """Route the board with the Freerouting version its layout names for it (board.kb2_router), else, or with
-    `default`, with ROUTER."""
-    version = (not default and getattr(board, "kb2_router", None)) or ROUTER
+_ROUTED = {}                   # board name -> (version, seed) of its last route()
+
+
+def _reorder_nets(dsn, seed):
+    """List the nets of a Specctra file in another order (the same nets, the same pins)."""
+    t = open(dsn).read()
+    i = t.index("(network")
+    j = t.index("(class", i)
+    pat = r"\(net \S+\s*\(pins[^)]*\)\s*\)"
+    blocks = re.findall(pat, t[i:j])
+    random.Random(seed).shuffle(blocks)
+    it = iter(blocks)
+    open(dsn, "w").write(t[:i] + re.sub(pat, lambda m: next(it), t[i:j]) + t[j:])
+
+
+def route(board, name, passes=40, attempt=1):
+    """Route the board with the Freerouting version its layout names for it (board.kb2_router: a version, or
+    (version, seed)), else with ROUTER.
+    A version that gives the same board every time is no use asked twice, so each attempt puts the job to it
+    another way: attempt n gets seed + n - 1, and a seed other than 0 lists the nets in another order and moves
+    the routing outline in by a micrometre per seed. Neither changes the board that is asked for; both change
+    the board the router comes back with, the same way on every machine."""
+    named = getattr(board, "kb2_router", None) or ROUTER
+    version, seed = named if isinstance(named, (tuple, list)) else (named, 0)
     if version != ROUTER and router(version) is None:
         version = ROUTER
     java, jar, extra, n_jobs = router(version)
     n_jobs = n_jobs or ROUTER_JOBS
+    seed = seed + attempt - 1 if ROUTERS[version]["seeds"] else 0
+    _ROUTED[name] = (version, seed)
     if version != ROUTER:
-        print(f"  {name}: routing with Freerouting {version}")
+        print(f"  {name}: routing with Freerouting {version}" + (f", seed {seed}" if seed else ""))
     dsn = os.path.join(PCB_OUT, name + ".dsn")
     ses = os.path.join(PCB_OUT, name + ".ses")
     poly, ox, oy = board.kb2_outline
     edge = getattr(board, "kb2_route_edge", PR.CLEARANCE + 0.25)   # route inside the real edge by the edge clearance
+    edge += 0.001 * seed
     set_outline(board, poly.buffer(-edge, join_style="mitre"), ox, oy)
     # KiCad applies the edge clearance to unplated holes too; the router only knows
     # the copper clearance, so grow those holes by the difference while exporting
@@ -531,6 +557,8 @@ def route(board, name, passes=40, default=False):
                 saved.append((p, sz))
                 p.SetSize(pcbnew.VECTOR2I(sz.x + MM(g), sz.y + MM(g)))
     assert pcbnew.ExportSpecctraDSN(board, dsn), "DSN export failed"
+    if seed:
+        _reorder_nets(dsn, seed)
     for p, sz in saved:
         p.SetSize(sz)
     set_outline(board, poly, ox, oy)
@@ -763,19 +791,22 @@ def export(board_path, name, layers=None, drill=True, rename=None):
 
 
 def make(name, builder, passes=60, attempts=10):
-    """Route from a fresh board until DRC is clean (Freerouting 2.1 is randomized). A board whose layout names
-    another router gets one attempt with it: that one routes the same way every time, so the attempts after it
-    use the default."""
+    """Route from a fresh board until DRC is clean. Freerouting 2.1 is randomized, so every attempt differs; a
+    version that isn't gets another seed each attempt (see route())."""
     for attempt in range(1, attempts + 1):
-        err, unc = _make_once(name, builder(), passes, default=attempt > 1)
+        err, unc = _make_once(name, builder(), passes, attempt)
         if err == 0 and unc == 0:
+            version, seed = _ROUTED.get(name, (ROUTER, 0))
+            if attempt > 1 and ROUTERS[version]["seeds"]:
+                print(f"  {name}: clean with seed {seed}. Name it for this board in the layout's ROUTER "
+                      f"(({version!r}, {seed})) and it routes in one attempt")
             return err, unc
         print(f"  {name}: attempt {attempt} not clean, rerouting")
     raise RuntimeError(f"{name}: no clean route after {attempts} attempts")
 
 
-def _make_once(name, board, passes, default=False):
-    r = route(board, name, passes, default)
+def _make_once(name, board, passes, attempt=1):
+    r = route(board, name, passes, attempt)
     if r is None:
         print(f"  {name}: router gave no result")
         return 1, 1
