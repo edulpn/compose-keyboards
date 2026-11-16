@@ -5,30 +5,35 @@ Optional: delete this file, or set C58_PREROUTE=0, and the autorouter routes eve
   ROW4   the thumb row, on all four boards: the one net Freerouting 2.5 can't finish. From its connector slot
          it runs under the connector's cable side, down the inner edge and along the front of the thumb keys,
          on the back copper, with a short spur up to each diode.
-  +5V    the LED rail, on the solder RGB board: a 0.5 mm trunk along every key row, in the gap between each
+  +5V    the LED rail, on both RGB boards: a 0.5 mm trunk along every key row, in the gap between each
          switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is
          on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back,
          through a via at either end, so the front copper stays open in the column gaps and the back copper
          under the keys for everything that has to cross a row. The rows are tied into a mesh: a 1 mm spine
          down the outer edge, a 0.8 mm one down the inner edge from connector slot 19, slot 2 straight into the
          top row, and the thumb row joined at both ends.
-         Not on the hotswap RGB board: with the rail laid (this way, or all on the front copper) Freerouting 2.1
-         didn't finish that board in 55 minutes in any of four tries, and with ROW4 alone it routes in one
-         attempt. The likely reason, not confirmed: its sockets' pads sit on both faces, and each key's links
-         between them want the same gap under the switch the trunk takes. There the router lays +5V, as before.
+  D1..   on the hotswap RGB board, every key's D net: its socket pad on each face to its diode. On this board
+         the sockets' pads sit on both faces, so each key needs two links across the board (D and its column),
+         and with the rail laid as well the router didn't finish it. The D nets are laid the way the router
+         lays them on a board it does finish, which leaves it the columns, the rows and the LED data.
 
 Everything is placed from the plan (key frames, the connector's slots, the diodes), and every stretch between
 two such points goes through Field.route, which steps round whatever the plan put in the way.
 
-  ROUTER  the boards routed with Freerouting 2.5.0 instead of the default 2.1.0. With ROW4 laid here 2.5.0
-          finishes these three in one attempt and gives the same board on every run. The hotswap RGB board stays
-          with 2.1.0: 2.5.0 leaves 5 connections open on it.
+  ROUTER  the boards routed with Freerouting 2.5.0 instead of the default 2.1.0: all four. It gives the same
+          board on every run. With ROW4 laid here it finishes the plain boards and the solder RGB board as they
+          are put to it. The hotswap RGB board, with its rail and D nets laid, it finishes when the job is put
+          to it another way (the seed, see route() in compose/pcb/kicad.py): the one named here is the first
+          of seeds 0 to 7 that came out clean. A change to this board's plan or to the copper laid here can
+          need another: the build goes on to the next seeds by itself and says which one was clean.
 """
 import math
 import numpy as np
+from compose import params as PR
 from compose.pcb import rev2_half as H
 
-ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_solder_rgb": "2.5.0"}
+ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_solder_rgb": "2.5.0",
+          "half_rev2_hotswap_rgb": ("2.5.0", 7)}
 
 ROW = "ROW4"
 ROW_W = 0.25                 # signal width
@@ -44,7 +49,10 @@ CAP_VIA_X = 7.3              # ... or to here on a key with capacitors, so the v
 GAP_FACE = "B"               # the face the trunk crosses the column gaps on. "B": a via at each end of every key's
                              #   stretch, so the front copper is open in the column gaps and the back copper under
                              #   the keys; "F": no vias in the trunk, and the front copper walled off along every row
-RAIL_ON = ("solder",)        # the RGB boards whose rail is laid here (see above for the hotswap one)
+D_W = 0.25                   # a hotswap key's D net: its two socket pads to its diode
+TOP_FY = -7.2                # ... over the top of the switch: footprint y, clear of the socket's slots
+D_SIDE_X, D_DOWN_X, D_OUT_X = 6.6, 4.1, 6.9   # ... a diode in the row gap: down the side of the switch outside its peg
+                             #   hole, then between the LED's pads and the capacitor's, or outside the capacitor
 SPUR_W = 0.4                 # trunk to an LED or capacitor pad; connector pad to its via (the pads are 0.4 wide)
 SPINE_OUT_W = 1.0            # the spine down the outer edge
 SPINE_IN_W = 0.8             # the spine down the inner edge
@@ -63,8 +71,10 @@ def half_rev2(f, s):
     """f: the board's Field (compose.pcb.rev2_half.field), s: its plan."""
     slot = {v: np.array(k) for k, v in H.slot_of_pad_xy(s).items()}
     row4(f, s, slot)
-    if s.rgb and s.variant in RAIL_ON:
+    if s.rgb:
         rail(f, s, slot)
+        if s.variant == "hotswap":
+            dnets(f, s)
 
 
 def row4(f, s, slot):
@@ -101,6 +111,36 @@ def row4(f, s, slot):
         if i < len(thumbs) - 1:
             at = L(k, -8.5, ROW_FY)
             f.track(ROW, "B", [foot, at], ROW_W)
+
+
+def dnets(f, s):
+    """Every key's D net on a hotswap board: its socket pad on each face to its diode's anode, laid the way the
+    router lays it on a board it finishes. The pad beside the diode goes straight to the anode on its own face,
+    and on over the top of the switch, still on that face, to a via above the other pad. The front copper at
+    the right-hand edge of every key stays clear for the column's trunk, which the router runs there."""
+    L = lambda k, x, y: H.fp2local(k, x, y)
+    px, py = PR.HS_PAD1[0]                                        # the B pad; the F pad is at -px
+    for ks in s.keys:
+        k, net = ks.k, f"D{ks.i + 1}"
+        ax, ay = _fp(k, ks.anode)
+        upright = abs(ax) > 8.0                                   # the diode stands in the column gap on that side
+        sg = (1 if ax > 0 else -1) if upright else 1
+        near, far = ("B", "F") if sg > 0 else ("F", "B")          # the faces of the pads at +sg and -sg
+        pad = L(k, sg * px, py)
+        if upright:
+            f.route(net, near, pad, ks.anode, D_W)
+        else:                                                     # a diode lying in the row gap in front of the key:
+            side = [pad, L(k, D_SIDE_X, -3.0), L(k, D_SIDE_X, 0.0)]     # down the side of the switch, then between
+            down = [L(k, D_DOWN_X, 3.2), L(k, D_DOWN_X, ay - 1.5), ks.anode]     # the LED and the capacitor, or
+            if not f.can_track(net, near, side + down, D_W):      #   outside the capacitor where its 5 V runs between
+                down = [L(k, D_OUT_X, 1.5), L(k, D_OUT_X, ay - 1.9), ks.anode]
+            f.through(net, near, side + down, D_W)
+        via = next((v for v in (L(k, -sg * px, TOP_FY), L(k, -sg * px, TOP_FY + 0.2)) if f.can_via(net, v)), None)
+        if via is None:
+            raise RuntimeError(f"pre-route: no room for the via of {net}")
+        f.via(net, via)
+        f.track(net, far, [via, L(k, -sg * px, py)], D_W)
+        f.through(net, near, [pad, L(k, sg * px, TOP_FY), L(k, -sg * (px - 1.0), TOP_FY), via], D_W)
 
 
 def rail(f, s, slot):
