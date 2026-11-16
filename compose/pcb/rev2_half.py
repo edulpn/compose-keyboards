@@ -44,11 +44,15 @@ BOARDS = {"half_rev2_hotswap": ("hotswap", False), "half_rev2_solder": ("solder"
 # ---------------------------------------------------------------- parts
 LED_AT = (0.0, 5.05)                 # MINI-E centre, footprint coords (KiCad, y down): under the switch's LED window
 LED_CUT = (3.6, 3.2, 0.5)            # board cutout w x h, corner radius (body 3.2 x 2.8, router corners r 0.5)
-LED_PAD_X, LED_PAD_Y = 2.775, 0.75   # pad centres. The pads reach from 2.1 to 3.45 mm out from the LED's centre and
-LED_PAD = (1.35, 0.82)               #   stop 0.3 mm from the cutout, for the leads to rest on; the two published
-#                                        footprints (compose/sim/half_rev2.py) start 0.05 and 0.15 mm nearer still
+LED_PAD_X, LED_PAD_Y = 2.85, 0.75    # where a track lands on each pad (the pad's anchor)
+LED_PAD = (1.35, 0.82)               # the pad: from 2.1 to 3.45 mm out from the LED's centre, 0.3 mm from the cutout, for
+#                                        the leads to rest on; the two published footprints (compose/sim/half_rev2.py)
+#                                        start 0.05 and 0.15 mm nearer still
+LED_PAD_IN = 0.075                   # ... so its copper is centred this much nearer the LED than its anchor: of the
+#                                        pad's length, the 2 x 0.075 mm next to the cutout is ground no track can use
+#                                        (route_view)
 LED_PAD_EDGE = 0.25                  # the copper-to-edge rule for these pads alone; the board's is 0.4 mm
-assert LED_PAD_X - LED_PAD[0] / 2 - LED_CUT[0] / 2 >= LED_PAD_EDGE + 0.05 - 1e-9
+assert LED_PAD_X - LED_PAD_IN - LED_PAD[0] / 2 - LED_CUT[0] / 2 >= LED_PAD_EDGE + 0.05 - 1e-9
 # ... as a KiCad rule: kicad.make() writes it beside the board file, where the DRC reads it
 LED_RULES = f"""(rule "LED pads to their own cutout"
   (condition "A.Type == 'Pad' && (A.intersectsCourtyard('LB*') || A.intersectsCourtyard('LF*'))")
@@ -94,12 +98,18 @@ def led_pads(k, face):
     """{pin: pad polygon} for the LED copy on `face` ('B' = left half, 'F' = right half)."""
     out = {}
     for pin, (sx, sy) in LED_PINS.items():
-        x = sx * LED_PAD_X * (-1 if face == "B" else 1)       # B: the footprint flipped (mirrored in x)
+        x = sx * (LED_PAD_X - LED_PAD_IN) * (-1 if face == "B" else 1)     # B: the footprint flipped (mirrored in x)
         y = sy * LED_PAD_Y
         w, h = LED_PAD
         q = [fp2local(k, LED_AT[0] + x + dx * w / 2, LED_AT[1] + y + dy * h / 2) for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
         out[pin] = Polygon(q)
     return out
+
+
+def led_lands(k, face):
+    """{pin: the point a track lands on} for the LED copy on `face`: each pad's anchor."""
+    m = -1 if face == "B" else 1
+    return {pin: fp2local(k, LED_AT[0] + sx * LED_PAD_X * m, LED_AT[1] + sy * LED_PAD_Y) for pin, (sx, sy) in LED_PINS.items()}
 
 
 def cap_box(k, face):
@@ -521,19 +531,36 @@ def led_fp(b, ref, face):
     fp.Reference().SetVisible(False)
     fp.Value().SetVisible(False)
     for pin, (sx, sy) in LED_PINS.items():
-        PK.add_pad(fp, pin, "smd", "roundrect", (sx * LED_PAD_X, sy * LED_PAD_Y), LED_PAD)
+        p = PK.add_pad(fp, pin, "smd", "roundrect", (sx * LED_PAD_X, sy * LED_PAD_Y), LED_PAD)
+        p.SetOffset(PK.V(-sx * LED_PAD_IN, 0.0))               # the copper, from the anchor: toward the LED
     PK.courtyard(fp, -3.65, -1.85, 3.65, 1.85, pcbnew.F_CrtYd)
     # pin 1 mark: a short bar outside pad 1
-    bar = LED_PAD_X + LED_PAD[0] / 2 + 0.3
-    PK.silk_poly(fp, [(bar, -LED_PAD_Y - 0.5), (bar, -LED_PAD_Y + 0.5)], pcbnew.F_SilkS, 0.15)
+    PK.silk_poly(fp, [(LED_PAD_X + 0.9, -LED_PAD_Y - 0.5), (LED_PAD_X + 0.9, -LED_PAD_Y + 0.5)], pcbnew.F_SilkS, 0.15)
     if face == "B":
         fp.Flip(pcbnew.VECTOR2I(0, 0), True)                   # left-right: x mirrored, as in the plan
     return fp
 
 
-def _fp_pad_xy(fp, num):
-    import pcbnew
-    return [(pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y)) for p in fp.Pads() if p.GetNumber() == num]
+def route_view(b):
+    """The board as the router is to see it: every LED pad without the 2 x LED_PAD_IN it reaches toward its cutout.
+    No track can use that strip: it lies inside the margin the router keeps from an edge (kb2_route_edge and its
+    own clearance, 0.45 mm; the pad stops at 0.3). What is left is the pad centred on its anchor, where tracks
+    land. Returns the function that puts the pads back."""
+    pcbnew, PK = _pc()
+    saved = []
+    for fp in b.GetFootprints():
+        if fp.GetReference()[:2] in ("LB", "LF"):
+            for p in fp.Pads():
+                sz, off = p.GetSize(), p.GetOffset()
+                saved.append((p, pcbnew.VECTOR2I(sz.x, sz.y), pcbnew.VECTOR2I(off.x, off.y)))    # copies: live references
+                p.SetSize(pcbnew.VECTOR2I(sz.x - PK.MM(2 * LED_PAD_IN), sz.y))
+                p.SetOffset(pcbnew.VECTOR2I(0, 0))
+
+    def undo():
+        for p, sz, off in saved:
+            p.SetSize(sz)
+            p.SetOffset(off)
+    return undo
 
 
 def build(name):
@@ -556,6 +583,7 @@ def build(name):
         # clearance (DRC-checked); the default 0.45 crowds the 29 LED cutouts
         b.kb2_route_edge = PR.CLEARANCE + 0.05
         b.kb2_drc_rules = LED_RULES
+        b.kb2_route_view = route_view
     if rgb and POWER_W > PR.TRACE_W:
         pw = pcbnew.NETCLASS("Power")
         pw.SetTrackWidth(MM(POWER_W))
@@ -608,10 +636,12 @@ def build(name):
                 fp = led_fp(b, f"{tag}{j + 1}", face)              # built (and flipped) at the origin:
                 fp.Rotate(V(0, 0), DEG(k.rot))                      #   turn relative to that, then move
                 fp.Move(V(*K(fp2local(k, *LED_AT))))
-                want = led_pads(k, face)
+                want, land = led_pads(k, face), led_lands(k, face)
                 for pin, poly in want.items():
-                    got = _fp_pad_xy(fp, pin)
-                    assert got and near(got[0], K(poly.centroid.coords[0])), f"LED {face} pad {pin} misplaced"
+                    got = [p for p in fp.Pads() if p.GetNumber() == pin]
+                    xy = lambda q: (pcbnew.ToMM(q.x), pcbnew.ToMM(q.y))
+                    assert len(got) == 1 and near(xy(got[0].GetPosition()), K(land[pin])) \
+                        and near(xy(got[0].ShapePos()), K(poly.centroid.coords[0])), f"LED {face} pad {pin} misplaced"
                 din = "RGB_IN" if j == 0 else f"{tag}_{j}"
                 dout = "RGB_OUT" if j == n_led - 1 else f"{tag}_{j + 1}"
                 nets = {"1": "+5V", "2": dout, "3": "GND", "4": din}

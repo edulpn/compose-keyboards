@@ -556,11 +556,15 @@ def route(board, name, passes=40, attempt=1):
                 sz = pcbnew.VECTOR2I(p.GetSize().x, p.GetSize().y)      # copy: GetSize() is a live reference
                 saved.append((p, sz))
                 p.SetSize(pcbnew.VECTOR2I(sz.x + MM(g), sz.y + MM(g)))
+    view = getattr(board, "kb2_route_view", None)      # the board's own changes for the router's eyes; returns the undo
+    undo = view(board) if view else None
     assert pcbnew.ExportSpecctraDSN(board, dsn), "DSN export failed"
     if seed:
         _reorder_nets(dsn, seed)
     for p, sz in saved:
         p.SetSize(sz)
+    if undo:
+        undo()
     set_outline(board, poly, ox, oy)
     if os.path.exists(ses):
         os.remove(ses)
