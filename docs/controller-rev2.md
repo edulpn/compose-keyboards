@@ -53,6 +53,7 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 - **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout sets only where its halves' connectors sit; its jumper's shape does the rest.
 - **Jumpers:** a custom flex per half (conductors on one side; one design can serve both halves), 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. Compose58 rev 2's: [flex jumpers](../layouts/lily58/rev2.md#flex-jumpers).
 - **Slot order:** slot 1 is the back-most contact. Both connectors use the same physical order, so the right connector is turned 180° and its pad numbers run backwards.
+- **Which way round to solder them:** each connector goes with its housing's circuit 1 notch on the silkscreen triangle (the back end on the left connector, the front end on the right), which puts its contacts on the Pico's side. Nothing on the part stops it going on turned round: Molex lists it as not polarised to the board, and its two rows of tails sit 1.825 and 1.925 mm either side of the body's centre, near enough the same to land on the pads. Turned round, the contacts face away from the jumper's conductors, and that half reads no keys and lights no LEDs.
 
 | slot | 1 | 2 | 3 | 4 | 5–11 | 12–17 | 18 | 19 | 20 |
 |---|---|---|---|---|---|---|---|---|---|
