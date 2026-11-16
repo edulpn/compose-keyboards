@@ -556,11 +556,15 @@ def route(board, name, passes=40, attempt=1):
                 sz = pcbnew.VECTOR2I(p.GetSize().x, p.GetSize().y)      # copy: GetSize() is a live reference
                 saved.append((p, sz))
                 p.SetSize(pcbnew.VECTOR2I(sz.x + MM(g), sz.y + MM(g)))
+    view = getattr(board, "kb2_route_view", None)      # the board's own changes for the router's eyes; returns the undo
+    undo = view(board) if view else None
     assert pcbnew.ExportSpecctraDSN(board, dsn), "DSN export failed"
     if seed:
         _reorder_nets(dsn, seed)
     for p, sz in saved:
         p.SetSize(sz)
+    if undo:
+        undo()
     set_outline(board, poly, ox, oy)
     if os.path.exists(ses):
         os.remove(ses)
@@ -749,6 +753,14 @@ def drc_counts(rep):
     return errors, warnings, unc
 
 
+def drc_placed(rep):
+    """How many of a DRC report's errors no other route can clear: a pad, not a track, too near a board edge or an
+    unplated hole."""
+    blocks = re.split(r"\n(?=\[)", open(rep).read())
+    return sum(1 for b in blocks if b.startswith("[copper_edge_clearance]") and re.search(r"\): [^\n]*\b[Pp]ad\b", b)
+               and not re.search(r"\): (Track|Via|Zone)\b", b))
+
+
 def drc(board, name):
     rep = os.path.join(PCB_OUT, name + "_drc.txt")
     pcbnew.WriteDRCReport(board, rep, pcbnew.EDA_UNITS_MILLIMETRES, True)
@@ -806,6 +818,12 @@ def make(name, builder, passes=60, attempts=10):
 
 
 def _make_once(name, board, passes, attempt=1):
+    rules = os.path.join(PCB_OUT, name + ".kicad_dru")      # the board's own DRC rules (board.kb2_drc_rules, KiCad's
+    if getattr(board, "kb2_drc_rules", None):                #   custom-rule text): KiCad reads them from beside the
+        with open(rules, "w") as f:                          #   board file when it loads the board and when it runs DRC
+            f.write("(version 1)\n" + board.kb2_drc_rules)
+    elif os.path.exists(rules):
+        os.remove(rules)
     r = route(board, name, passes, attempt)
     if r is None:
         print(f"  {name}: router gave no result")
@@ -842,6 +860,10 @@ def _make_once(name, board, passes, attempt=1):
         pcbnew.SaveBoard(path, board)
         board = pcbnew.LoadBoard(path)
         err, warn, unc, rep = drc(board, name)
+    placed = drc_placed(rep)
+    if placed:
+        raise RuntimeError(f"{name}: {placed} pads too near a board edge (see {os.path.basename(rep)}): the parts' "
+                           f"places or the board's DRC rules are wrong, and no other route clears that")
     z = export(path, name)
     print(f"{name}: {t} track segments, {v} vias | DRC {err} errors, {warn} warnings, {unc} unconnected | {os.path.basename(z)}")
     return err, unc
