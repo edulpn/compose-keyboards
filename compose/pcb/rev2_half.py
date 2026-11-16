@@ -728,7 +728,9 @@ def build(name):
         print(f"  pre-routed {', '.join(f.nets())}: {nt} track segments, {nv} vias")
     if rgb:
         _clear_switch_silk(b)
-        gnd_fanout(b)
+        undo = route_view(b)                                     # the fanout is the router's ground: laid on the pads
+        gnd_fanout(b)                                            #   as the router sees them, each stub from its pad's
+        undo()                                                   #   anchor
     return b
 
 
