@@ -34,9 +34,16 @@ Independent of the net names the boards were built with:
      board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 19 to the
      farthest fitted LED. A rail the layout pre-routes on that board (layouts/<layout>/preroute.py) is held to
      RAIL_R_MAX, the figure the power simulation assumes; an autorouted one is reported. Negative control: the
-     same copper read at the signal width is over the limit.
+     same copper read at the signal width is over the limit. The return is read as well: all the GND copper of
+     both faces (pour, pads, stubs, vias) as a resistor sheet (compose/sim/sheet.py), from each fitted LED's GND
+     pad to the fitted connector's slots 1, 4 and 20. The worst rail and the worst return together are held to
+     RAIL_R_MAX. Negative control: without the pour no LED has a return. The track and vias of the LED data
+     run in and out of the half (slot 3 to the first LED, the last LED to slot 18) are reported.
   8. No copper of any net, on either face, within rev2_half.M2_KEEP of the centre of an M2 hole: the screw's head
      bears on one face and the plate's brass insert on the other, and the screw joins the two.
+  9. A diode's solder joint keeps JOINT_GAP from the pad of every other net on its face (pads are bare copper;
+     a bridge from a joint to a socket's column pad holds a key down). Negative control: a joint put on a
+     connector pad is found.
 """
 import os
 import sys
@@ -44,6 +51,7 @@ import random
 import itertools
 import numpy as np
 import pcbnew
+from shapely.affinity import affine_transform
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
 CTRL_OUT = os.environ.get("CTRL_OUT", "out")
@@ -54,6 +62,7 @@ from compose.pcb import layout as PL
 from compose.pcb import rev2_half as H
 from compose.pcb import preroute as PRE
 from compose.sim import matrix as SP
+from compose.sim import sheet as SH
 from compose.sim import controller_copper as CC
 from compose.pcb import jumper as J
 
@@ -72,13 +81,14 @@ KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socke
 #                        (-2.8, -0.7)
 MINI_E_PADSIDE = {"VDD": (1, -1), "DOUT": (1, 1), "VSS": (-1, 1), "DIN": (-1, -1)}
 MINI_E_LEAD = (2.75, 0.75)                                  # lead centres from the LED's centre (x, y), mm
-RAIL_R_MAX = 0.15                                           # ohm, a half's 5 V rail from its connector to the farthest
-                                                            #   LED. compose/sim/controller_spice.py (E2) allows this much
-                                                            #   for the half's rail and its return together, and only the
-                                                            #   rail is read here: the return is the GND pour, which this
-                                                            #   network leaves out (estimated from the routed RGB boards'
-                                                            #   pour at 6 to 27 mohm to the worst LED, the rails being 76
-                                                            #   to 82)
+RAIL_R_MAX = 0.15                                           # ohm, what compose/sim/controller_spice.py (E2) allows a
+                                                            #   half for its 5 V rail and the return together, connector
+                                                            #   to the farthest LED. The rail is read as a network of
+                                                            #   tracks (Half.rail), the return through the GND pour as a
+                                                            #   sheet (Half.ground); the worst of each, added, is held to it
+JOINT_GAP = 0.45                                            # mm, a diode's solder joint to the pad of another net: what the
+                                                            #   plan's placement comes to (rev2_half._place keeps SMD pads
+                                                            #   0.25 mm off the diode's 2 mm body; its own pad is 1.6 mm)
 
 
 def ok(cond, msg):
@@ -129,6 +139,12 @@ class Half:
         pads.sort(key=lambda p: p.GetPosition().y)
         return {k + 1: self.cu.node_at((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)), self.bottom)
                 for k, p in enumerate(pads)}
+
+    def connector_pad(self):
+        """Centre (KiCad mm) of the fitted connector's slot 5 pad."""
+        ref = "J1B" if self.side == "L" else "J1F"
+        pads = sorted((p for p in self.fp[ref].Pads() if p.GetNumber() != "MP"), key=lambda p: p.GetPosition().y)
+        return (ToMM(pads[4].GetPosition().x), ToMM(pads[4].GetPosition().y))
 
     def connector_gap(self):
         """(distance, part) from the fitted connector's pads to the nearest other pad on the same face."""
@@ -222,6 +238,79 @@ class Half:
         face = "B" if self.side == "L" else "F"
         return [tuple(self.at(p, layer) for p in H.cap_pads(L.keys[i], face)) for i in self.s.caps]
 
+    def tracks_of(self, group):
+        """A copper group's tracks and vias, in KiCad mm: ([(a, b, width, face)], [xy])."""
+        name = {F: "F", B: "B"}
+        items = self.cu.items
+        k = next(i for i, it in enumerate(items) if it[2] in ("via", "track"))       # Copper lists pads, then tracks
+        segs, vias = [], []
+        for t in self.b.GetTracks():
+            if t.GetClass() == "PCB_VIA":
+                assert items[k][2] == "via"
+                if self.cu.find(k) == group:
+                    vias.append((ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)))
+                k += 2
+            else:
+                assert items[k][2] == "track"
+                if self.cu.find(k) == group:
+                    a, c = t.GetStart(), t.GetEnd()
+                    segs.append(((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
+                k += 1
+        return segs, vias
+
+    def ground(self, pour=True):
+        """The return through the GND copper as a resistor sheet (compose.sim.sheet): everything in the copper group
+        of the fitted connector's slot 1, whatever its net is called, on both faces: the pour, the pads, the stubs
+        and the vias. Returns (worst resistance from a fitted LED's GND pad, drawing alone, to the fitted connector's
+        GND contacts, that LED's place in the chain from 1, the far LED's rise per ampere of total current when
+        every LED draws the same). pour: False leaves the pour out (negative control)."""
+        face = "B" if self.side == "L" else "F"
+        ref = "J1B" if self.side == "L" else "J1F"
+        name = {F: "F", B: "B"}
+        gnd = self.slots()[1]
+        if gnd is None:
+            return float("inf"), 0, float("inf")
+        mine = [(s, name[lay], lab) for i, (s, lay, lab) in enumerate(self.cu.items) if self.cu.find(i) == gnd]
+        areas = [(s, f) for s, f, lab in mine if lab != "track" and (pour or lab != "zone")]
+        segs, vias = self.tracks_of(gnd)
+        sinks = [(s, f) for s, f, lab in mine if f == face and lab.startswith(ref + ".")]
+        loads = [(affine_transform(H.led_pads(L.keys[i], face)["3"], [1, 0, 0, -1, OX, OY]), face) for i in self.s.led_order]
+        alone, same = SH.Sheet(areas, vias, segs, via_drill=PR.VIA_DRILL, board_t=PR.PCB_T).solve(sinks, loads)
+        worst = max(range(len(alone)), key=lambda i: alone[i])
+        return alone[worst], worst + 1, max(same)
+
+    def data_runs(self):
+        """The LED data run into and out of the half: {slot: (mm of track, vias)} for the copper groups of the
+        fitted connector's slots 3 and 18 (each reaches the LED copies of both faces)."""
+        sl, out = self.slots(), {}
+        for k in (3, 18):
+            segs, vias = self.tracks_of(sl[k])
+            out[k] = (sum(float(np.hypot(b[0] - a[0], b[1] - a[1])) for a, b, w, f in segs), len(vias))
+        return out
+
+    def joint_gap(self, at=None):
+        """(gap, what, pairs under 1.5 mm): a diode's solder joint (its pad, on either face) to the nearest pad of
+        another copper group on the same face. Tracks, vias and the pour are under solder mask and don't count.
+        at: one joint put here on the fitted face instead, on no net (KiCad mm; negative control)."""
+        from shapely.geometry import Point as P_
+        drefs = {ks.dref for ks in self.s.keys}
+        pads = [(i, s, lay, lab) for i, (s, lay, lab) in enumerate(self.cu.items) if lab not in ("via", "track", "zone")]
+        if at is not None:
+            joints = [(None, P_(at).buffer(0.8), self.bottom, "a joint put there")]
+        else:
+            joints = [p for p in pads if p[3].split(".")[0] in drefs]
+        best, near = (1e9, None), 0
+        for i, s, lay, lab in joints:
+            g = None if i is None else self.cu.find(i)
+            for i2, s2, lay2, lab2 in pads:
+                if lay2 != lay or lab2.split(".")[0] == lab.split(".")[0] or (g is not None and self.cu.find(i2) == g):
+                    continue
+                d = s.distance(s2)
+                near += d < 1.5
+                if d < best[0]:
+                    best = (d, f"{lab} to {lab2} on {'F' if lay == F else 'B'}")
+        return best[0], best[1], near
+
     def rail(self, width=None):
         """The 5 V rail as a resistor network (compose.pcb.preroute.rail_resistance): every track and via in
         the copper group of the fitted connector's slot 2, whatever its net is called. Returns (worst resistance
@@ -234,20 +323,7 @@ class Half:
         vdd = self.slots()[2]
         name = {F: "F", B: "B"}
         items = self.cu.items
-        k = next(i for i, it in enumerate(items) if it[2] in ("via", "track"))       # Copper lists pads, then tracks
-        segs, vias = [], []
-        for t in self.b.GetTracks():
-            if t.GetClass() == "PCB_VIA":
-                assert items[k][2] == "via"
-                if self.cu.find(k) == vdd:
-                    vias.append(xy(t))
-                k += 2
-            else:
-                assert items[k][2] == "track"
-                if self.cu.find(k) == vdd:
-                    a, c = t.GetStart(), t.GetEnd()
-                    segs.append(((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
-                k += 1
+        segs, vias = self.tracks_of(vdd)
         pads = [(s, name[lay]) for i, (s, lay, lab) in enumerate(items)
                 if lab not in ("via", "track", "zone") and self.cu.find(i) == vdd]
         loads = [(K(H.led_pads(L.keys[i], face)["1"].centroid.coords[0]), face) for i in self.s.led_order]
@@ -301,6 +377,11 @@ def board_checks(h):
                               f"{d:.2f} mm from a hole's centre ({what}), to keep {H.M2_KEEP:.2f}")
     ok(h.under_screws(at=K(h.s.keys[0].cathode))[0] < H.M2_KEEP,
        "negative control: read round a diode's pad instead of the holes, copper is found")
+    d, what, near = h.joint_gap()
+    ok(d >= JOINT_GAP - 0.01, f"a diode's solder joint >= {JOINT_GAP} mm from the pad of every other net on its face: "
+                              + (f"{d:.2f} mm at the nearest ({what}), {near} pairs under 1.5 mm on the two faces"
+                                 if near else "none within 1.5 mm"))
+    ok(h.joint_gap(at=h.connector_pad())[0] < JOINT_GAP, "negative control: a joint put on a pad of the jumper connector is found")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
     col = {c: sl[5 + c] for c in range(7)}
@@ -371,15 +452,25 @@ def board_checks(h):
            f"(with every LED drawing the same, the far LED drops {shared * 1e3:.0f} mV per ampere of the half's total)")
     name = next(n for n, v in H.BOARDS.items() if v == (h.variant, h.rgb))
     laid = H.laid(name)[1]
+    back, at, rise = h.ground()
+    rmsg = (f"return through the GND copper (pour, pads, stubs and vias of both faces as a resistor sheet, {SH.GRID} mm grid), "
+            f"the fitted LEDs' GND pads to slots 1 + 4 + 20: {back * 1e3:.0f} mohm at the worst LED (chain position {at}; with "
+            f"every LED drawing the same, the far LED rises {rise * 1e3:.0f} mV per ampere of the half's total)")
     if laid is not None and "+5V" in laid.nets():
-        ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm, what the power simulation allows the rail and its return "
-                                f"(the return through the GND pour is not read)")
+        ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm with its return, read next")
         thin = h.rail(width=PR.TRACE_W)[0]
         ok(thin > RAIL_R_MAX, f"negative control: the same rail read at the signal width ({PR.TRACE_W} mm) is over the limit "
                               f"({thin * 1e3:.0f} mohm)")
+        ok(worst + back <= RAIL_R_MAX, f"{rmsg}; the worst rail and the worst return together {(worst + back) * 1e3:.0f} mohm, "
+                                       f"limit {RAIL_R_MAX * 1e3:.0f} mohm, what the power simulation allows a half")
     else:
         print(f"  note  {msg}; autorouted, so not held to the {RAIL_R_MAX * 1e3:.0f} mohm the power simulation assumes "
               f"(the layout's preroute.py doesn't lay this board's rail)")
+        ok(np.isfinite(back), rmsg)
+    ok(np.isinf(h.ground(pour=False)[0]), "negative control: with the pour left out, an LED's GND pad has no return")
+    runs = h.data_runs()
+    print(f"  note  LED data run, both faces' LED copies included: slot 3 to the first LED {runs[3][0]:.0f} mm of track and "
+          f"{runs[3][1]} vias, the last LED to slot 18 {runs[18][0]:.0f} mm and {runs[18][1]} vias")
 
 
 # ---------------------------------------------------------------- the flex jumpers
@@ -544,6 +635,9 @@ def main():
     jpath = lambda s_: os.path.join(pcb, "jumper_rev2.kicad_pcb")         # one part, both sides
     g = J.solve()
     only = [a for a in sys.argv[2:]] or os.environ.get("SIM_BOARDS", "").split() or list(H.BOARDS)
+    if any(rgb for name, (variant, rgb) in H.BOARDS.items() if name in only):
+        print("\n== sheet method (compose/sim/sheet.py), which reads the return through the GND pour, on shapes with a known answer")
+        FAIL.extend(f"sheet method: {what}" for what in SH.selftest())
     for name, (variant, rgb) in H.BOARDS.items():
         if name not in only:
             continue
