@@ -76,6 +76,10 @@ SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 4: "GND", 18: "RGB_OUT", 19: "+5V",
 SLOT_NET.update({5 + c: f"COL{c}" for c in range(7)})
 SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
 POST_SEARCH = 18.0
+M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part (the plan), and no copper on either face
+                                     #   (a rule area: no tracks, vias or pour). The screw's head bears on one face and
+                                     #   the plate's brass insert on the other, joined through the screw, so no net may
+                                     #   lie under either. 2.15 mm: clear of a head up to 4 mm across
 
 
 def fp2local(k, fx, fy):
@@ -375,7 +379,7 @@ def _place():
     core = G.OUTLINE.buffer(-PR.FLANGE_W - (PR.M2_INSERT_D / 2 + 0.8), join_style="round")
     board = ol.buffer(-(PR.M2_HEAD_D / 2 + 0.6))
     plate_r = PR.M2_INSERT_D / 2 + 0.8
-    head_r = PR.M2_HEAD_D / 2 + 0.4
+    head_r = M2_KEEP
     cuts0 = unary_union([PL.switch_cutout(k, grow=0.0) for k in keys])     # the plate's real switch holes
     s.posts = []
     for (x0, y0) in PL.ORIGINAL_POSTS:
@@ -501,6 +505,7 @@ def field(s, keepouts=()):
             f.pad(face, quad(np.array(s.ffc.c) + n * FFC_MP[0] + u * sg * FFC_MP[1], *FFC_MP[2:]), None, f"J1{face}.MP")
     for x, y in s.posts:
         f.hole(Point(x, y).buffer(PR.M2_CLEAR / 2))
+        f.keepout(Point(x, y).buffer(M2_KEEP))                    # under the screw's head and the plate's insert
     for k_ in keepouts:
         f.keepout(k_)
     return f
@@ -703,6 +708,7 @@ def build(name):
         PK.add_pad(h, "", "npth", "circle", (0, 0), (PR.M2_CLEAR,) * 2, (PR.M2_CLEAR,) * 2)
         h.SetPosition(V(*K((x, y))))
         b.Add(h)
+        PK.add_keepout(b, Point(x, y).buffer(M2_KEEP), PK.OX, PK.OY)   # no copper under the head or the insert
     # ---- art + connector labels
     from compose.pcb import art as pcb_art
     PR.REVISION = "rev 2"

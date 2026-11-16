@@ -35,6 +35,8 @@ Independent of the net names the boards were built with:
      farthest fitted LED. A rail the layout pre-routes on that board (layouts/<layout>/preroute.py) is held to
      RAIL_R_MAX, the figure the power simulation assumes; an autorouted one is reported. Negative control: the
      same copper read at the signal width is over the limit.
+  8. No copper of any net, on either face, within rev2_half.M2_KEEP of the centre of an M2 hole: the screw's head
+     bears on one face and the plate's brass insert on the other, and the screw joins the two.
 """
 import os
 import sys
@@ -143,6 +145,20 @@ class Half:
                     d = min(q.distance(m) for m in mine)
                     if d < best[0]:
                         best = (d, f"{r} pad {p.GetNumber()}")
+        return best
+
+    def under_screws(self, at=None):
+        """(distance, what) of the copper nearest the centre of an M2 hole, of any net and on either face: pads,
+        tracks, vias and the pour. The screw's head bears on one face and the plate's insert on the other.
+        at: read round this point (KiCad mm) instead of the holes."""
+        from shapely.geometry import Point as P_
+        best = (1e9, None)
+        for c in ([at] if at is not None else [K(p) for p in self.s.posts]):
+            pt = P_(c)
+            for shp, lay, lab in self.cu.items:
+                d = shp.distance(pt)
+                if d < best[0]:
+                    best = (d, f"{lab} on {'F' if lay == F else 'B'}")
         return best
 
     def keys(self):
@@ -276,6 +292,11 @@ def board_checks(h):
     gap = h.connector_gap()
     ok(gap[0] >= 0.6 - 1e-3, f"jumper connector's pads >= 0.6 mm from every other part's pad on its face "
                              f"(both hand-soldered): {gap[0]:.2f} mm, nearest {gap[1]}")
+    d, what = h.under_screws()
+    ok(d >= H.M2_KEEP - 0.01, f"no copper under the M2 screws' heads or the plate's inserts, on either face: the nearest is "
+                              f"{d:.2f} mm from a hole's centre ({what}), to keep {H.M2_KEEP:.2f}")
+    ok(h.under_screws(at=K(h.s.keys[0].cathode))[0] < H.M2_KEEP,
+       "negative control: read round a diode's pad instead of the holes, copper is found")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
     col = {c: sl[5 + c] for c in range(7)}
