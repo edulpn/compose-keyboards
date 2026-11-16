@@ -34,7 +34,7 @@ Independent of the net names the boards were built with:
      board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 19 to the
      farthest fitted LED. A rail the layout pre-routes on that board (layouts/<layout>/preroute.py) is held to
      RAIL_R_MAX, the figure the power simulation assumes; an autorouted one is reported. Negative control: the
-     same copper read at the signal width is over the limit. The return through the GND pour is not read.
+     same copper read at the signal width is over the limit.
 """
 import os
 import sys
