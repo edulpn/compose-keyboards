@@ -135,7 +135,7 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 - **One reversible board for both halves**, as on rev 1. The left half has its switches on the front and everything else on the back; the right half is the same board flipped over.
 - **Every one-sided part has a copy on each face**: sockets, LEDs, capacitors, the jumper connector. Fit only the copies on the face away from the switches. Through-hole parts (diodes, solder-in switches) serve both.
 - **One placement for all four boards**: diodes, mounting posts and the connector sit in the same spots on every variant, so one plate fits them all.
-- **Outline:** the plate outline less 5 mm, inside the gasket pads. No case screws go through it: the board hangs from the plate on four M2 screws into heat-set inserts in the plate, placed in column gaps clear of every part.
+- **Outline:** the plate outline less 5 mm, inside the gasket pads. No case screws go through it: the board hangs from the plate on four M2 screws into heat-set inserts in the plate, placed in column gaps clear of every part. No copper runs within 2.15 mm of a screw's centre on either face, so the screw's head (up to 4 mm across) and the insert's face have no track or pour under them to cut into.
 - **Matrix:** the layout's rows and columns, COL2ROW, a through-hole diode per key in the column or row gap beside it. The plate has a shallow pocket over each diode's top-side solder joint.
 
 ### Jumper connector
@@ -251,6 +251,7 @@ Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own 
 
 - every key runs column slot → switch → diode → row slot;
 - spare slots stay unconnected;
+- no copper of any net within 2.15 mm of an M2 hole's centre, on either face (under the screw's head and the plate's insert);
 - RGB boards: one unbroken LED chain from slot 3 to slot 18, with every LED and capacitor across 5 V and GND;
 - plain boards: the RGB pass-through.
 
