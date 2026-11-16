@@ -73,8 +73,12 @@ KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socke
 MINI_E_PADSIDE = {"VDD": (1, -1), "DOUT": (1, 1), "VSS": (-1, 1), "DIN": (-1, -1)}
 MINI_E_LEAD = (2.75, 0.75)                                  # lead centres from the LED's centre (x, y), mm
 RAIL_R_MAX = 0.15                                           # ohm, a half's 5 V rail from its connector to the farthest
-                                                            #   LED: what compose/sim/controller_spice.py (E2) allows for
-                                                            #   the half's rail and its return
+                                                            #   LED. compose/sim/controller_spice.py (E2) allows this much
+                                                            #   for the half's rail and its return together, and only the
+                                                            #   rail is read here: the return is the GND pour, which this
+                                                            #   network leaves out (estimated from the routed RGB boards'
+                                                            #   pour at 6 to 27 mohm to the worst LED, the rails being 76
+                                                            #   to 82)
 
 
 def ok(cond, msg):
@@ -368,7 +372,8 @@ def board_checks(h):
     name = next(n for n, v in H.BOARDS.items() if v == (h.variant, h.rgb))
     laid = H.laid(name)[1]
     if laid is not None and "+5V" in laid.nets():
-        ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm, as the power simulation assumes")
+        ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm, what the power simulation allows the rail and its return "
+                                f"(the return through the GND pour is not read)")
         thin = h.rail(width=PR.TRACE_W)[0]
         ok(thin > RAIL_R_MAX, f"negative control: the same rail read at the signal width ({PR.TRACE_W} mm) is over the limit "
                               f"({thin * 1e3:.0f} mohm)")
