@@ -24,8 +24,9 @@ two such points goes through Field.route, which steps round whatever the plan pu
           board on every run. With ROW4 laid here it finishes the plain boards and the solder RGB board as they
           are put to it. The hotswap RGB board, with its rail and D nets laid, it finishes when the job is put
           to it another way (the seed, see route() in compose/pcb/kicad.py): the one named here is the first
-          of seeds 0 to 7 that came out clean. A change to this board's plan or to the copper laid here can
-          need another: the build goes on to the next seeds by itself and says which one was clean.
+          that came out clean. Seeds 0 to 6 left connections open; 7 was clean until the M2 holes got their
+          no-copper areas and leaves 5 open since. A change to this board's plan or to the copper laid here
+          can need another: the build goes on to the next seeds by itself and says which one was clean.
 """
 import math
 import numpy as np
@@ -33,7 +34,7 @@ from compose import params as PR
 from compose.pcb import rev2_half as H
 
 ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_solder_rgb": "2.5.0",
-          "half_rev2_hotswap_rgb": ("2.5.0", 7)}
+          "half_rev2_hotswap_rgb": ("2.5.0", 8)}
 
 ROW = "ROW4"
 ROW_W = 0.25                 # signal width
