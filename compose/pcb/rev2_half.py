@@ -44,8 +44,16 @@ BOARDS = {"half_rev2_hotswap": ("hotswap", False), "half_rev2_solder": ("solder"
 # ---------------------------------------------------------------- parts
 LED_AT = (0.0, 5.05)                 # MINI-E centre, footprint coords (KiCad, y down): under the switch's LED window
 LED_CUT = (3.6, 3.2, 0.5)            # board cutout w x h, corner radius (body 3.2 x 2.8, router corners r 0.5)
-LED_PAD_X, LED_PAD_Y = 2.85, 0.75    # pad centres (pads 1.2 x 0.82: 0.45 mm of copper-edge clearance to the cutout)
-LED_PAD = (1.2, 0.82)
+LED_PAD_X, LED_PAD_Y = 2.775, 0.75   # pad centres. The pads reach from 2.1 to 3.45 mm out from the LED's centre and
+LED_PAD = (1.35, 0.82)               #   stop 0.3 mm from the cutout, for the leads to rest on; the two published
+#                                        footprints (compose/sim/half_rev2.py) start 0.05 and 0.15 mm nearer still
+LED_PAD_EDGE = 0.25                  # the copper-to-edge rule for these pads alone; the board's is 0.4 mm
+assert LED_PAD_X - LED_PAD[0] / 2 - LED_CUT[0] / 2 >= LED_PAD_EDGE + 0.05 - 1e-9
+# ... as a KiCad rule: kicad.make() writes it beside the board file, where the DRC reads it
+LED_RULES = f"""(rule "LED pads to their own cutout"
+  (condition "A.Type == 'Pad' && (A.intersectsCourtyard('LB*') || A.intersectsCourtyard('LF*'))")
+  (constraint edge_clearance (min {LED_PAD_EDGE}mm)))
+"""
 LED_PINS = {"1": (1, -1), "2": (1, 1), "3": (-1, 1), "4": (-1, -1)}   # VDD, DOUT, GND, DIN (pad-side view, F)
 CAP_EVERY = 3                        # 100 nF (1206) per this many LEDs (hot-plug inrush, see the controller sim)
 CAP_AT = (5.6, 5.05)                 # footprint coords, upright (pads along y) beside the LED, inside the switch
@@ -516,7 +524,8 @@ def led_fp(b, ref, face):
         PK.add_pad(fp, pin, "smd", "roundrect", (sx * LED_PAD_X, sy * LED_PAD_Y), LED_PAD)
     PK.courtyard(fp, -3.65, -1.85, 3.65, 1.85, pcbnew.F_CrtYd)
     # pin 1 mark: a short bar outside pad 1
-    PK.silk_poly(fp, [(LED_PAD_X + 0.9, -LED_PAD_Y - 0.5), (LED_PAD_X + 0.9, -LED_PAD_Y + 0.5)], pcbnew.F_SilkS, 0.15)
+    bar = LED_PAD_X + LED_PAD[0] / 2 + 0.3
+    PK.silk_poly(fp, [(bar, -LED_PAD_Y - 0.5), (bar, -LED_PAD_Y + 0.5)], pcbnew.F_SilkS, 0.15)
     if face == "B":
         fp.Flip(pcbnew.VECTOR2I(0, 0), True)                   # left-right: x mirrored, as in the plan
     return fp
@@ -546,6 +555,7 @@ def build(name):
         # the router keeps its own 0.2 mm clearance to the boundary as well: 0.25 more makes the 0.4 mm copper-edge
         # clearance (DRC-checked); the default 0.45 crowds the 29 LED cutouts
         b.kb2_route_edge = PR.CLEARANCE + 0.05
+        b.kb2_drc_rules = LED_RULES
     if rgb and POWER_W > PR.TRACE_W:
         pw = pcbnew.NETCLASS("Power")
         pw.SetTrackWidth(MM(POWER_W))
