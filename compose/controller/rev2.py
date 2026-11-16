@@ -45,6 +45,8 @@ from compose.pcb import art as PA
 
 V, MM, DEG = PK.V, PK.MM, PK.DEG
 NAME = "controller_rev2"
+ROUTER = "2.5.0"                           # the Freerouting version this board is routed with: 2.5.0 gives the
+#                                            same board on every run (2.1.0 where it isn't installed)
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
 from compose.controller.rev2_std import (W2, Y_BACK, Y_FRONT, CORNER_R, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, CLIP_Y, POST_R,
@@ -220,6 +222,7 @@ def build():
     ol = outline_poly()
     ol_up = translate(scale(ol, 1.0, -1.0, origin=(0, 0)), CX, -CY)     # PK.K maps (x, y) -> (x, -y)
     b.kb2_outline = (ol_up, 0.0, 0.0)
+    b.kb2_router = ROUTER
     PK.outline(b, ol_up, 0.0, 0.0)
     fps = {}
     # power nets: 0.4 mm tracks (0.5 A LED rail + return; still fits between 2.54 mm pins)
