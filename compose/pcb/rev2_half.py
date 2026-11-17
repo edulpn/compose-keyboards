@@ -20,7 +20,7 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
     by physical position: the back-most contact is slot 1, as on the controller (the jumper keeps the order).
   - Slots: 1 GND, 2 5V, 3 RGB in, 4 GND, 5-11 COL0-6, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
-Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/layout.py.
+Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
 import os
 import sys
@@ -33,7 +33,7 @@ from shapely.ops import unary_union
 from compose import params as PR
 from compose import geom as G
 from compose import layout as layouts
-from compose.pcb import layout as PL
+from compose.pcb import switch as SW
 from compose.pcb import preroute as PRE
 from compose.controller import rev2_std as CS
 
@@ -83,7 +83,7 @@ M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part
 
 
 def fp2local(k, fx, fy):
-    return PL.fp2local(k, fx, fy)
+    return SW.fp2local(k, fx, fy)
 
 
 def outline():
@@ -137,7 +137,7 @@ def socket_shapes(k):
     loc = lambda p: fp2local(k, *p)
     sh = [Polygon([loc((x, y)) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))])]
     for (c, sz) in (PR.HS_PAD2, PR.HS_PAD1):
-        for cc in (c, PL.mirror_fp(c)):
+        for cc in (c, SW.mirror_fp(c)):
             w, h = sz
             sh.append(Polygon([loc((cc[0] + dx * w / 2, cc[1] + dy * h / 2)) for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]))
     return unary_union(sh)
@@ -167,7 +167,7 @@ def jumper_row_y():
     import hashlib
     import json
     here = os.path.dirname(os.path.abspath(__file__))
-    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "layout.py", "pcb/layout.py", "pcb/rev2_half.py",
+    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "layout.py", "pcb/switch.py", "pcb/rev2_half.py",
                                                   "pcb/jumper.py", "controller/rev2_std.py", "case/gasket.py")]
     src.append(os.path.join(here, "..", "..", "layouts", PR.LAYOUT, "layout.py"))
     # params.py as it resolved, not only as written: C58_TENT, C58_SPLAY, C58_GAP_TOP and the other environment
@@ -256,7 +256,7 @@ def ffc_place(keep, ol):
 
 # ---------------------------------------------------------------- plan
 def _diode_candidates():
-    return PL._diode_candidates()
+    return SW.diode_candidates()
 
 
 _PLACEMENT = {}
@@ -271,7 +271,7 @@ def plan(variant="hotswap", rgb=False):
     base = _PLACEMENT["s"]
     s = SimpleNamespace(**vars(base))
     s.variant, s.rgb = variant, rgb
-    s.holes = unary_union([h for k in L.keys for h in PL.key_holes(k, variant)])
+    s.holes = unary_union([h for k in L.keys for h in SW.key_holes(k, variant)])
     s.socks = base.socks if variant == "hotswap" else Polygon()
     if not rgb:
         s.ledcut, s.leds, s.led_order, s.caps = [], {"B": {}, "F": {}}, [], []
@@ -285,8 +285,8 @@ def _place():
     ol = s.outline
     keys = L.keys
     rgb = True
-    cuts = unary_union([PL.switch_cutout(k) for k in keys])            # plate switch holes (+0.6)
-    holes = unary_union([h for k in keys for v in ("hotswap", "solder") for h in PL.key_holes(k, v)])
+    cuts = unary_union([SW.switch_cutout(k) for k in keys])            # plate switch holes (+0.6)
+    holes = unary_union([h for k in keys for v in ("hotswap", "solder") for h in SW.key_holes(k, v)])
     socks = unary_union([socket_shapes(k) for k in keys])
     variant = "hotswap"
     leds = {"B": {}, "F": {}}
@@ -322,7 +322,7 @@ def _place():
     # keeps a 0.9 mm margin to socket bodies and other diodes; to SMD pads, LEDs and the connector it keeps
     # 0.25 mm from its real (2 mm) diameter
     inside = ol.buffer(-1.0)
-    sbodies = unary_union([PL.socket_body(k) for k in keys]) if variant == "hotswap" else Polygon()
+    sbodies = unary_union([SW.socket_body(k) for k in keys]) if variant == "hotswap" else Polygon()
     smd = unary_union([socks.difference(sbodies), s.ffc.body, ledcut_u, ledpads_u, caps_u])
     taken0 = Polygon()
 
@@ -380,9 +380,9 @@ def _place():
     board = ol.buffer(-(PR.M2_HEAD_D / 2 + 0.6))
     plate_r = PR.M2_INSERT_D / 2 + 0.8
     head_r = M2_KEEP
-    cuts0 = unary_union([PL.switch_cutout(k, grow=0.0) for k in keys])     # the plate's real switch holes
+    cuts0 = unary_union([SW.switch_cutout(k, grow=0.0) for k in keys])     # the plate's real switch holes
     s.posts = []
-    for (x0, y0) in PL.ORIGINAL_POSTS:
+    for (x0, y0) in G.POSTS:
         best = None
         n = int(POST_SEARCH / 0.5)
         for a in range(-n, n + 1):
@@ -469,13 +469,13 @@ def field(s, keepouts=()):
             (c2, s2), (c1, s1) = PR.HS_PAD2, PR.HS_PAD1
             f.pad("B", rect(k, c2, *s2), col, f"{ks.ref}.2")
             f.pad("B", rect(k, c1, *s1), dn, f"{ks.ref}.1")
-            f.pad("F", rect(k, PL.mirror_fp(c2), *s2), col, f"{ks.ref}.2")
-            f.pad("F", rect(k, PL.mirror_fp(c1), *s1), dn, f"{ks.ref}.1")
+            f.pad("F", rect(k, SW.mirror_fp(c2), *s2), col, f"{ks.ref}.2")
+            f.pad("F", rect(k, SW.mirror_fp(c1), *s1), dn, f"{ks.ref}.1")
         else:
-            for p, n, num in ((PR.MX_PIN1, dn, 1), (PL.mirror_fp(PR.MX_PIN1), dn, 1),
-                              (PR.MX_PIN2, col, 2), (PL.mirror_fp(PR.MX_PIN2), col, 2)):
+            for p, n, num in ((PR.MX_PIN1, dn, 1), (SW.mirror_fp(PR.MX_PIN1), dn, 1),
+                              (PR.MX_PIN2, col, 2), (SW.mirror_fp(PR.MX_PIN2), col, 2)):
                 f.pad("FB", Point(fp2local(k, *p)).buffer(PR.MX_PTH_PAD / 2), n, f"{ks.ref}.{num}")
-        for h in PL.key_holes(k, s.variant)[:5 if s.variant == "hotswap" else 3]:    # centre, pegs, socket slots
+        for h in SW.key_holes(k, s.variant)[:5 if s.variant == "hotswap" else 3]:    # centre, pegs, socket slots
             f.hole(h)
         c, a = np.array(ks.cathode), np.array(ks.anode)
         u = (a - c) / np.linalg.norm(a - c)
@@ -520,7 +520,7 @@ POWER_W = PR.TRACE_W         # power at the signal width: brightness is capped a
 
 def _pc():
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     return pcbnew, PK
 
 

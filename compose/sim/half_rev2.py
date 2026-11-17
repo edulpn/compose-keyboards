@@ -65,10 +65,10 @@ CTRL_OUT = os.environ.get("CTRL_OUT", "out")
 sys.argv = sys.argv[:1] + [OUT]
 from compose import params as PR
 from compose import geom as G
-from compose.pcb import layout as PL
+from compose.pcb import switch as SW
 from compose.pcb import rev2_half as H
 from compose.pcb import preroute as PRE
-from compose.sim import matrix as SP
+from compose.sim.copper import Copper
 from compose.sim import sheet as SH
 from compose.sim import coupling as CP
 from compose.sim import controller_copper as CC
@@ -120,14 +120,14 @@ def K(p):
 
 
 def mirror(p):
-    return PL.mirror_fp(p)
+    return SW.mirror_fp(p)
 
 
 class Half:
     """One routed board fitted as one half: copper groups of every part pin."""
 
     def __init__(self, path, variant, rgb, side):
-        self.cu = SP.Copper(path)
+        self.cu = Copper(path)
         self.b = self.cu.b
         self.fp = {f.GetReference(): f for f in self.b.GetFootprints()}
         self.variant, self.rgb, self.side = variant, rgb, side
@@ -210,12 +210,12 @@ class Half:
                 c1, c2 = KAILH_TAB1, KAILH_TAB2
                 if self.side == "R":
                     c1, c2 = mirror(c1), mirror(c2)
-                sa, sb = self.at(PL.fp2local(k, *c1)), self.at(PL.fp2local(k, *c2))
+                sa, sb = self.at(SW.fp2local(k, *c1)), self.at(SW.fp2local(k, *c2))
             else:
                 p1, p2 = PR.MX_PIN1, PR.MX_PIN2
                 if self.side == "R":
                     p1, p2 = mirror(p1), mirror(p2)
-                sa, sb = self.at(PL.fp2local(k, *p1), F), self.at(PL.fp2local(k, *p2), F)
+                sa, sb = self.at(SW.fp2local(k, *p1), F), self.at(SW.fp2local(k, *p2), F)
             d = self.fp[ks.dref]
             square = (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT)
             sq = [p for p in d.Pads() if p.GetShape() in square]       # (SWIG pad objects don't compare equal)
@@ -451,7 +451,7 @@ def board_checks(h):
     ok(not bad, "every key: column slot -> switch -> diode anode, cathode -> row slot" + (f" ({bad[:3]})" if bad else ""))
     if h.variant == "hotswap":                                   # a tab 2.1 mm further out is past its pad's end
         off = (KAILH_TAB1[0] + 2.1, KAILH_TAB1[1])
-        bare = sum(h.at(PL.fp2local(ks.k, *(mirror(off) if h.side == "R" else off))) is None for ks in h.s.keys)
+        bare = sum(h.at(SW.fp2local(ks.k, *(mirror(off) if h.side == "R" else off))) is None for ks in h.s.keys)
         ok(bare >= len(keys) // 2, f"negative control: a socket tab just off its pad is caught ({bare} of {len(keys)} "
                                    f"land on bare board; the tab test isn't trivially true)")
     used = {5 + c for c in {k.col for k in L.keys}} | {12 + r for r in {k.row for k in L.keys}}
@@ -542,7 +542,7 @@ class Jumper:
     connector's contacts mirrored back."""
 
     def __init__(self, path, side, g, half, ctrl_board, shift=0.0):
-        self.cu = SP.Copper(path)
+        self.cu = Copper(path)
         self.side = side
         sg = 1.0 if side == "L" else -1.0
         f = J.flat(g, side)

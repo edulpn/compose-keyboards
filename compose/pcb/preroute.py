@@ -64,7 +64,7 @@ def hook(name):
 
 def router(board):
     """The Freerouting version the current layout names for a board (ROUTER = {board name: version, or
-    (version, seed)} in its routing module), or None: the default (compose.pcb.kicad.ROUTER)."""
+    (version, seed)} in its routing module), or None: the default (compose.pcb.toolbox.ROUTER)."""
     return getattr(_layout(), "ROUTER", {}).get(board)
 
 
@@ -495,7 +495,7 @@ def place(board, field, K):
     """The field's copper onto the board (K: its coordinates -> KiCad mm), and the nets it holds noted on the
     board (kb2_prerouted) for the export, the import and the clean-up after routing."""
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     nets = board.GetNetsByName()
     lay = {"F": pcbnew.F_Cu, "B": pcbnew.B_Cu}
     names = field.nets()
@@ -528,7 +528,7 @@ def board_field(board):
     """A Field read back from the KiCad board itself (KiCad mm, y down): its real pad shapes and nets, unplated
     holes, exposed-copper art, keep-out areas, and every track and via on it."""
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     ToMM = pcbnew.ToMM
     ol, ox, oy = board.kb2_outline
     kol = Polygon([PK.K(p, ox, oy) for p in ol.exterior.coords], [[PK.K(p, ox, oy) for p in r.coords] for r in ol.interiors])

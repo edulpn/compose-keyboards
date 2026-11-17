@@ -72,7 +72,7 @@ def _controller_solids():
     standoffs. Returns dict name -> solid (P frame)."""
     from compose.controller import rev2 as CV
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     os.makedirs(PK.PCB_OUT, exist_ok=True)
     b = CV.build()
     to_P = CT.to_P
@@ -131,7 +131,7 @@ def half_parts_local():
     """Everything under a half board (left local frame), every variant at once: hotswap sockets, diode bodies,
     capacitors, LEDs, the cable connector, M2 screw heads, solder-in switch pins."""
     from compose.pcb import rev2_half as H2
-    from compose.pcb import layout as PL
+    from compose.pcb import switch as SW
     from shapely.geometry import LineString as LS
     from shapely.ops import unary_union as uu
     s = H2.plan("hotswap", True)
@@ -143,8 +143,8 @@ def half_parts_local():
         "ffc": s.ffc.body,
         "leds": uu(s.ledcut),            # reverse-mount MINI-E: the body (3.2 x 2.8) within its cutout
         "heads": uu([Point(p).buffer(PR.M2_HEAD_D / 2) for p in s.posts]),
-        "pins": uu([Point(PL.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
-                    for p_ in (PR.MX_PIN1, PR.MX_PIN2) for pp in (p_, PL.mirror_fp(p_))]),
+        "pins": uu([Point(SW.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
+                    for p_ in (PR.MX_PIN1, PR.MX_PIN2) for pp in (p_, SW.mirror_fp(p_))]),
     }
     sol = [poly_prism(g, z0 - HALF_PART_H[n], z0) for n, g in shapes.items() if not g.is_empty]
     return union(sol)

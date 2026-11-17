@@ -28,6 +28,8 @@ from compose import params as PR
 from compose import layout as layouts
 
 LAYOUT = layouts.get()
+POSTS = tuple(LAYOUT.posts)          # the plate posts as the layout gives them: rev 1's board plan (compose.pcb.layout)
+#                                       moves LAYOUT.posts clear of its parts, rev 2 solves its own from these
 P = PR.KEY_PITCH
 
 

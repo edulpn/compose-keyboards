@@ -158,11 +158,11 @@ GL = gasket_layout()
 
 # ================================================================ plate
 def plate2_local():
-    from compose.case import sandwich as PT
+    from compose.case import keyholes as KH
     core = prism(ring(O_CORE), 0.0, TH)
     flange = prism(ring(O_PLATE), PR.FLANGE_Z0, PR.FLANGE_Z0 + PR.FLANGE_T)
     plate = core.fuse(flange).clean()
-    cut = PT._switch_cutter()
+    cut = KH.switch_cutter()
     cutters = [cut.rotate(cq.Vector(0, 0, 0), cq.Vector(0, 0, 1), k.rot).translate(cq.Vector(k.x, k.y, 0))
                for k in L.keys]
     plate = plate.cut(cq.Compound.makeCompound(cutters))
@@ -178,8 +178,8 @@ def plate2_local():
 
 # ================================================================ frame
 def _key_opening():
-    from compose.case import sandwich as PT
-    return PT.key_opening()
+    from compose.case import keyholes as KH
+    return KH.key_opening()
 
 
 def middle_side_local(gap):
@@ -360,7 +360,6 @@ def cover2_P():
     """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like rev 1.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
     standoffs, four M3 screws."""
-    from compose.case import sandwich as PT
     z0 = CT.cover_under
     gap = PR.FLOAT_GAP + PR.FIT_GAP
     yb, yf = 0.0, -PR.BRIDGE_LEN

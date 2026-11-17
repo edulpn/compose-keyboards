@@ -23,7 +23,7 @@ two such points goes through Field.route, which steps round whatever the plan pu
   ROUTER  the boards routed with Freerouting 2.5.0 instead of the default 2.1.0: all four. It gives the same
           board on every run. With ROW4 laid here it finishes the plain boards and the solder RGB board as they
           are put to it. The hotswap RGB board, with its rail and D nets laid, it finishes when the job is put
-          to it another way (the seed, see route() in compose/pcb/kicad.py): the one named here is the first
+          to it another way (the seed, see route() in compose/pcb/toolbox.py): the one named here is the first
           that came out clean. Seeds 0 to 6 left connections open; 7 was clean until the M2 holes got their
           no-copper areas and leaves 5 open since. A change to this board's plan or to the copper laid here
           can need another: the build goes on to the next seeds by itself and says which one was clean.

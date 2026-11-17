@@ -51,7 +51,7 @@ def _lines(data):
 
 
 def main():
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     from compose.pcb import jumper as J
     dst = ORDER_OUT
     shutil.rmtree(dst, ignore_errors=True)
