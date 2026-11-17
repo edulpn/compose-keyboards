@@ -24,6 +24,7 @@ import json
 import itertools
 import subprocess
 import numpy as np
+from compose.controller import rev2_std as STD
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out"
 SIM = os.path.join(OUT, "sim_controller_rev2")
@@ -738,6 +739,8 @@ RREF vbus 0 44
     rep(f"\nBrightness cap: {n_led} LEDs x {i_white * 1e3:.0f} mA full white + {i_q * 1e3:.1f} mA idle each; the polyfuse holds "
         f"0.5 A and USB gives {I_USB * 1e3:.0f} mA in total. Keeping the LEDs under {I_LED_MAX * 1e3:.0f} mA -> "
         f"**RGB_MATRIX_MAXIMUM_BRIGHTNESS {cap}** (of 255) for full white; colours/effects average lower.")
+    verdict(STD.RGB_MAX_BRIGHTNESS <= cap, f"the cap the firmware is generated with ({STD.RGB_MAX_BRIGHTNESS}, "
+            f"compose/controller/rev2_std.py) is within the {cap} this budget allows")
     duty = cap / 255
     n_pk = n_led * duty + 3.5 * math.sqrt(n_led * duty * (1 - duty))
     i_pk = n_pk * i_white + n_led * i_q

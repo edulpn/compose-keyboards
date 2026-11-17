@@ -14,13 +14,13 @@ import json
 from compose import params as PR
 from compose import geom as G
 from compose.pcb import rev2_half as H
+from compose.controller.rev2_std import RGB_MAX_BRIGHTNESS      # checked against the power budget by spice-controller
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
 ROWS = [f"GP{g}" for g in range(6)]
 COLS_L = [f"GP{g}" for g in range(6, 13)]
 COLS_R = [f"GP{g}" for g in (22, 21, 20, 19, 18, 17, 16)]
 RGB_PIN = "GP13"
-RGB_MAX_BRIGHTNESS = 32          # 58 LEDs at full white stay well under the 0.5 A polyfuse (controller rev 2 sim)
 
 
 def matrix_pos(k, side):

@@ -55,3 +55,8 @@ def outline():
     o = box(-W2, Y_BACK, W2, Y_FRONT)
     o = o.difference(box(-W2 - 1, Y_BACK - 1, -CLIP_X, CLIP_Y)).difference(box(CLIP_X, Y_BACK - 1, W2 + 1, CLIP_Y))
     return o.buffer(-CORNER_R).buffer(CORNER_R, resolution=8).buffer(1.0, resolution=8).buffer(-1.0, resolution=8)
+
+# optional RGB: the brightness the firmware caps the LEDs at (QMK's RGB_MATRIX_MAXIMUM_BRIGHTNESS, of 255). The
+# controller's circuit simulation (compose/sim/controller_spice.py, E2) works out the highest value that keeps
+# 84 LEDs at full white inside USB's budget, and fails when this one is above it.
+RGB_MAX_BRIGHTNESS = 32
