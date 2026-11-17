@@ -7,6 +7,10 @@
 # main's own run to check.
 # Pushes to main and manual runs always run everything.
 #
+# Rev 1 is released: a pull request that changes any of its outputs fails. Rev 2 is live, so its outputs are
+# compared with the base's and the result reported (case STLs, keyboard.json, the jumper, and each half board
+# that routes against the board routed before): a change meant to leave them alone has to read "identical".
+#
 # A rev 2 half board is routed only when something its routing reads has changed since it was last routed
 # clean (.github/ci/routed.py); otherwise that board is taken from the cache and goes through DRC, the copper
 # simulation and the order check like a fresh one.
@@ -43,6 +47,10 @@ jobs:
       - run: python3 .github/ci/test_affected.py
       - run: python3 .github/ci/test_plan.py
       - run: python3 .github/ci/test_routed.py
+      - run: python3 .github/ci/test_sameboard.py
+      - run: python3 .github/ci/test_imports.py
+      # every name the code takes from another of its modules exists (covers the commands no job below runs)
+      - run: python3 .github/ci/imports.py
       - id: plan
         run: python3 .github/ci/plan.py deps
 
@@ -91,6 +99,7 @@ jobs:
     env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - run: $T deps/rev2.txt gasket-case o2
       - run: $T deps/rev2.txt gasket-checks o2
@@ -107,6 +116,30 @@ jobs:
           fi
           pip3 install -q --user --break-system-packages hjson "jsonschema>=4,<5"
           python3 .github/ci/qmk_schema.py qmk/data/schemas o2/firmware/keyboard.json o2/firmware/rgb/keyboard.json
+      # Rev 2 is the live revision: a design change moves its outputs on purpose, so this reports and does not fail.
+      # A change that is meant to leave them alone (a reorganisation, a new check) has to read "identical" here.
+      - name: the same outputs as the base? (case STLs, both keyboard.json; reported)
+        if: github.event_name == 'pull_request'
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          git worktree add -q --detach "$RUNNER_TEMP/base" $base
+          if ! (cd "$RUNNER_TEMP/base" && python3 -m compose gasket-case "$RUNNER_TEMP/b2" \
+                && python3 -m compose firmware-rev2 "$RUNNER_TEMP/b2") > "$RUNNER_TEMP/base.log" 2>&1; then
+            tail -5 "$RUNNER_TEMP/base.log"
+            echo "::notice::rev 2: the base ${base:0:9} did not build here, so there is nothing to compare with"; exit 0
+          fi
+          differ=""
+          for f in $( (cd o2 && ls print/*.stl firmware/keyboard.json firmware/rgb/keyboard.json
+                       cd "$RUNNER_TEMP/b2" && ls print/*.stl firmware/keyboard.json firmware/rgb/keyboard.json) 2>/dev/null | sort -u); do
+            cmp -s "o2/$f" "$RUNNER_TEMP/b2/$f" || differ="$differ $f"
+          done
+          if [ -z "$differ" ]; then
+            msg="rev 2: $(ls o2/print/*.stl | wc -l | tr -d ' ') STLs and both keyboard.json identical to the base ${base:0:9}"
+          else
+            msg="rev 2: outputs differ from the base ${base:0:9}:$differ"
+            echo "::notice title=rev 2 outputs changed::$msg"
+          fi
+          echo "$msg"; echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with: { name: deps-rev2, path: deps, retention-days: 7 }
 
@@ -199,6 +232,8 @@ jobs:
       - id: route
         if: steps.reuse.outputs.clean != 'true'
         run: |
+          rm -rf "$RUNNER_TEMP/was"; mkdir -p "$RUNNER_TEMP/was"      # the board as it was routed before, to compare with
+          cp o2/pcb/$BOARD.kicad_pcb o2/pcb/$BOARD.dsn o2/routed/$BOARD.json "$RUNNER_TEMP/was/" 2>/dev/null || true
           rm -rf o2 deps
           if [ "${{ matrix.shards }}" = 1 ]; then      # the board's own job: no clean route fails it
             timeout --signal=INT 55m $T deps/boards.txt half-rev2 o2 $BOARD \
@@ -215,6 +250,19 @@ jobs:
           python3 .github/ci/routed.py record deps/boards.txt o2/routed/$BOARD.json \
               commit=${{ github.event.pull_request.head.sha || github.sha }} run=${{ github.run_id }} \
               kicad="$(python3 -c 'import pcbnew; print(pcbnew.Version())')"
+      # Freerouting 2.5.0 gives the same board for the same job. Routing again because a file moved or the workflow
+      # changed should therefore end in the board there was: the same router input (.dsn), then the same copper,
+      # parts and silkscreen (.github/ci/sameboard.py). Reported, not failed: a design change differs on purpose.
+      - name: the same board as the one routed before? (reported)
+        if: steps.route.outputs.routed == 'true'
+        run: |
+          was="$RUNNER_TEMP/was"
+          [ -f "$was/$BOARD.kicad_pcb" ] && [ -f "$was/$BOARD.dsn" ] || { echo "$BOARD: no earlier board to compare with"; exit 0; }
+          from=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('extra', {}).get('commit', '?')[:9])" "$was/$BOARD.json" 2>/dev/null || echo "?")
+          if cmp -s "$was/$BOARD.dsn" o2/pcb/$BOARD.dsn; then dsn="the router was handed the same job as at $from"
+          else dsn="the router's job (.dsn) differs from the one at $from"; fi
+          echo "$BOARD: $dsn"; echo "**$BOARD**: $dsn" >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/ci/sameboard.py "$was/$BOARD.kicad_pcb" o2/pcb/$BOARD.kicad_pcb name=$BOARD was="routed at $from"
       - if: steps.record.outputs.key
         uses: actions/cache/save@v4
         with:
@@ -241,6 +289,7 @@ jobs:
     env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - run: $T deps/boards.txt flex-jumper o2
       - uses: actions/upload-artifact@v4
@@ -248,6 +297,17 @@ jobs:
       - run: $T deps/boards.txt flex-sim o2
       - uses: actions/upload-artifact@v4
         with: { name: deps-boards-jumper, path: deps, retention-days: 7 }
+      - name: the same jumper as the base's? (reported)
+        if: github.event_name == 'pull_request'
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          git worktree add -q --detach "$RUNNER_TEMP/base" $base
+          if ! (cd "$RUNNER_TEMP/base" && python3 -m compose flex-jumper "$RUNNER_TEMP/bj") > "$RUNNER_TEMP/base.log" 2>&1; then
+            tail -5 "$RUNNER_TEMP/base.log"
+            echo "::notice::jumper: the base ${base:0:9} did not build here, so there is nothing to compare with"; exit 0
+          fi
+          python3 .github/ci/sameboard.py "$RUNNER_TEMP/bj/pcb/jumper_rev2.kicad_pcb" o2/pcb/jumper_rev2.kicad_pcb \
+              name=jumper_rev2 was="built from the base ${base:0:9}"
 
   boards-sim:
     needs: [controller, half, jumper]

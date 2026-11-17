@@ -28,10 +28,11 @@ How it works: [the gasket-mount case](../../docs/gasket-case.md).
 | pads | 20 pairs per half: 18 found along the plate edge, 2 at the ends of the inner (bridge) edge |
 | frame screws | six M3 per frame |
 
-### Checked (`gasket-checks`: 131 checks, all passing)
+### Checked (`gasket-checks`: 132 checks, all passing)
 
 | check | result |
 |---|---|
+| layout | 29 keys per half, keycaps at least 0.5 mm apart; the inner edge straight along the whole centre section |
 | overlaps | none between parts that mustn't touch: tub, plates, frames, cover, controller board and the parts on both its faces, Pico stack, standoffs, the real underside parts of every half-board variant, jumpers, pads |
 | clearances | plate–tub 0.6 mm, plate–frame 0.58 mm, cover–frames 0.3 mm, board–tub 0.5 mm, Pico–cover 0.7 mm |
 | pad gap | 2.10 mm at every pad, top and bottom, measured on the solids along the plate normal |

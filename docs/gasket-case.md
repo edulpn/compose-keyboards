@@ -72,7 +72,7 @@ The pairs are found by scanning the plate edge for every spot where a slice fits
 
 ## What `gasket-checks` verifies
 
-Every check runs on the generated solids, for the layout as built:
+The layout is checked first, before anything is built round it: keycaps at least 0.5 mm apart, and the half's inner edge straight along the whole centre section (a layout whose inner edge is too short for it stops here). Every other check runs on the generated solids, for the layout as built:
 
 - **overlaps:** none between parts that mustn't touch: tub, plates, frames, cover, the controller board and the parts on both its faces, the Pico stack, standoffs, the real underside parts of every half-board variant, the jumpers, the pads;
 - **clearances** between plate and tub, plate and frame, cover and frames, board and tub, Pico and cover;

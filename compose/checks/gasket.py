@@ -258,6 +258,10 @@ def parts_world(jumpers=True):
 
 
 def main():
+    # ---- the layout itself, before anything is built round it (rev 1's build stops on these; nothing of rev 2 did)
+    issues = G.validate_layout()
+    rec("L layout: keycaps >= 0.5 mm apart, inner edge straight along the centre section, hardware inside the outline",
+        not issues, f"{len(G.LAYOUT.keys)} keys per half" + ("".join("; " + i for i in issues)))
     print("building parts ...", flush=True)
     from compose.pcb import jumper as J
     jg = J.solve()                                       # the jumper path (raises if there's none)
