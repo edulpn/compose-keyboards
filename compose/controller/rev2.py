@@ -40,7 +40,7 @@ from shapely.affinity import scale, translate, rotate
 from shapely.ops import unary_union
 import pcbnew
 from compose import params as PR
-from compose.pcb import kicad as PK
+from compose.pcb import toolbox as PK
 from compose.pcb import art as PA
 
 V, MM, DEG = PK.V, PK.MM, PK.DEG

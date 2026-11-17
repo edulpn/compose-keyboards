@@ -16,9 +16,10 @@ from shapely.ops import unary_union
 from matplotlib.textpath import TextPath
 from matplotlib.font_manager import FontProperties
 from compose import params as PR
-from compose.pcb import layout as PL
+from compose import geom as G
+from compose.pcb import switch as SW
 
-L = PL.L
+L = G.LAYOUT
 
 
 # ---------------------------------------------------------------- text -> outlines
@@ -55,8 +56,8 @@ def ring_logo(cx, cy, r):
 
 # ---------------------------------------------------------------- free board area
 def free_area(plan):
-    keep = [PL.switch_cutout(k, grow=0.8) for k in L.keys]
-    keep += [PL.bottom_keepout(k).buffer(0.5) for k in L.keys]
+    keep = [SW.switch_cutout(k, grow=0.8) for k in L.keys]
+    keep += [SW.bottom_keepout(k).buffer(0.5) for k in L.keys]
     keep += [LineString([ks.cathode, ks.anode]).buffer(2.4) for ks in plan.keys]        # incl. the 'K' marks
     keep += [Point(p).buffer(3.0) for p in plan.holes_m3 + plan.holes_m2]
     keep.append(plan.conn_body.buffer(1.2))

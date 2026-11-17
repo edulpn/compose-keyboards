@@ -25,7 +25,7 @@ RUN arch=$(dpkg --print-architecture | sed 's/amd64/x64/') \
        | tar -xJ -C /usr/local --strip-components=1 \
     && node --version
 
-# Freerouting (the autorouter); compose/pcb/kicad.py reads FREEROUTING
+# Freerouting (the autorouter); compose/pcb/toolbox.py reads FREEROUTING
 ARG FREEROUTING_VERSION=2.1.0
 RUN curl -fsSL -o /opt/freerouting.jar \
         "https://github.com/freerouting/freerouting/releases/download/v${FREEROUTING_VERSION}/freerouting-${FREEROUTING_VERSION}.jar"

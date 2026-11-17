@@ -54,8 +54,8 @@ def half_local(board_path):
     """The left half's fitted parts (hotswap + RGB build), left local frame: {material: [solids]}."""
     import pcbnew
     from compose.pcb import rev2_half as H2
-    from compose.pcb import layout as PL
-    from compose.pcb import kicad as PK
+    from compose.pcb import switch as SW
+    from compose.pcb import toolbox as PK
     s = H2.plan("hotswap", True)
     L = G.LAYOUT
     zb = -PR.PCB_T                                      # the B face (the parts hang below it)
@@ -64,14 +64,14 @@ def half_local(board_path):
     for k in L.keys:
         rects = []
         for (c, (w, h)) in (PR.HS_PAD2, PR.HS_PAD1):
-            r = Polygon([PL.fp2local(k, c[0] + dx * w / 2, c[1] + dy * h / 2) for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+            r = Polygon([SW.fp2local(k, c[0] + dx * w / 2, c[1] + dy * h / 2) for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
             rects.append(r)
             out["hmetal"].append(_prism(r.buffer(-0.15), zb, zb - 0.25))
         from shapely.ops import unary_union
         body = unary_union(rects).convex_hull.buffer(-0.6)
         out["hsock"].append(_prism(body, zb - 0.05, zb - PR.HS_HEIGHT))
         for p in (PR.MX_PIN1, PR.MX_PIN2):                # the two pin receptacles
-            x, y = PL.fp2local(k, *p)
+            x, y = SW.fp2local(k, *p)
             out["hsock"].append(cq.Solid.makeCylinder(1.6, PR.HS_HEIGHT + 0.2, cq.Vector(x, y, zb - PR.HS_HEIGHT - 0.2)))
     # ---- DO-35 diodes: body against the board, band at the cathode, leads to the holes and through the board
     Ld, Dd = PR.DIODE_BODY

@@ -29,7 +29,7 @@ from shapely.geometry import Point
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out"
 sys.argv = sys.argv[:1] + [OUT]
-from compose.sim import matrix as SP                                         # Copper class (geometry-only connectivity)
+from compose.sim.copper import Copper                                         # Copper class (geometry-only connectivity)
 
 ToMM = pcbnew.ToMM
 FAIL = []
@@ -122,7 +122,7 @@ def spec_nets(rgb=True):
 # ---------------------------------------------------------------- physical part pins on the copper
 class Board:
     def __init__(self, path):
-        self.cu = SP.Copper(path)
+        self.cu = Copper(path)
         self.b = self.cu.b
         self.fp = {f.GetReference(): f for f in self.b.GetFootprints()}
 

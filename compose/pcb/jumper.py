@@ -295,7 +295,7 @@ def build_board(g=None):
     """KiCad board of the jumper (one part for both sides; conductors numbered as on the left jumper): single-sided (F.Cu), fingers as pads, traces as tracks; User.1 = the PI
     stiffener areas (on the back, under the fingers: 0.3 mm total there); F.Mask = the coverlay openings."""
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     f = flat(g, "L")
     b = PK.new_board()
     ds = b.GetDesignSettings()
@@ -396,7 +396,7 @@ def drc_counts(rep):
     exposes all 20 nets by design: KiCad's "solder mask bridge" check doesn't apply to a cable end. KiCad 7's
     Python DRC ignores the project's rule severities, so those entries are taken out of the error count here."""
     import re
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     err, warn, unc = PK.drc_counts(rep)
     bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
     return err - bridges, warn, unc, bridges
@@ -407,7 +407,7 @@ def main(out=None):
     import os
     import sys
     import pcbnew
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     out = out or (sys.argv[1] if len(sys.argv) > 1 else "out_r2t")
     PK.PCB_OUT = os.path.join(out, "pcb")
     os.makedirs(PK.PCB_OUT, exist_ok=True)

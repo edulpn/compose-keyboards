@@ -103,7 +103,7 @@ C58_REV=2 python3 -m compose gasket-render out_r2t   # renders (assembly views n
 
 ### Routing
 
-How `route()` in `compose/pcb/kicad.py` drives Freerouting:
+How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
 
 - Each attempt runs `ROUTER_JOBS` Freerouting jobs side by side (default: half the CPU cores; each takes 3–4 GB) and keeps the first whose `.ses` is sound and fully routed.
 - A job is dropped when it stalls (best unrouted count unchanged for 40 passes), or when its `.ses` isn't the board it finished with. Freerouting 2.1 sometimes logs "Restoring an earlier board" and then writes that one; on the RGB boards that happens in most runs.
@@ -142,12 +142,14 @@ Outputs go to `out*/`, which is not committed: releases carry them.
 compose/            the platform (Python package)
   params.py           every dimension: angles, thicknesses, gaps, pads, hardware
   geom.py, layout.py  frames and transforms; the Layout/Key types
-  case/               sandwich.py (rev 1 case), gasket.py (rev 2 case), build, coupons, tilt risers
-  pcb/                rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py),
+  case/               sandwich.py (rev 1 case), gasket.py (rev 2 case), the key holes both cut (keyholes.py),
+                      build, coupons, tilt risers
+  pcb/                the KiCad toolbox every board is built with (toolbox.py), the switch as geometry (switch.py),
+                      rev 1 half boards + controller rev 1 (layout.py, kicad.py), rev 2 half boards (rev2_half.py),
                       the rev 2 flex jumper (jumper.py), board art, nets laid out before the router (preroute.py)
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
   checks/             fit, assembly, gasket and printability checks; the flex jumper as an elastic strip (flex_sim.py)
-  sim/                copper-level and ngspice simulations
+  sim/                copper-level and ngspice simulations (copper.py: a board's copper as geometry)
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
   order_rev2.py       the rev 2 order folder (out_order/)
@@ -181,7 +183,7 @@ After a change, re-run the build, then the checks. The checks are what tell you 
 
 Every design change goes through the existing checks (case checks, DRC, the copper simulations) rather than being judged by eye. When a new kind of part or constraint appears, add a check for it.
 
-- **Released revisions must not change.** Code shared between revisions (`kicad.py`, `art.py`, `params.py`, `geom.py`, `sim/matrix.py`) must leave rev 1's outputs byte-identical: build STLs, BOM and `keyboard.json`. Compare against a build of the unchanged code:
+- **Released revisions must not change.** Code shared between revisions (`params.py`, `geom.py`, `pcb/toolbox.py`, `pcb/switch.py`, `pcb/art.py`, `sim/copper.py`, `case/keyholes.py`) must leave rev 1's outputs byte-identical: build STLs, BOM and `keyboard.json`. Compare against a build of the unchanged code:
 
   ```sh
   git stash; python3 -m compose build /tmp/r1a; python3 -m compose firmware /tmp/r1a; git stash pop
@@ -191,7 +193,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
   ```
 
   Half-board Gerbers can't be compared byte for byte: routing is randomized. Rev 1's release carries the exact Gerbers that were ordered, so it is never rebuilt.
-- **Moving code between modules:** `python3 .github/ci/imports.py` checks, without running anything, that every name the code takes from another of its modules exists. It covers the commands nothing else reruns (rev 1's boards, simulation and renders).
+- **Moving code between modules:** `python3 .github/ci/imports.py` checks, without running anything, that every name the code takes from another of its modules exists. It covers the commands nothing else reruns (rev 1's boards, simulation and renders). It also checks that the controller rev 2 and rev 2 commands reach none of rev 1's modules through their imports: what both revisions use goes in a module of its own, so a change to one revision's code cannot reach the other.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
 - **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance and the return's through the GND pour from the copper, and holds a pre-routed rail and its return to 150 mΩ together; `python3 -m compose.sim.sheet` checks the method it reads the pour with, without KiCad); `flex-sim` passes. After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
 
@@ -232,7 +234,7 @@ Only needed if KiCad 7 isn't an option.
 
 The calls live in:
 
-- `compose/pcb/kicad.py`: `add_pad`, `silk_poly`, `drc`;
+- `compose/pcb/toolbox.py`: `add_pad`, `silk_poly`, `drc`;
 - `compose/pcb/rev2_half.py`: `led_fp`, `gnd_pour`, `gnd_fanout`;
 - `compose/pcb/jumper.py`: `build_board`;
 - `compose/controller/rev2.py`, `compose/checks/gasket.py`, `compose/render/model.py`, `compose/sim/controller_copper.py`.

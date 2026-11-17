@@ -199,7 +199,7 @@ def build():
     assert ok, "flex-sim: the jumper doesn't settle"
     jl = G.P2W(st.solid(zj))
     add("jumper", stl(cq.Compound.makeCompound([jl, jl.mirror("YZ")]), "jumper", tol=0.02), smooth=True)
-    from compose.pcb import kicad as PK
+    from compose.pcb import toolbox as PK
     S = np.diag([-1.0, 1, 1, 1])
     hb = os.path.join(OUT, "pcb", BUILD + ".kicad_pcb")
     hg = os.path.join(OUT, "pcb", BUILD + "_gerbers")

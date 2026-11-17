@@ -38,6 +38,13 @@ CASES = [
     ("a module that makes its names at run time", {"compose/c.py": "globals().update(V=1)\n", "compose/d.py": "from compose.c import V\n"}, 0, ""),
     ("a command whose module is not there", {"compose/__main__.py": "COMMANDS = {'build': ('compose.gone', 'builds')}\n"}, 1, "command build"),
     ("a layout taking a name the platform lost", {"layouts/one/preroute.py": "from compose.pkg import b as H\nR = H.ROUTER\n"}, 1, "H.ROUTER"),
+    ("a rev 2 command built on a shared module", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'half-rev2': ('compose.c', '')}\n",
+                                                  "compose/c.py": "from compose.pkg import shared\nV = shared.S\n",
+                                                  "compose/pkg/shared.py": "S = 1\n"}, 0, ""),
+    ("a rev 2 command that imports rev 1's module", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'half-rev2': ('compose.c', '')}\n",
+                                                     "compose/c.py": "def f():\n    from compose import a\n"}, 1, "reaches rev 1's compose.a"),
+    ("the same through a module in between", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'half-rev2': ('compose.c', '')}\n",
+                                              "compose/c.py": "from compose.pkg import b\n"}, 1, "compose.a <- compose.pkg.b <- compose.c"),
     ("other packages' names are not ours to check", {"compose/c.py": "import numpy as np\nfrom shapely.geometry import Nope\nV = np.nope\n"}, 0, ""),
 ]
 # the list of known ones: (tree, the list, how many problems)

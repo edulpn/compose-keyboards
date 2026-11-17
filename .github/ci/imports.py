@@ -11,7 +11,8 @@ ngspice) and checks, wherever they are written, at the top of a file or inside a
   from compose.x import y as Y
   ... Y.name ...                      `name` is bound at the top level of compose.x.y, wherever Y means that
                                       module (not where a function has its own variable of that name)
-  COMMANDS in compose/__main__.py     every command's module exists
+  COMMANDS in compose/__main__.py     every command's module exists, and no command but rev 1's own reaches one
+                                      of rev 1's modules through its imports (REV1 below)
 
 This is what breaks when code moves between modules, and it covers the commands no CI job runs (rev 1's
 boards, simulation and renders, which are released and not rebuilt). It does not check calls, arguments or
@@ -29,6 +30,11 @@ KNOWN = {
         "the rev 1 model round the controller rev 2, a build the platform no longer makes; that branch is not "
         "reached when rev 1 is built",
 }
+# Rev 1 is released and kept as it is; the controller rev 2 and rev 2 are built on what is shared, not on rev 1's
+# modules, so a change to rev 1's code cannot reach them (nor theirs it). Rev 1's commands, and the modules that
+# are rev 1's without being a command's:
+REV1 = ("build", "pcb", "firmware", "model", "checks", "sim", "render", "coupons", "tilt-risers")
+REV1_ALSO = ("compose.pcb.layout", "compose.case.sandwich", "compose.case.assembly")
 SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef,
           ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
@@ -257,13 +263,53 @@ class Repo:
                     tgt = env.get(n.value.id)
                     if tgt and tgt not in self.open and n.attr not in self.names[tgt] and not n.attr.startswith("__"):
                         out.append(f"{at}: {n.value.id}.{n.attr}: {tgt} has no {n.attr}")
+        cmds = self.commands()
+        out += [f"compose/__main__.py: command {cmd}: no module {mod}" for cmd, mod in cmds.items() if mod not in self.mods]
+        rev1 = {mod for cmd, mod in cmds.items() if cmd in REV1} | set(REV1_ALSO)
+        for cmd, mod in cmds.items():
+            if cmd in REV1 or mod not in self.mods:
+                continue
+            via = self.reached(mod)
+            for hit in sorted(rev1 & set(via)):
+                chain, x = [], hit
+                while x != mod:
+                    chain.append(x)
+                    x = via[x]
+                out.append(f"compose/__main__.py: command {cmd}: reaches rev 1's {hit} ({' <- '.join(chain + [mod])}): what both "
+                           f"generations use belongs in a module of its own")
+        return out
+
+    def commands(self):
+        """{command: module} from COMMANDS in compose/__main__.py."""
         main = self.trees.get("compose.__main__")
         for n in (main.body if main else []):
             if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "COMMANDS" for t in n.targets):
-                for cmd, (mod, _) in ast.literal_eval(n.value).items():
-                    if mod not in self.mods:
-                        out.append(f"compose/__main__.py: command {cmd}: no module {mod}")
-        return out
+                return {cmd: mod for cmd, (mod, _) in ast.literal_eval(n.value).items()}
+        return {}
+
+    def imported(self, m):
+        """The repository's modules a module imports, anywhere in its file."""
+        deps = set()
+        for n in ast.walk(self.trees[m]):
+            if isinstance(n, ast.Import):
+                deps |= {a.name for a in n.names if a.name in self.mods}
+            elif isinstance(n, ast.ImportFrom):
+                src = source_of(n, m, self.mods)
+                if src in self.mods:
+                    deps.add(src)
+                    deps |= {src + "." + a.name for a in n.names if src + "." + a.name in self.mods}
+        return deps
+
+    def reached(self, m):
+        """{module: the module that imports it} for everything a module's imports lead to."""
+        via, todo = {}, [m]
+        while todo:
+            x = todo.pop()
+            for d in sorted(self.imported(x)):
+                if d not in via and d != m:
+                    via[d] = x
+                    todo.append(d)
+        return via
 
 
 def main():
