@@ -19,7 +19,11 @@ Each layout has its own pages: revisions, build guides, status and releases.
 ## Docs
 
 - **[Building from source](docs/building.md):** requirements, commands, repository layout, customising.
-- **[Controller rev 2](docs/controller-rev2.md):** the shared controller board standard for every layout.
+- **[Rev 2](docs/rev2.md):** the platform's second generation, and its pages:
+  - **[The gasket-mount case](docs/gasket-case.md):** how the plates float on foam pads, what prints how, what is checked.
+  - **[Controller rev 2](docs/controller-rev2.md):** the shared controller board standard for every layout.
+  - **[Rev 2 half boards](docs/half-boards-rev2.md):** the reversible board in its four variants, per-key RGB, firmware, the copper simulation.
+  - **[Flex jumpers](docs/flex-jumper.md):** the flex PCB between a half and the controller, how to order it, how it is simulated.
 - **[How the parts fit together](docs/case-geometry.md):** the case geometry that keeps every part insertable.
 
 ## What the platform does

@@ -85,7 +85,7 @@ python3 -m compose controller out       # route, DRC, Gerbers (add --resilk to r
 python3 -m compose sim-controller out   # copper-level simulation
 python3 -m compose spice-controller out # ngspice simulation
 
-# Compose58 rev 2 (layouts/lily58/rev2.md): set C58_REV=2
+# Rev 2 (docs/rev2.md; Compose58's own page: layouts/lily58/rev2.md): set C58_REV=2
 C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
 C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
 C58_REV=2 python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
@@ -153,7 +153,7 @@ compose/            the platform (Python package)
   order_rev2.py       the rev 2 order folder (out_order/)
 layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); optionally the nets it
                     routes itself (preroute.py)
-docs/               platform docs (this wiki), images
+docs/               platform docs (this wiki), images: rev 2's case, controller, half boards and jumpers each have a page
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
 ```
 

@@ -1,6 +1,6 @@
 # Controller rev 2
 
-[Home](../README.md) › Docs › Controller rev 2
+[Home](../README.md) › Docs › [Rev 2](rev2.md) › Controller rev 2
 
 The shared controller board for every Compose split layout: one board, one connector standard and one firmware pin map, so any layout's half boards plug into the same controller. Nothing on it depends on a layout's angles: each layout's flex jumpers take those up.
 
@@ -51,7 +51,7 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
 - **Connectors:** two Molex 52610-2072 (Easy-On, 20 positions, 1.0 mm pitch, vertical, slider latch) on the top face, square to the side edges. Slot plane at 14.8 mm either side of the Pico centre, centred 2.6 mm forward of it, contact face toward the Pico. Footprint from Molex's recommended pattern: two tails per contact, one either side of the body. The title moved behind the connectors to make room.
 - **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout sets only where its halves' connectors sit; its jumper's shape does the rest.
-- **Jumpers:** a custom flex per half (conductors on one side; one design can serve both halves), 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. Compose58 rev 2's: [flex jumpers](../layouts/lily58/rev2.md#flex-jumpers).
+- **Jumpers:** a custom flex per half (conductors on one side; one design can serve both halves), 20 conductors at 1.0 mm pitch, 0.3 mm thick at the fingers, conductors toward the contact face; it goes 4.1 mm straight down into the slot. On a half board the connector is a Molex 200528-0200 (right angle, bottom contact) on the bottom face. How it is made, ordered and simulated: [flex jumpers](flex-jumper.md).
 - **Slot order:** slot 1 is the back-most contact. Both connectors use the same physical order, so the right connector is turned 180° and its pad numbers run backwards.
 - **Which way round to solder them:** each connector goes with its housing's circuit 1 notch on the silkscreen triangle (the back end on the left connector, the front end on the right), which puts its contacts on the Pico's side. Nothing on the part stops it going on turned round: Molex lists it as not polarised to the board, and its two rows of tails sit 1.825 and 1.925 mm either side of the body's centre, near enough the same to land on the pads. Turned round, the contacts face away from the jumper's conductors, and that half reads no keys and lights no LEDs.
 

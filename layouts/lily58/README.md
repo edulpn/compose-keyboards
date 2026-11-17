@@ -31,7 +31,8 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
   - Connectors and cables, including what to buy and the 1:1 cable trap.
   - Assembly order, PCBs, the controller rev 1 interface.
   - What the checks verify, print orientation.
-- **[Rev 2](rev2.md):** the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB), the flex jumpers, the checks and simulation, and the design notes and ideas collected along the way.
+- **[Rev 2](rev2.md):** what Compose58 gets from the platform's rev 2: its sizes, parts, what is laid out by hand on its boards, and what its checks returned.
+- **[The platform's rev 2 pages](../../docs/rev2.md):** how the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB) and the flex jumpers work, and the design notes and ideas collected along the way.
 - **[Controller rev 2](../../docs/controller-rev2.md):** the shared controller rev 2 uses.
 - **[Building from source](../../docs/building.md):** changing angles or parameters and regenerating everything.
 
