@@ -41,6 +41,7 @@ jobs:
       - uses: actions/cache/restore@v4
         with: { path: deps, key: "deps-${{ github.sha }}", restore-keys: "deps-" }
       - run: python3 .github/ci/test_affected.py
+      - run: python3 .github/ci/test_plan.py
       - run: python3 .github/ci/test_routed.py
       - id: plan
         run: python3 .github/ci/plan.py deps
