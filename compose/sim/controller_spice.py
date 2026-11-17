@@ -153,6 +153,53 @@ def board_facts():
     return segs, length, res, vias
 
 
+def power_paths():
+    """Worst resistance along the routed power copper, each net as a resistor network
+    (compose.pcb.preroute.rail_resistance: 1 oz copper + 20 %, junctions and vias as routed):
+      VBUS      the Pico's VBUS pin to the polyfuse
+      +5V_LED   the polyfuse to a jumper connector's 5 V terminal
+      GND       a jumper connector's GND terminal to the Pico's GND pins (tied together)
+    for the worst terminal drawing alone (a terminal: the better of its two tails). With the current spread
+    over several terminals none drops more than the total current through this figure."""
+    import pcbnew
+    from shapely.geometry import Polygon
+    from compose.pcb import preroute as PRE
+    b = pcbnew.LoadBoard(os.path.join(OUT, "pcb", "controller_rev2.kicad_pcb"))
+    mm = pcbnew.ToMM
+    face = {pcbnew.F_Cu: "F", pcbnew.B_Cu: "B"}
+    pads, segs, vias = {}, {}, {}                      # by net name
+    for fp in b.GetFootprints():
+        for pd in fp.Pads():
+            faces = "".join(f for lay, f in face.items() if pd.IsOnLayer(lay))
+            if not faces or not pd.GetNetname():
+                continue
+            ol = pd.GetEffectivePolygon().Outline(0)
+            shape = Polygon([(mm(ol.CPoint(i).x), mm(ol.CPoint(i).y)) for i in range(ol.PointCount())]).buffer(0)
+            pads.setdefault(pd.GetNetname(), []).append(
+                (fp.GetReference(), pd.GetNumber(), (mm(pd.GetPosition().x), mm(pd.GetPosition().y)), shape, faces))
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            vias.setdefault(t.GetNetname(), []).append((mm(t.GetPosition().x), mm(t.GetPosition().y)))
+        elif t.GetClass() == "PCB_TRACK":
+            a, c = t.GetStart(), t.GetEnd()
+            segs.setdefault(t.GetNetname(), []).append(((mm(a.x), mm(a.y)), (mm(c.x), mm(c.y)), mm(t.GetWidth()), face[t.GetLayer()]))
+
+    def worst(net, is_feed, is_load):
+        mine = pads.get(net, [])
+        feeds = [(xy, faces[0]) for ref, num, xy, shape, faces in mine if is_feed(ref)]
+        loads = [((ref, num), (xy, faces[0])) for ref, num, xy, shape, faces in mine if is_load(ref)]
+        if not feeds or not loads:
+            return math.inf
+        each = PRE.rail_resistance(segs.get(net, []), vias.get(net, []), [(shape, faces) for _, _, _, shape, faces in mine],
+                                   feeds, [at for _, at in loads], 0.6, 0.3)[2]
+        best = {}
+        for (key, _), r in zip(loads, each):
+            best[key] = min(best.get(key, math.inf), r)
+        return max(best.values())
+    pico, conn, fuse = (lambda r: r.startswith("U1")), (lambda r: r in ("JL", "JR")), (lambda r: r == "F1")
+    return {"VBUS": worst("VBUS", pico, fuse), "+5V_LED": worst("+5V_LED", fuse, conn), "GND": worst("GND", pico, conn)}
+
+
 def coupled_runs(segs, max_gap=0.6):
     """Parallel overlap length (mm) and mean edge gap for every pair of nets on the same layer."""
     pairs = {}
@@ -198,10 +245,17 @@ RP = dict(VIH=2.0, VIL=0.8, VABS=3.3 + 0.5, RPU=(50e3, 80e3), CIN=5e-12, R_DRV=(
 #   RP2040 datasheet 5.5.3: VIH 2.0 / VIL 0.8 at IOVDD 3.3, pull-up 50-80k, VOH >= 2.62 V at 4 mA (-> <= 170 ohm)
 HCT = dict(VTH=1.4, VIH=2.0, VIL=0.8, R_OUT=(30.0, 110.0), TPD=(10e-9, 25e-9))
 #   74HCT125 (Nexperia): VIH 2.0 / VIL 0.8, VOH 3.84 V at -6 mA, VCC 4.5 V, 85 C (-> ~110 ohm worst)
-WS = dict(VIH_K=0.7, VIL_K=0.3, CIN=10e-12, T0H=(0.25e-6, 0.55e-6), T1H=(0.65e-6, 0.95e-6))
-#   WS2812B: VIH 0.7 VDD, VIL 0.3 VDD, T0H 0.4 +-0.15 us, T1H 0.8 +-0.15 us (SK6812: same thresholds)
+WS = dict(VIH_K=0.7, VIL_K=0.3, CIN=10e-12, T0H=(0.25e-6, 0.40e-6), T1H=(0.65e-6, 0.95e-6))
+#   VIH 0.7 VDD, VIL 0.3 VDD on both parts. High times: what both accept. WS2812B: T0H 0.4 +-0.15 us, T1H 0.8 +-0.15 us.
+#   SK6812 MINI-E (rev 04, the part the rev 2 halves take): T0H 0.2-0.4 us, T1H 0.58-1.0 us
 QMK = dict(T0H=0.35e-6, T1H=0.90e-6, TBIT=1.25e-6, SELECT=0.25e-6, IO_DELAY=30e-6)
 #   QMK ws2812 timing defaults (350 / 900 / 1250 ns), waitInputPinDelay ~ 1/4 us on RP2040, MATRIX_IO_DELAY 30 us
+RF = (0.48, 1.10)            # ohm, MF-RHT050 (Bourns MF-RHT data sheet): Rmin, R1max (after a trip); hold 0.5 A, trip 0.92 A
+CABLE_R = 0.25               # ohm per conductor of the USB cable: USB 2.0 allows 125 mV in VBUS and 125 mV in GND at 0.5 A
+I_USB, I_REST = 0.5, 0.06    # A: what USB gives a device in all; the Pico, an OLED and a pointing device
+I_LED_MAX = I_USB - I_REST   # A, what is left for the LEDs
+LED_CAPS = 42                # 100 nF capacitors on the two halves: 84 LEDs, one per two (halves carry one per 2 to 4)
+HALF_TRACE = (0.03, 0.20)    # m, slot 3 to the first LED on a half board (sim-half-rev2 holds the routed boards to it)
 FFC = dict(Z0=(100.0, 180.0), TD_PER_M=4.8e-9, R_PER_M=3.0, C_PER_M=(30e-12, 60e-12), CM_PER_M=(10e-12, 30e-12),
            LEN=(0.02, 0.10), I_MAX=1.0)
 #   the flex jumper (compose.pcb.jumper; 26 mm on Compose58 rev 2): 20 x 0.5 mm conductors at 1.0 mm on polyimide,
@@ -284,7 +338,7 @@ def sim_rgb_first(facts):
     L_in = length.get("GP13", 0) * 1e-3
     rep(f"Routed lengths: GP13 {L_in * 1e3:.1f} mm, RGB_BUF + RGB_L_IN {L_ctrl * 1e3:.1f} mm (controller).")
     rep("Swept: GPIO drive 50/170 ohm, HCT output 30/110 ohm and 10/25 ns delay, PCB Z0 90/150, jumper Z0 100/180 "
-        f"and {LEN_TXT}, half trace 30/150 mm, LED rail (controller/far LED) 5.25/5.25, 5.0/4.8, 4.6/4.3 V. "
+        f"and {LEN_TXT}, half trace {HALF_TRACE[0] * 1e3:.0f}/{HALF_TRACE[1] * 1e3:.0f} mm, LED rail (controller/far LED) 5.25/5.25, 5.0/4.8, 4.6/4.3 V. "
         "Bits sent: 0 1 0 1 1 0 (QMK 350/900 ns in a 1250 ns slot).\n")
     bits = [0, 1, 0, 1, 1, 0]
     rails = [(5.25, 5.25), (5.0, 4.8), (4.6, 4.3)]
@@ -292,7 +346,7 @@ def sim_rgb_first(facts):
     results = []
     n = 0
     corners = list(itertools.product(
-            rails, RP["R_DRV"], [(30.0, 10e-9), (110.0, 25e-9)], PCBZ["Z0"], FFC["Z0"], FFC["LEN"], (0.03, 0.15)))
+            rails, RP["R_DRV"], [(30.0, 10e-9), (110.0, 25e-9)], PCBZ["Z0"], FFC["Z0"], FFC["LEN"], HALF_TRACE))
 
     def deck(vc, vf, rg, rh, tpd, zp, zf, lf, lh):
         return MODELS + f"""
@@ -399,7 +453,7 @@ def sim_rgb_hop(facts):
         f"two jumper runs. On the controller, gate 2 of the 74HCT125 re-drives it (220 ohm in, 100k pull-down, "
         f"330 ohm out). Routed: return {L_ret * 1e3:.1f} mm, out {L_out * 1e3:.1f} mm. Swept: LED DOUT 30/200 ohm, "
         f"left half return trace 50/300 mm, jumper Z0 100/180 and {LEN_TXT} (both jumpers), HCT 30/110 ohm and "
-        f"10/25 ns, right half trace 150 mm, rails 5.25, 4.8, 4.3 V (left/right LEDs and buffer alike).\n")
+        f"10/25 ns, right half trace {HALF_TRACE[1] * 1e3:.0f} mm, rails 5.25, 4.8, 4.3 V (left/right LEDs and buffer alike).\n")
     bits = [0, 1, 0, 1, 1, 0]
     rails = (5.25, 4.8, 4.3)
     n = n_in = n_out = 0
@@ -427,7 +481,7 @@ DL 0 hin DCLAMP
 R7 hbuf r7o 330
 {tline('pco', 'r7o', 'c3', 120, L_out * PCBZ['TD_PER_M'])}
 {tline('ffr', 'c3', 'hr', zf, lf * FFC['TD_PER_M'], lf * FFC['R_PER_M'])}
-{tline('hp', 'hr', 'din', 120, 0.15 * PCBZ['TD_PER_M'])}
+{tline('hp', 'hr', 'din', 120, HALF_TRACE[1] * PCBZ['TD_PER_M'])}
 {led_input('din', 'vcc', 'led')}
 """
     ress = spice_batch("B_hop", [(deck(v, rd, lr, zf, lf, rh, tpd), ["v(din)", "v(hin)", "v(c2)", "v(dout)"],
@@ -479,7 +533,7 @@ RD g dout {rd}
 {tline('ffl', 'jl', 'c1', zf, lf * FFC['TD_PER_M'], lf * FFC['R_PER_M'])}
 {tline('pc', 'c1', 'c3', 120, (L_ret + L_out) * PCBZ['TD_PER_M'])}
 {tline('ffr', 'c3', 'hr', zf, lf * FFC['TD_PER_M'], lf * FFC['R_PER_M'])}
-{tline('hp', 'hr', 'din', 120, 0.15 * PCBZ['TD_PER_M'])}
+{tline('hp', 'hr', 'din', 120, HALF_TRACE[1] * PCBZ['TD_PER_M'])}
 {led_input('din', 'vcc', 'led')}
 """
     ress = spice_batch("B_direct", [(deck_direct(v, rd, lr, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
@@ -575,18 +629,23 @@ def sim_power(facts):
     r5 = res.get("+5V_LED", 0)
     rv = res.get("VBUS", 0)
     rg = res.get("GND", 0)
-    rep(f"Routed copper (whole net, 0.4 mm power tracks): +5V_LED {length.get('+5V_LED', 0):.0f} mm / {r5 * 1e3:.0f} mohm, "
-        f"VBUS {length.get('VBUS', 0):.0f} mm / {rv * 1e3:.0f} mohm, GND {length.get('GND', 0):.0f} mm / {rg * 1e3:.0f} mohm "
-        f"(upper bounds: whole-net length in series).")
+    path = power_paths()
+    r5p, rvp, rgp = path["+5V_LED"], path["VBUS"], path["GND"]
+    rep(f"Routed copper (0.4 mm power tracks), whole net in series / the worst path through it as a resistor network: "
+        f"+5V_LED {length.get('+5V_LED', 0):.0f} mm, {r5 * 1e3:.0f} / {r5p * 1e3:.0f} mohm (polyfuse to a jumper connector's "
+        f"5 V terminal); VBUS {length.get('VBUS', 0):.0f} mm, {rv * 1e3:.0f} / {rvp * 1e3:.0f} mohm (Pico pin to the polyfuse); "
+        f"GND {length.get('GND', 0):.0f} mm, {rg * 1e3:.0f} / {rgp * 1e3:.0f} mohm (a jumper connector's GND terminal to the "
+        f"Pico's GND pins). The paths are what E1 and E2 use.")
+    verdict(all(math.isfinite(v) for v in path.values()), "every power path is found on the routed copper")
 
     # E1: hot-plug inrush
     rep("\n**E1 hot-plug.** Host port: 5.0 V regulator behind 0.1 ohm / 5 uH (it can't react in microseconds) "
         "with the 120 uF the USB 2.0 spec requires per port; 2 m cable 0.25 ohm / 2 uH. Pico: Schottky into ~10 uF on VSYS "
-        "+ 30 mA. RGB rail: MF-RHT050 (0.5-1.17 ohm cold), C2 (ESR 0.3 ohm), 84 x 100 nF at the LEDs behind the "
-        "jumpers. USB 2.0 sizes the host bulk for a device of <= 10 uF so that its VBUS droops < 330 mV for the other "
+        f"+ 30 mA. RGB rail: MF-RHT050 ({RF[0]}-{RF[1]} ohm cold), C2 (ESR 0.3 ohm), {LED_CAPS} x 100 nF at the LEDs behind the "
+        "jumpers (84 LEDs, a capacitor per two: the most the halves carry). USB 2.0 sizes the host bulk for a device of <= 10 uF so that its VBUS droops < 330 mV for the other "
         "devices on it; the USB-IF inrush test allows 50 uC in the first 100 us.\n")
     rows = []
-    for c2, rf, populated in [("ref", 0, False), (None, 0.5, False)] + [(c, r, True) for c in (100e-6, 22e-6, 10e-6, 0.0) for r in (0.5, 1.17)]:
+    for c2, rf, populated in [("ref", 0, False), (None, RF[0], False)] + [(c, r, True) for c in (100e-6, 22e-6, 10e-6, 0.0) for r in RF]:
         body = MODELS + f"""
 VH hsrc 0 5.0
 RHS hsrc hs1 0.1
@@ -619,7 +678,7 @@ RREF vbus 0 44
             body += f"RF vbus rail {rf}\nCD rail 0 0.1u\n"
             if c2:
                 body += f"C2 rail c2e {c2}\nRESR c2e 0 0.3\n"
-            body += f"RFFC rail halves {FFC['LEN'][1] * FFC['R_PER_M'] / 2 + r5:.4f}\nCLED halves 0 8.4u\n"
+            body += f"RFFC rail halves {FFC['LEN'][1] * FFC['R_PER_M'] / 2 + r5p:.4f}\nCLED halves 0 {LED_CAPS * 0.1:.1f}u\n"
         r = spice("E1_inrush", body.replace("CH hport 0 120u IC=5.0", "CH hport 0 120u IC=5.0").replace(
             ".model SWA", ".ic v(hport)=5.0 v(hs1)=5.0\n.model SWA"), ["v(hport)", "v(vbus)", "i(vi)"], tran="20n 400u uic")
         t, vh, ii = r["t"], r["v(hport)"], r["i(vi)"]
@@ -637,39 +696,57 @@ RREF vbus 0 44
             f"{rf if populated else '-'} | {droop * 1e3:.0f} mV | {ipk:.1f} A | {q * 1e6:.0f} uC |")
     by = {(p, c, r_): (d, q) for p, c, r_, d, _, q in rows}
     ref = by[(False, "ref", 0)][0]
-    e = by[(False, None, 0.5)][0]
+    e = by[(False, None, RF[0])][0]
     rep(f"\nAbsolute droop depends on the host model; compare against the USB spec-limit device in the same model ({ref * 1e3:.0f} mV).")
     verdict(e <= ref * 1.1, f"RGB empty: the board adds nothing to the Pico's own hot-plug load ({e * 1e3:.0f} mV vs {ref * 1e3:.0f} mV)")
-    d10, d100, d0 = by[(True, 10e-6, 0.5)][0], by[(True, 100e-6, 0.5)][0], by[(True, 0.0, 0.5)][0]
+    d10, d100, d0 = by[(True, 10e-6, RF[0])][0], by[(True, 100e-6, RF[0])][0], by[(True, 0.0, RF[0])][0]
     verdict(d10 <= ref * 1.1, f"RGB fitted, C2 = 10 uF: {d10 / ref:.1f}x the spec-limit droop ({d10 * 1e3:.0f} mV). Most of it is "
-            f"the halves' 84 x 100 nF (no C2: {d0 / ref:.1f}x); 100 uF would make it {d100 / ref:.1f}x. Typical of RGB "
-            f"keyboards; fewer LED decoupling caps on the halves (one per 2-4 LEDs) or a switched LED rail would fix it",
+            f"the halves' {LED_CAPS} x 100 nF (no C2: {d0 / ref:.1f}x); 100 uF would make it {d100 / ref:.1f}x. Typical of RGB "
+            f"keyboards; a switched LED rail would fix it",
             warn_only=True)
 
-    # E2: DC drop to the far LED and brightness cap
-    rep("\n**E2 LED rail at load.** Device VBUS = 4.75 V host minimum - 0.25 ohm cable x total current; then the "
-        "polyfuse (R1max 1.17 ohm after a trip, 0.5 ohm new), routed +5V_LED copper, jumper (2 x 5V and 3 x GND "
-        f"conductors in parallel, {FFC['LEN'][1] * 1e3:.0f} mm, {FFC['R_PER_M']:.0f} ohm/m), half board rail+return 0.15 ohm (assumed for rev 2 halves).\n")
-    rep("| LED current | fuse R | far LED VDD | data high at far LED (HCT VOH) | VIH (0.7 VDD) |")
-    rep("|---|---|---|---|---|")
-    worst_vdd = 9
-    for i_led, rf in itertools.product((0.1, 0.3, 0.45), (0.5, 1.17)):
-        i_tot = i_led + 0.06                                  # Pico + OLED + pointing device
-        vbus = 4.75 - 0.25 * i_tot - rv * i_tot
-        v_ctrl = vbus - rf * i_led - r5 * i_led
-        r_ffc = FFC["LEN"][1] * FFC["R_PER_M"] / 2 + FFC["LEN"][1] * FFC["R_PER_M"] / 3
-        v_far = v_ctrl - i_led * (r_ffc + 0.15)
-        voh = v_ctrl - 6e-3 * 110                             # HCT at 6 mA worst
-        rep(f"| {i_led * 1e3:.0f} mA | {rf} | {v_far:.2f} V | {voh:.2f} V | {0.7 * v_far:.2f} V |")
-        worst_vdd = min(worst_vdd, v_far)
-    verdict(worst_vdd >= 3.7, f"far LED VDD >= 3.7 V (SK6812 MINI-E / WS2812B-2020 minimum) at 450 mA: {worst_vdd:.2f} V")
-    # brightness cap
+    # E2: drop to the far LED and brightness cap
     i_white, i_q, n_led = 36e-3, 0.7e-3, 84
-    budget = 0.45 - n_led * i_q
-    cap = int(255 * budget / (n_led * i_white))
+    cap = int(255 * (I_LED_MAX - n_led * i_q) / (n_led * i_white))
+    r_ffc = FFC["LEN"][1] * FFC["R_PER_M"] / 2 + FFC["LEN"][1] * FFC["R_PER_M"] / 3
+
+    def rail(i_led, rf):
+        """(V across a jumper connector's 5 V and GND terminals, V at the far LED) for a total LED current."""
+        i_tot = i_led + I_REST
+        vbus = 4.75 - 2 * CABLE_R * i_tot - rvp * i_tot       # at the polyfuse, against the Pico's GND pins
+        v_ctrl = vbus - (rf + r5p + rgp) * i_led
+        return v_ctrl, v_ctrl - (i_led / 2) * (r_ffc + 0.15)
+    rep(f"\n**E2 LED rail at load.** At the device: the 4.75 V host minimum less the cable, {CABLE_R} ohm in VBUS and {CABLE_R} "
+        f"ohm in GND (the 125 mV each that USB 2.0 allows at 0.5 A), x total current. Then the routed VBUS path, the polyfuse "
+        f"({RF[1]} ohm after a trip, {RF[0]} ohm new), the routed +5V_LED and GND paths. Each half takes half the LED current through "
+        f"its own jumper (2 x 5V and 3 x GND conductors in parallel, {FFC['LEN'][1] * 1e3:.0f} mm, {FFC['R_PER_M']:.0f} ohm/m) and "
+        f"its board (rail + return 0.15 ohm, which sim-half-rev2 holds the rev 2 halves to). The Pico and its modules take "
+        f"{I_REST * 1e3:.0f} mA, so the LEDs have {I_LED_MAX * 1e3:.0f} mA of USB's {I_USB * 1e3:.0f}.\n")
+    rep("| LED current | fuse R | at the jumper connectors | far LED VDD | data high from the buffer (HCT VOH at 6 mA) | VIH at the far LED (0.7 VDD) |")
+    rep("|---|---|---|---|---|---|")
+    worst_vdd, worst_ctrl = 9, 9
+    for i_led, rf in itertools.product((0.1, 0.3, I_LED_MAX), RF):
+        v_ctrl, v_far = rail(i_led, rf)
+        rep(f"| {i_led * 1e3:.0f} mA | {rf} | {v_ctrl:.2f} V | {v_far:.2f} V | {v_ctrl - 6e-3 * HCT['R_OUT'][1]:.2f} V | {0.7 * v_far:.2f} V |")
+        worst_vdd, worst_ctrl = min(worst_vdd, v_far), min(worst_ctrl, v_ctrl)
+    verdict(worst_vdd >= 3.7, f"far LED VDD >= 3.7 V (SK6812 MINI-E / WS2812B-2020 minimum) at {I_LED_MAX * 1e3:.0f} mA: {worst_vdd:.2f} V")
+    verdict(worst_ctrl >= 4.5, f"the 74HCT125's supply at USB's floor and full LED load: {worst_ctrl:.2f} V, under the 4.5 V its data "
+            f"sheet starts at (HC-family parts work from 2 V and their thresholds fall with the supply; A and B sweep "
+            f"the buffer's rail down to 4.6 and 4.3 V). A host at 5.0 V gives {rail(I_LED_MAX, RF[1])[0] + 0.25:.2f} V",
+            warn_only=True)
+    # the brightness cap, and what it does not cap
     rep(f"\nBrightness cap: {n_led} LEDs x {i_white * 1e3:.0f} mA full white + {i_q * 1e3:.1f} mA idle each; the polyfuse holds "
-        f"0.5 A and USB gives 0.5 A in total. Keeping the LEDs under 450 mA -> **RGB_MATRIX_MAXIMUM_BRIGHTNESS {cap}** "
-        f"(of 255) for full white; colours/effects average lower.")
+        f"0.5 A and USB gives {I_USB * 1e3:.0f} mA in total. Keeping the LEDs under {I_LED_MAX * 1e3:.0f} mA -> "
+        f"**RGB_MATRIX_MAXIMUM_BRIGHTNESS {cap}** (of 255) for full white; colours/effects average lower.")
+    duty = cap / 255
+    n_pk = n_led * duty + 3.5 * math.sqrt(n_led * duty * (1 - duty))
+    i_pk = n_pk * i_white + n_led * i_q
+    rep(f"\nThe cap is a PWM duty, not a current: each LED draws its {i_white * 1e3:.0f} mA for {duty * 100:.1f} % of the time, "
+        f"and the rail (C2 and the halves' capacitors behind the polyfuse, about 20 us) follows the sum. The table above is "
+        f"the average. If the LEDs' PWM is not synchronised (their data sheet doesn't say), about {n_pk:.0f} of the "
+        f"{n_led} are on together at mean + 3.5 sigma: {i_pk * 1e3:.0f} mA, far LED {rail(i_pk, RF[0])[1]:.2f} V with a new fuse and "
+        f"{rail(i_pk, RF[1])[1]:.2f} V after a trip, for under 0.1 ms at a time. Reported, not held: the LEDs' 3.7 V is a "
+        f"figure for steady supply.")
     return rows, cap
 
 
@@ -849,8 +926,8 @@ def main():
     facts = board_facts()
     rep("# Compose controller rev 2 - circuit simulation (ngspice)\n")
     rep("Models: RP2040 (VIH 2.0 / VIL 0.8 V, pull-ups 50-80k, 4 mA drive <= 170 ohm, abs max 3.8 V), "
-        "74HCT125 (VIH 2.0 V, VOH 3.84 V at -6 mA), WS2812B/SK6812 (VIH 0.7 VDD, VIL 0.3 VDD, T0H 250-550, T1H 650-950 ns), "
-        "1N4148 (SPICE model), MF-RHT050 (0.5 A hold, 0.5-1.17 ohm), QMK defaults (WS2812 350/900/1250 ns, "
+        "74HCT125 (VIH 2.0 V, VOH 3.84 V at -6 mA), WS2812B and SK6812 MINI-E (VIH 0.7 VDD, VIL 0.3 VDD; T0H 250-400, T1H 650-950 ns, the windows both accept), "
+        "1N4148 (SPICE model), MF-RHT050 (0.5 A hold, 0.92 A trip, 0.48-1.10 ohm), QMK defaults (WS2812 350/900/1250 ns, "
         "MATRIX_IO_DELAY 30 us). Flex jumper, 1.0 mm pitch: Z0 100-180 ohm, 4.8 ns/m, 3 ohm/m, 30-60 pF/m, 10-30 pF/m "
         f"mutual, {LEN_TXT}.")
     sim_rgb_first(facts)
