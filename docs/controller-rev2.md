@@ -100,7 +100,7 @@ Outlined "RGB" on the bottom silkscreen. Leave it empty for no RGB: firmware RGB
 | R4 100 kΩ | pull-down: keeps the data low before the Pico boots, so the LEDs don't latch noise at plug-in |
 | U2's second gate, R5 220 Ω in, R6 100 kΩ pull-down, R7 330 Ω out | re-drives the chain on its way from the left half to the right half. Wired straight through, the two jumper runs ring too much (see the simulation). R5 limits clamp current. |
 | F1 Bourns MF-RHT050 | polyfuse, VBUS → LED 5 V; stands on the bottom face beside the Pico, back right |
-| C2 10 µF | bulk capacitor (with 100 µF the hot-plug dip on the USB port would be 1.7× a spec-limit device instead of 1.4×) |
+| C2 10 µF | bulk capacitor (with 100 µF the hot-plug dip on the USB port would be 1.7× a spec-limit device instead of 1.3×) |
 
 All of the RGB group except F1 sits in the box under the Pico on the bottom face.
 
@@ -127,7 +127,7 @@ All of the RGB group except F1 sits in the box under the Pico on the bottom face
 
 ## Simulation
 
-Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controller_spice.py`, report in `out/sim_controller_rev2/report.md`. Result: **0 failures**, 2 warnings (hot-plug dip, 5 V pointing stick).
+Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controller_spice.py`, report in `out/sim_controller_rev2/report.md`. Result: **0 failures**, 3 warnings (hot-plug dip, the buffer's supply at USB's lowest voltage, 5 V pointing stick).
 
 | what | result |
 |---|---|
@@ -135,10 +135,10 @@ Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controll
 | optional RGB group | behaves correctly fitted and empty |
 | key scan | QMK COL2ROW through two model jumpers (slot k to slot k) into model halves: all 84 keys, 1000 random chords, no ghosting (including across the shared rows); slots reversed are harmless |
 | negative controls | swapped firmware pin, unrotated right connector, reversed diodes, injected short, cut track: all caught |
-| RGB data (192 corners: drive strengths, jumper 20–100 mm and 100–180 Ω, LED rail down to 4.3 V) | clean single edges at the LED; '0' 340–363 ns and '1' 890–913 ns (spec 250–550 / 650–950); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
-| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 6.2 mA. Wired straight through it failed half the corners (0.96 V overshoot). |
+| RGB data (192 corners: drive strengths, jumper 20–100 mm and 100–180 Ω, half-board trace 30–200 mm, LED rail down to 4.3 V) | clean single edges at the LED; '0' 339–364 ns and '1' 889–914 ns (250–400 / 650–950 allowed: the windows both the WS2812B and the SK6812 MINI-E accept); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
+| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 6.1 mA. Wired straight through it failed half the corners (0.96 V overshoot). |
 | I2C | 400 kHz with up to 60 pF of bus on the board's pull-ups, 100 kHz to 100 pF; modules with their own 2.2–10 k pull-ups stay in spec |
-| power | the far LED stays ≥ 3.76 V at 450 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and the thinnest flex copper (1/3 oz, 100 mm). Hot-plug dip with RGB fitted is 1.4× a USB spec-limit device, mostly from the halves' LED decoupling (warning). |
+| power | at USB's lowest voltage (4.75 V at the port, 4.5 V at the device after the cable) the far LED stays ≥ 3.87 V at 440 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and the thinnest flex copper (1/3 oz, 100 mm). That is the average: the brightness cap is a PWM duty, and at a current peak (about 21 of 84 LEDs on at once, 0.82 A) the far LED dips to 3.64 V with a new fuse and 3.13 V after a trip, for under 0.1 ms at a time. The 74HCT125 then runs from 3.96 V, under the 4.5 V its data sheet starts at (warning; 4.21 V from a 5.0 V host). Hot-plug dip with RGB fitted is 1.3× a USB spec-limit device, with a 100 nF capacitor per two LEDs on the halves (warning). |
 | matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 53 ns (QMK samples at ~250 ns) and recovers in 3.3 µs (QMK waits 30 µs); worst jumper/board crosstalk leaves idle lines ≥ 2.75 V (limit 2.0 V) |
 | PS/2 stick | fine from 3.3 V; a 5 V stick with its own pull-ups would exceed the RP2040's 3.8 V limit (warning) |
 | with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/lily58/rev2.md#the-half-boards)); through the real flex jumper's copper; its 27.6 mm is inside the 20–100 mm the circuit simulation covers |
