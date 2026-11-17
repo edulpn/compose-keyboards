@@ -256,6 +256,8 @@ Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own 
 - no copper of any net within 2.15 mm of an M2 hole's centre, on either face (under the screw's head and the plate's insert);
 - RGB boards: one unbroken LED chain from slot 3 to slot 18, with every LED and capacitor across 5 V and GND;
 - RGB boards: the 5 V rail and the return through the GND pour, each read from the copper, within 150 mΩ together;
+- RGB boards: the LED data run into the half and out of it within the lengths the controller's circuit simulation sweeps (200 and 300 mm of track);
+- RGB boards: LED data tracks beside column and row tracks move no column or row more than 0.7 V, with every data net switching at once;
 - plain boards: the RGB pass-through.
 
 Then it checks the jumpers: the jumper board's copper rebuilt the same way, and the flat strip bent along its solved path on the left and as its mirror image on the right, so every finger has to land on a contact of the half's connector and of the controller's (it does, within 0.01 mm) and slot k meets slot k. Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and both jumpers: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a jumper with its fingers in reverse order, a half connector 0.5 mm off along its row) are caught.

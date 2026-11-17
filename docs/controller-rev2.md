@@ -104,7 +104,7 @@ Outlined "RGB" on the bottom silkscreen. Leave it empty for no RGB: firmware RGB
 
 All of the RGB group except F1 sits in the box under the Pico on the bottom face.
 
-- **Firmware:** `RGB_MATRIX_MAXIMUM_BRIGHTNESS 32`. 84 LEDs at full white stay under 450 mA: the fuse holds 0.5 A and USB gives 0.5 A in total.
+- **Firmware:** `RGB_MATRIX_MAXIMUM_BRIGHTNESS 32`. 84 LEDs at full white stay under 440 mA: the fuse holds 0.5 A, and USB gives 0.5 A in total, of which 60 mA are kept for the Pico and its modules.
 - **Rev 2 halves:** DIN from slot 3 to the first LED, the last DOUT back on slot 18; a pass-through link when a half has no LEDs; one 100 nF per 2–4 LEDs rather than per LED (hot-plug inrush).
 
 ## BOM

@@ -37,8 +37,13 @@ Independent of the net names the boards were built with:
      same copper read at the signal width is over the limit. The return is read as well: all the GND copper of
      both faces (pour, pads, stubs, vias) as a resistor sheet (compose/sim/sheet.py), from each fitted LED's GND
      pad to the fitted connector's slots 1, 4 and 20. The worst rail and the worst return together are held to
-     RAIL_R_MAX. Negative control: without the pour no LED has a return. The track and vias of the LED data
-     run in and out of the half (slot 3 to the first LED, the last LED to slot 18) are reported.
+     RAIL_R_MAX. Negative control: without the pour no LED has a return. The LED data run in and out of the
+     half (slot 3 to the first LED, the last LED to slot 18) is held to the lengths the controller's circuit
+     simulation sweeps.
+ 10. RGB boards: LED data tracks beside matrix tracks (compose/sim/coupling.py, the method the controller's
+     circuit simulation reads its own board with). With every data net of the fitted chain switching together,
+     no column or row may move more than XTALK_DIP_MAX. Negative control: a data track laid the whole way
+     beside the worst one at the board's clearance is over the limit.
   8. No copper of any net, on either face, within rev2_half.M2_KEEP of the centre of an M2 hole: the screw's head
      bears on one face and the plate's brass insert on the other, and the screw joins the two.
   9. A diode's solder joint keeps JOINT_GAP from the pad of every other net on its face (pads are bare copper;
@@ -63,6 +68,7 @@ from compose.pcb import rev2_half as H
 from compose.pcb import preroute as PRE
 from compose.sim import matrix as SP
 from compose.sim import sheet as SH
+from compose.sim import coupling as CP
 from compose.sim import controller_copper as CC
 from compose.pcb import jumper as J
 
@@ -86,6 +92,15 @@ RAIL_R_MAX = 0.15                                           # ohm, what compose/
                                                             #   to the farthest LED. The rail is read as a network of
                                                             #   tracks (Half.rail), the return through the GND pour as a
                                                             #   sheet (Half.ground); the worst of each, added, is held to it
+DATA_IN_MAX, DATA_OUT_MAX = 200.0, 300.0                    # mm of track on the LED data run into a half (slot 3 to the first
+                                                            #   LED) and out of it (the last LED to slot 18), both faces'
+                                                            #   LED copies included: what compose/sim/controller_spice.py
+                                                            #   sweeps (A: HALF_TRACE; B: the left half's return trace)
+XTALK_DIP_MAX = 0.7                                         # V an idle column or row may move with the half's LED data: it
+                                                            #   has 1.3 V (3.3 V down to VIH 2.0 V), and the jumper takes up
+                                                            #   to 0.56 V of that (controller_spice F2, a 100 mm jumper)
+XTALK_SWING, XTALK_PIN_C = 5.25, 5e-12                      # the LED data's swing at the highest rail; the victim's own
+                                                            #   capacitance: an RP2040 pin, plus its track on the half
 JOINT_GAP = 0.45                                            # mm, a diode's solder joint to the pad of another net: what the
                                                             #   plan's placement comes to (rev2_half._place keeps SMD pads
                                                             #   0.25 mm off the diode's 2 mm body; its own pad is 1.6 mm)
@@ -238,25 +253,61 @@ class Half:
         face = "B" if self.side == "L" else "F"
         return [tuple(self.at(p, layer) for p in H.cap_pads(L.keys[i], face)) for i in self.s.caps]
 
+    def tracks_by_group(self):
+        """Every copper group's tracks and vias, in KiCad mm: {group: ([(a, b, width, face)], [xy])}."""
+        if getattr(self, "_tracks", None) is None:
+            name = {F: "F", B: "B"}
+            items = self.cu.items
+            k = next(i for i, it in enumerate(items) if it[2] in ("via", "track"))   # Copper lists pads, then tracks
+            out = {}
+            for t in self.b.GetTracks():
+                if t.GetClass() == "PCB_VIA":
+                    assert items[k][2] == "via"
+                    out.setdefault(self.cu.find(k), ([], []))[1].append((ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)))
+                    k += 2
+                else:
+                    assert items[k][2] == "track"
+                    a, c = t.GetStart(), t.GetEnd()
+                    out.setdefault(self.cu.find(k), ([], []))[0].append(
+                        ((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
+                    k += 1
+            self._tracks = out
+        return self._tracks
+
     def tracks_of(self, group):
         """A copper group's tracks and vias, in KiCad mm: ([(a, b, width, face)], [xy])."""
-        name = {F: "F", B: "B"}
-        items = self.cu.items
-        k = next(i for i, it in enumerate(items) if it[2] in ("via", "track"))       # Copper lists pads, then tracks
-        segs, vias = [], []
-        for t in self.b.GetTracks():
-            if t.GetClass() == "PCB_VIA":
-                assert items[k][2] == "via"
-                if self.cu.find(k) == group:
-                    vias.append((ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)))
-                k += 2
-            else:
-                assert items[k][2] == "track"
-                if self.cu.find(k) == group:
-                    a, c = t.GetStart(), t.GetEnd()
-                    segs.append(((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
-                k += 1
-        return segs, vias
+        segs, vias = self.tracks_by_group().get(group, ([], []))
+        return list(segs), list(vias)
+
+    def crosstalk(self, shadow=False):
+        """LED data tracks beside matrix tracks (compose.sim.coupling). Aggressors: every data net of the fitted
+        chain (slot 3, each LED's output, slot 18), all switching XTALK_SWING together. Victims: the column and
+        row slots' copper, each at its own lowest capacitance (the pin and its track on this board; the jumper
+        and the controller add more). Returns (worst dip in volts, its slot, mm of it beside LED data, pF across).
+        shadow: also lay a data track the whole way beside each victim at 0.2 mm (negative control)."""
+        sl = self.slots()
+        data = {g for led in self.leds() for g in (led[1], led[3])} | {sl[3], sl[18]}
+        data.discard(None)
+        agg = [seg for g in data for seg in self.tracks_of(g)[0]]
+        worst = (0.0, None, 0.0, 0.0)
+        for k in range(5, 18):
+            mine = self.tracks_of(sl[k])[0]
+            if sl[k] is None or sl[k] in data or not mine:
+                continue
+            others = agg
+            if shadow:
+                others = list(agg)
+                for a, b, w, f in mine:
+                    d = float(np.hypot(b[0] - a[0], b[1] - a[1]))
+                    if d > 0:
+                        ox, oy = -(b[1] - a[1]) / d * (w + 0.2), (b[0] - a[0]) / d * (w + 0.2)
+                        others.append(((a[0] + ox, a[1] + oy), (b[0] + ox, b[1] + oy), w, f))
+            run, cm = CP.beside(mine, others)
+            own = XTALK_PIN_C + CP.C_PER_MM * sum(float(np.hypot(b[0] - a[0], b[1] - a[1])) for a, b, w, f in mine)
+            dip = CP.dip(XTALK_SWING, cm, own)
+            if dip > worst[0]:
+                worst = (dip, k, run, cm * 1e12)
+        return worst
 
     def ground(self, pour=True):
         """The return through the GND copper as a resistor sheet (compose.sim.sheet): everything in the copper group
@@ -469,8 +520,16 @@ def board_checks(h):
         ok(np.isfinite(back), rmsg)
     ok(np.isinf(h.ground(pour=False)[0]), "negative control: with the pour left out, an LED's GND pad has no return")
     runs = h.data_runs()
-    print(f"  note  LED data run, both faces' LED copies included: slot 3 to the first LED {runs[3][0]:.0f} mm of track and "
-          f"{runs[3][1]} vias, the last LED to slot 18 {runs[18][0]:.0f} mm and {runs[18][1]} vias")
+    ok(runs[3][0] <= DATA_IN_MAX and runs[18][0] <= DATA_OUT_MAX,
+       f"LED data run, both faces' LED copies included: slot 3 to the first LED {runs[3][0]:.0f} mm of track and {runs[3][1]} vias "
+       f"(the controller's circuit simulation sweeps to {DATA_IN_MAX:.0f} mm), the last LED to slot 18 {runs[18][0]:.0f} mm and "
+       f"{runs[18][1]} vias (to {DATA_OUT_MAX:.0f} mm)")
+    dip, k, run, cm = h.crosstalk()
+    ok(dip <= XTALK_DIP_MAX, f"LED data beside the matrix: with every data net of the chain switching {XTALK_SWING} V together, the "
+                             f"worst column or row moves {dip:.2f} V (slot {k}: {run:.0f} mm beside LED data, {cm:.2f} pF across); "
+                             f"limit {XTALK_DIP_MAX} V")
+    ok(h.crosstalk(shadow=True)[0] > XTALK_DIP_MAX,
+       "negative control: a data track laid the whole way beside each column and row at 0.2 mm is over the limit")
 
 
 # ---------------------------------------------------------------- the flex jumpers
