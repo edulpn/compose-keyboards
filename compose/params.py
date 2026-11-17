@@ -180,11 +180,8 @@ ART_MIN_TEXT_EM = 1.2            # smallest silkscreen font size (em, mm)
 ART_COPPER_KEEPOUT = 0.6         # traces kept this far from the exposed-copper title
 
 # ---------------------------------------------------------------- rev 2 controller (rev 2 board on standoffs)
-CONTROLLER = "rev2" if REV == 2 else "rev1"
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
-STANDOFF_LENGTHS = (10, 12, 15, 20, 25)   # stock M3 male-female hex standoffs
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
-CTRL_BOSS_R = 3.6                # case post under each standoff (M3 heat-set insert)
 
 # ---------------------------------------------------------------- rev 2: gasket mount (compose/case/gasket.py)
 # Local half frame: z = 0 plate underside, PLATE_T plate top. The plate's outer FLANGE_W is a thin flange
