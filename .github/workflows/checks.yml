@@ -3,6 +3,8 @@
 # A pull request runs only the suites its changes can affect: every full run on main records which repository
 # files each suite read (.github/ci/traced.py), and the plan job compares that list with the files the pull
 # request changes (.github/ci/plan.py). A docs-only change runs nothing; a rev 2 change skips rev 1.
+# Only the pull request's own changes count: what main gained between that full run and the pull request's base is
+# main's own run to check.
 # Pushes to main and manual runs always run everything.
 #
 # A rev 2 half board is routed only when something its routing reads has changed since it was last routed
