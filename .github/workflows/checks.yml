@@ -92,6 +92,18 @@ jobs:
       - run: $T deps/rev2.txt gasket-case o2
       - run: $T deps/rev2.txt gasket-checks o2
       - run: $T deps/rev2.txt firmware-rev2 o2
+      # both keyboard.json files against QMK's own schema, as its master has it today
+      - id: qmk
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with: { repository: qmk/qmk_firmware, path: qmk, sparse-checkout: data/schemas }
+      - name: keyboard.json against QMK's schema
+        run: |
+          if [ ! -f qmk/data/schemas/keyboard.jsonschema ]; then
+            echo "::notice::QMK's schemas could not be fetched: the keyboard.json files were not validated"; exit 0
+          fi
+          pip3 install -q --user --break-system-packages hjson "jsonschema>=4,<5"
+          python3 .github/ci/qmk_schema.py qmk/data/schemas o2/firmware/keyboard.json o2/firmware/rgb/keyboard.json
       - uses: actions/upload-artifact@v4
         with: { name: deps-rev2, path: deps, retention-days: 7 }
 

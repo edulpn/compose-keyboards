@@ -235,7 +235,14 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 | `firmware/keyboard.json` | plain boards |
 | `firmware/rgb/keyboard.json` | RGB boards: RGB Matrix, 58 LEDs, brightness capped at 32 |
 
-Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own row and column, right keys at column 13 − col.
+Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own row and column, right keys at column 13 − col. CI validates both files against QMK's own schema (`.github/ci/qmk_schema.py`). A QMK build needs a keymap as well: put the file in a keyboard folder of your QMK tree with a `keymaps/default/keymap.json` beside it (the layout is `LAYOUT`, 58 keys).
+
+**The brightness cap** (RGB boards) is QMK's `RGB_MATRIX_MAXIMUM_BRIGHTNESS`. QMK applies it when brightness is set through its own keycodes and functions, and nowhere else:
+
+- a Pico that ran other RGB firmware keeps the brightness it stored. Clear its stored settings once: press a key mapped to `QK_CLEAR_EEPROM`, or flash Raspberry Pi's `flash_nuke.uf2` before the firmware;
+- keymap code that sets colours itself (`rgb_matrix_set_color()`) is not capped: keep those values at 32 or under.
+
+Past the cap the 58 LEDs can draw up to 2.1 A; the controller's polyfuse then cuts the LED rail.
 
 ### Checked
 
@@ -258,6 +265,7 @@ Both use the controller rev 2 pin map: a 6 × 14 matrix, left keys at their own 
 - RGB boards: the 5 V rail and the return through the GND pour, each read from the copper, within 150 mΩ together;
 - RGB boards: the LED data run into the half and out of it within the lengths the controller's circuit simulation sweeps (200 and 300 mm of track);
 - RGB boards: LED data tracks beside column and row tracks move no column or row more than 0.7 V, with every data net switching at once;
+- RGB boards: the firmware lists its LEDs in the chain's order, the left half's then the right's;
 - plain boards: the RGB pass-through.
 
 Then it checks the jumpers: the jumper board's copper rebuilt the same way, and the flat strip bent along its solved path on the left and as its mirror image on the right, so every finger has to land on a contact of the half's connector and of the controller's (it does, within 0.01 mm) and slot k meets slot k. Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and both jumpers: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a jumper with its fingers in reverse order, a half connector 0.5 mm off along its row) are caught.

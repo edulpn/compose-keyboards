@@ -44,6 +44,8 @@ Independent of the net names the boards were built with:
      circuit simulation reads its own board with). With every data net of the fitted chain switching together,
      no column or row may move more than XTALK_DIP_MAX. Negative control: a data track laid the whole way
      beside the worst one at the board's clearance is over the limit.
+ 11. RGB boards: the firmware's LED list (compose/firmware_rev2.py) names the LEDs in the order of the chain
+     read in 3, the left half's then the right's, each at its key's matrix position.
   8. No copper of any net, on either face, within rev2_half.M2_KEEP of the centre of an M2 hole: the screw's head
      bears on one face and the plate's brass insert on the other, and the screw joins the two.
   9. A diode's solder joint keeps JOINT_GAP from the pad of every other net on its face (pads are bare copper;
@@ -707,6 +709,13 @@ def main():
         halves = {s: Half(path, variant, rgb, s) for s in ("L", "R")}
         for h in halves.values():
             board_checks(h)
+        if rgb:                                              # the firmware's LED list against the chain read above
+            chain = {a + b: [[L.keys[i].row, L.keys[i].col if s_ == "L" else 13 - L.keys[i].col]
+                             for s_ in (a, b) for i in halves[s_].s.led_order] for a, b in (("L", "R"), ("R", "L"))}
+            got = [e.get("matrix") for e in fw["rgb_matrix"]["layout"]]
+            ok(got == chain["LR"], f"{name}: keyboard.json lists its {len(got)} LEDs in the chain's order, the left half's then "
+                                   f"the right's, each at its key's matrix position")
+            ok(got != chain["RL"], "negative control: the right half's LEDs listed first is caught")
         print(f"\n== {name}: flex jumpers (copper of {os.path.basename(jpath('L'))}, folded along the solved path, left and mirrored right)")
         jumpers = {}
         for s_ in ("L", "R"):
