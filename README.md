@@ -8,13 +8,13 @@ Compose is a platform: one case generator, one controller board standard and one
 
 | Compose58 rev 1 (built) | Compose58 rev 2 (in progress) |
 |---|---|
-| ![Compose58 rev 1](layouts/lily58/images/rev1_hero.png) | ![Compose58 rev 2](layouts/lily58/images/rev2_hero.png) |
+| ![Compose58 rev 1](layouts/compose58/images/rev1_hero.png) | ![Compose58 rev 2](layouts/compose58/images/rev2_hero.png) |
 
 ## Layouts
 
 Each layout has its own pages: revisions, build guides, status and releases.
 
-- **[Compose58](layouts/lily58/README.md):** the Lily58 layout (58 keys), by kata0510.
+- **[Compose58](layouts/compose58/README.md):** the Lily58 layout (58 keys), by kata0510.
 
 ## Docs
 

@@ -2,7 +2,7 @@
 
 [Home](../README.md) › Docs › [Rev 2](rev2.md) › Gasket-mount case
 
-The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames and a lift-off middle cover. It is generated round the layout's keys and the [controller rev 2](controller-rev2.md) board (`compose/case/gasket.py`). Sizes, counts and check results for a keyboard are on its own page ([Compose58](../layouts/lily58/rev2.md#the-case)).
+The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames and a lift-off middle cover. It is generated round the layout's keys and the [controller rev 2](controller-rev2.md) board (`compose/case/gasket.py`). Sizes, counts and check results for a keyboard are on its own page ([Compose58](../layouts/compose58/rev2.md#the-case)).
 
 The rev follows from the command: these are rev 2's, and rev 1's own commands are untouched.
 
@@ -42,7 +42,7 @@ Everything prints without supports, in print orientation:
 
 ## How the gasket mount works
 
-![gasket stack, exploded](../layouts/lily58/images/rev2_gasket.png)
+![gasket stack, exploded](../layouts/compose58/images/rev2_gasket.png)
 
 - Each **plate** is a 5 mm core holding the switches, with a thin 2 mm flange round its edge, flush with its top face.
 - The **flange is pinched between foam pads**: pads on a ledge in the tub below, pads under the frame above. Nothing screws through the plate or the half board.
@@ -83,4 +83,4 @@ The layout is checked first, before anything is built round it: keycaps at least
 - **jumpers:** the bent shape solved from the case, clear of the plate (by the gasket's travel), the half board, the cover, the standoffs and the Pico;
 - **printability:** every part sliced in print orientation, each layer resting on the one below.
 
-The figures each of these returns are on the layout's page ([Compose58's](../layouts/lily58/rev2.md#the-case)).
+The figures each of these returns are on the layout's page ([Compose58's](../layouts/compose58/rev2.md#the-case)).

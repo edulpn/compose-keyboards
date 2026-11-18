@@ -6,10 +6,10 @@ import tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 import routed  # noqa: E402
 
-DEPS = ["compose/pcb/rev2_half.py", "compose/params.py", "layouts/lily58/layout.py", "layouts/",
-        "import:layouts.lily58.preroute", "import:compose.pcb.rev2_half",
+DEPS = ["compose/pcb/rev2_half.py", "compose/params.py", "layouts/compose58/layout.py", "layouts/",
+        "import:layouts.compose58.preroute", "import:compose.pcb.rev2_half",
         "o2/pcb/half.ses", "o2/pcb/", "out_cache/jumper_row_y.json"]         # what the command wrote and read back
-FILES = {"compose/pcb/rev2_half.py": "board", "compose/params.py": "params", "layouts/lily58/layout.py": "keys",
+FILES = {"compose/pcb/rev2_half.py": "board", "compose/params.py": "params", "layouts/compose58/layout.py": "keys",
          "compose/sim/half_rev2.py": "sim", "docs/building.md": "docs",
          ".github/actions/setup/action.yml": "freerouting-2.1.0", ".github/workflows/checks.yml": "jobs", "requirements.txt": "shapely",
          "o2/pcb/half.ses": "routes"}
@@ -28,10 +28,10 @@ CASES = [
     ("docs and the simulation changed", lambda r: (write(r, "docs/building.md", "x"), write(r, "compose/sim/half_rev2.py", "x")), {}, True),
     ("the board builder changed", lambda r: write(r, "compose/pcb/rev2_half.py", "board 2"), {}, False),
     ("a parameter changed", lambda r: write(r, "compose/params.py", "params 2"), {}, False),
-    ("a file it read is gone", lambda r: os.remove(os.path.join(r, "layouts/lily58/layout.py")), {}, False),
+    ("a file it read is gone", lambda r: os.remove(os.path.join(r, "layouts/compose58/layout.py")), {}, False),
     ("a layout folder appeared in a folder it listed", lambda r: write(r, "layouts/planck/layout.py", "keys"), {}, False),
-    ("a file appeared deeper, in a folder it didn't list", lambda r: write(r, "layouts/lily58/notes.txt", "x"), {}, True),
-    ("a module it looked for appeared", lambda r: write(r, "layouts/lily58/preroute.py", "copper"), {}, False),
+    ("a file appeared deeper, in a folder it didn't list", lambda r: write(r, "layouts/compose58/notes.txt", "x"), {}, True),
+    ("a module it looked for appeared", lambda r: write(r, "layouts/compose58/preroute.py", "copper"), {}, False),
     ("its own output differs (another run's .ses)", lambda r: write(r, "o2/pcb/half.ses", "other routes"), {}, True),
     ("its own output is gone", lambda r: os.remove(os.path.join(r, "o2/pcb/half.ses")), {}, True),
     ("the router version changed", lambda r: write(r, ".github/actions/setup/action.yml", "freerouting-2.5.0"), {}, False),

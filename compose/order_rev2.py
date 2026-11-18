@@ -100,7 +100,7 @@ def main():
     md = ["# Compose58 rev 2: what to order\n",
           "Every zip here was checked against its routed board when this folder was made, and that board's DRC",
           "report shows 0 errors and 0 unconnected. Order the controller,",
-          "one of the four half boards, and the jumper. Parts: see the BOM in layouts/lily58/rev2.md and",
+          "one of the four half boards, and the jumper. Parts: see the BOM in layouts/compose58/rev2.md and",
           "docs/controller-rev2.md.\n",
           "| zip | per keyboard | JLCPCB |", "|---|---|---|"]
     md += [f"| `{s}_JLCPCB.zip` | {q} | {n} |" for s, q, n in rows]

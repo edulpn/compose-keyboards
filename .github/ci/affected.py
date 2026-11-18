@@ -21,7 +21,7 @@ PICTURES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
 
 
 def module_name(path):
-    """compose/pcb/kicad.py -> compose.pcb.kicad, layouts/lily58/__init__.py -> layouts.lily58; else None."""
+    """compose/pcb/kicad.py -> compose.pcb.kicad, layouts/compose58/__init__.py -> layouts.compose58; else None."""
     if not path.endswith(".py"):
         return None
     parts = path[:-3].split("/")

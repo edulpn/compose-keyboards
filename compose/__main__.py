@@ -12,7 +12,7 @@ import os
 import runpy
 import sys
 
-LAYOUT = "lily58"            # the layout a run builds when no --layout names another: Compose58's
+LAYOUT = "compose58"         # the layout a run builds when no --layout names another: Compose58's
 
 # command: (the module it runs, the rev of the keyboard it builds, what it does). The rev and the layout reach
 # the modules through compose/params.py; None is a command of the controller rev 2, one board under every
