@@ -41,7 +41,7 @@ from shapely.ops import unary_union
 import pcbnew
 from compose import params as PR
 from compose.pcb import toolbox as PK
-from compose.pcb import art as PA
+from compose.pcb import lettering as LT
 
 V, MM, DEG = PK.V, PK.MM, PK.DEG
 NAME = "controller_rev2"
@@ -136,7 +136,7 @@ def silk_rect(b, x0, y0, x1, y1, w=0.15):
 
 def label(b, msg, x, y, em=None, angle=0.0, font=None, anchor="c", records=None):
     """Silkscreen text as outlines in the rev 1 art font (DejaVu Sans), centred (or left-anchored) at x, y."""
-    g = PA.text_shape(msg, font or PR.ART_TEXT_FONT, em or LABEL_EM)
+    g = LT.text_shape(msg, font or PR.ART_TEXT_FONT, em or LABEL_EM)
     if angle:
         g = rotate(g, angle, origin=(0, 0))
     bx0, by0, bx1, by1 = g.bounds
@@ -413,9 +413,9 @@ def art(b):
 
     def title(xm):
         g = unary_union([
-            PA.ring_logo(0.0, 0.0, 1.0),
-            PA.fit(PA.text_shape("Compose", PR.ART_TITLE_FONT), 1.35, -1.0, 7.0, 2.0, "left")[0],
-            PA.fit(PA.text_shape(f"controller · rev 2 · {PR.HANDLE}", PR.ART_TEXT_FONT), -1.0, -2.25, 10.0, 0.85)[0]])
+            LT.ring_logo(0.0, 0.0, 1.0),
+            LT.fit(LT.text_shape("Compose", PR.ART_TITLE_FONT), 1.35, -1.0, 7.0, 2.0, "left")[0],
+            LT.fit(LT.text_shape(f"controller · rev 2 · {PR.HANDLE}", PR.ART_TEXT_FONT), -1.0, -2.25, 10.0, 0.85)[0]])
         g = rotate(g, 90, origin=(0, 0))                        # reads bottom -> top along the strip
         bx0, by0, bx1, by1 = g.bounds
         k = min(1.0, (TITLE_Y1 - TITLE_Y0) / (by1 - by0))       # scaled down to fit the window if needed
@@ -425,7 +425,7 @@ def art(b):
     PK.add_poly(b, title(x_mid), pcbnew.F_SilkS, CX, CY)
     rec.append(dict(text="Compose", x=round(x_mid, 2), y=round((TITLE_Y0 + TITLE_Y1) / 2, 2)))
     # bottom face (it faces the case floor): the same title, mirrored so it reads from below
-    PK.add_poly(b, PA.mirror_about(title(x_mid), x_mid), pcbnew.B_SilkS, CX, CY)
+    PK.add_poly(b, LT.mirror_about(title(x_mid), x_mid), pcbnew.B_SilkS, CX, CY)
     # cover standoffs
     for x, y in COVER_HOLES:
         silk_circle(b, x, y, 2.2)
@@ -439,7 +439,7 @@ def art(b):
     j4_x = [-18.7 + i * 2.54 for i in range(4)]
     for x, t in zip(j4_x, ("GND", "VCC", "SCL", "SDA")):     # upright: four 3-letter names don't fit 2.54 mm side by side
         L(t, x, 26.3, angle=90, anchor="b")
-    top = 26.3 - max(PA.text_shape(t, PR.ART_TEXT_FONT, em).bounds[2] - PA.text_shape(t, PR.ART_TEXT_FONT, em).bounds[0]
+    top = 26.3 - max(LT.text_shape(t, PR.ART_TEXT_FONT, em).bounds[2] - LT.text_shape(t, PR.ART_TEXT_FONT, em).bounds[0]
                      for t in ("GND", "VCC", "SCL", "SDA"))
     L("OLED", (j4_x[0] + j4_x[-1]) / 2, top - 0.45, anchor="b")
     # J6 (AUX): pin names over the pins, the group name at the end of its own row, against the outline
@@ -469,12 +469,12 @@ def bsilk_rect(b, x0, y0, x1, y1, w=0.15):
 
 def blabel(b, msg, x, y, angle=0.0):
     """Bottom-face label (mirrored so it reads from below), centred at x, y."""
-    g = PA.text_shape(msg, PR.ART_TEXT_FONT, LABEL_EM)
+    g = LT.text_shape(msg, PR.ART_TEXT_FONT, LABEL_EM)
     if angle:
         g = rotate(g, angle, origin=(0, 0))
     bx0, by0, bx1, by1 = g.bounds
     g = translate(g, x - (bx0 + bx1) / 2, -y - (by0 + by1) / 2)
-    PK.add_poly(b, PA.mirror_about(g, x), pcbnew.B_SilkS, CX, CY)
+    PK.add_poly(b, LT.mirror_about(g, x), pcbnew.B_SilkS, CX, CY)
 
 
 _export_dsn = pcbnew.ExportSpecctraDSN

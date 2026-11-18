@@ -11,8 +11,9 @@ ngspice) and checks, wherever they are written, at the top of a file or inside a
   from compose.x import y as Y
   ... Y.name ...                      `name` is bound at the top level of compose.x.y, wherever Y means that
                                       module (not where a function has its own variable of that name)
-  COMMANDS in compose/__main__.py     every command's module exists, and no command but rev 1's own reaches one
-                                      of rev 1's modules through its imports (REV1 below)
+  COMMANDS in compose/__main__.py     every command's module exists, no command but rev 1's own reaches one of
+                                      rev 1's modules through its imports (REV1 below), and the controller
+                                      rev 2's commands reach no layout (NO_LAYOUT below)
 
 This is what breaks when code moves between modules, and it covers the commands no CI job runs (rev 1's
 boards, simulation and renders, which are released and not rebuilt). It does not check calls, arguments or
@@ -31,6 +32,10 @@ KNOWN = {}
 # are rev 1's without being a command's:
 REV1 = ("build", "pcb", "firmware", "model", "checks", "sim", "render", "coupons", "tilt-risers")
 REV1_ALSO = ("compose.pcb.layout", "compose.case.sandwich", "compose.case.assembly")
+# The controller rev 2 is one board under every layout: its build and its simulations load none. A layout is
+# loaded by compose.geom (when it is imported), read through compose.layout, and kept in layouts/.
+NO_LAYOUT = ("controller", "sim-controller", "spice-controller")
+LAYOUT = ("compose.geom", "compose.layout", "layouts")
 SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef,
           ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
@@ -267,13 +272,25 @@ class Repo:
                 continue
             via = self.reached(mod)
             for hit in sorted(rev1 & set(via)):
-                chain, x = [], hit
-                while x != mod:
-                    chain.append(x)
-                    x = via[x]
-                out.append(f"compose/__main__.py: command {cmd}: reaches rev 1's {hit} ({' <- '.join(chain + [mod])}): what both "
+                out.append(f"compose/__main__.py: command {cmd}: reaches rev 1's {hit} ({self._chain(via, hit, mod)}): what both "
                            f"generations use belongs in a module of its own")
+        for cmd, mod in cmds.items():
+            if cmd not in NO_LAYOUT or mod not in self.mods:
+                continue
+            via = self.reached(mod)
+            hits = [self._chain(via, x, mod) for x in set(via) | {mod} if x in LAYOUT or x.split(".")[0] in LAYOUT]
+            if hits:                                             # one line a command: the shortest way there
+                out.append(f"compose/__main__.py: command {cmd}: reaches a layout ({min(hits, key=lambda c: (c.count(' <- '), c))}): "
+                           f"the controller rev 2 is the same board under every layout")
         return out
+
+    @staticmethod
+    def _chain(via, hit, mod):
+        chain, x = [], hit
+        while x != mod:
+            chain.append(x)
+            x = via[x]
+        return " <- ".join(chain + [mod])
 
     def commands(self):
         """{command: module} from COMMANDS in compose/__main__.py."""
