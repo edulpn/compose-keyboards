@@ -12,6 +12,8 @@ runs:
       with:
         distribution: temurin
         java-version: "25"
+    # Every download and install below has a time limit (limit.sh): one that stalls is stopped and fails the job
+    # with an error saying what stalled, in place of the job waiting out its own limit and being cancelled.
     # The packages' .deb files are kept in the Actions cache: the Ubuntu mirror a runner is given can take half an
     # hour over them (KiCad, its footprints and Java are 100 MB of the download), and a job that waits that long
     # runs into its time limit. The cache is named after the exact files apt wants, so a new version of any
@@ -24,7 +26,7 @@ runs:
           kicad kicad-footprints kicad-symbols python3-pip python3-dev openjdk-21-jre-headless ngspice
           fonts-dejavu-core
       run: |
-        sudo apt-get update -q
+        bash "$GITHUB_ACTION_PATH/limit.sh" 180 "Refreshing the package index (apt-get update)" sudo apt-get update -q
         sudo apt-get install -qq --print-uris --no-install-recommends $APT_PACKAGES \
             | awk '{print $2}' | sort > "$RUNNER_TEMP/apt-debs.txt"
         echo "packages=$APT_PACKAGES" >> "$GITHUB_OUTPUT"
@@ -46,12 +48,14 @@ runs:
         done < "$RUNNER_TEMP/apt-debs.txt"
         echo "apt: $had of $(wc -l < "$RUNNER_TEMP/apt-debs.txt" | tr -d ' ') package files came from the cache"
         # download first, and keep the files: whatever the image does with them after an install
-        sudo apt-get install -y -q --no-install-recommends --download-only ${{ steps.apt.outputs.packages }}
+        bash "$GITHUB_ACTION_PATH/limit.sh" 300 "Downloading the apt packages" \
+            sudo apt-get install -y -q --no-install-recommends --download-only ${{ steps.apt.outputs.packages }}
         rm -f ~/apt-debs/*.deb
         while read -r f; do
           cp /var/cache/apt/archives/"$f" ~/apt-debs/ || echo "::warning::apt: $f is not in apt's archive folder, so it is not cached"
         done < "$RUNNER_TEMP/apt-debs.txt"
-        sudo apt-get install -y -q --no-install-recommends ${{ steps.apt.outputs.packages }}
+        bash "$GITHUB_ACTION_PATH/limit.sh" 300 "Installing the apt packages" \
+            sudo apt-get install -y -q --no-install-recommends ${{ steps.apt.outputs.packages }}
         J21=/usr/lib/jvm/java-21-openjdk-$(dpkg --print-architecture)/bin
         echo "$J21" >> "$GITHUB_PATH"
     - name: keep the apt package files (when this exact set was not cached yet)
@@ -69,7 +73,7 @@ runs:
       shell: bash
       run: |
         mkdir -p ~/tools
-        [ -f ~/tools/freerouting.jar ] || curl -fsSL -o ~/tools/freerouting.jar \
+        [ -f ~/tools/freerouting.jar ] || bash "$GITHUB_ACTION_PATH/limit.sh" 180 "Downloading Freerouting 2.1.0" curl -fsSL -o ~/tools/freerouting.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
         echo "FREEROUTING=$HOME/tools/freerouting.jar" >> "$GITHUB_ENV"
     - name: Freerouting 2.5.0 cache
@@ -80,7 +84,7 @@ runs:
     - name: Freerouting 2.5.0
       shell: bash
       run: |
-        [ -f ~/tools/freerouting-2.5.0.jar ] || curl -fsSL -o ~/tools/freerouting-2.5.0.jar \
+        [ -f ~/tools/freerouting-2.5.0.jar ] || bash "$GITHUB_ACTION_PATH/limit.sh" 180 "Downloading Freerouting 2.5.0" curl -fsSL -o ~/tools/freerouting-2.5.0.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
     - name: pip cache
       uses: actions/cache@v4
@@ -90,6 +94,7 @@ runs:
     - name: Python packages
       shell: bash
       run: |
-        pip3 install -q --user --break-system-packages -r requirements.txt
+        bash "$GITHUB_ACTION_PATH/limit.sh" 300 "Installing the Python packages (pip)" \
+            pip3 install -q --user --break-system-packages -r requirements.txt
         python3 -c "import pcbnew, cadquery; print('pcbnew', pcbnew.Version())"
         java -version
