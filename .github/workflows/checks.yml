@@ -220,7 +220,7 @@ jobs:
           import os, sys
           sys.argv = ["drc", "o2"]
           import pcbnew
-          from compose.pcb import kicad as PK
+          from compose.pcb import toolbox as PK
           name = os.environ["BOARD"]
           err, warn, unc, rep = PK.drc(pcbnew.LoadBoard(os.path.join(PK.PCB_OUT, name + ".kicad_pcb")), name)
           print(f"{name}, reused: DRC {err} errors, {warn} warnings, {unc} unconnected")
