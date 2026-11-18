@@ -16,8 +16,9 @@ import pcbnew
 from compose import params as PR
 from compose.case import sandwich as PT
 from compose.pcb import layout as PL
-from compose.pcb.toolbox import (PCB_OUT, MM, V, DEG, OX, OY, K, new_board, Nets, outline, text, add_poly, switch_fp, lib_fp,
+from compose.pcb.toolbox import (PCB_OUT, MM, V, DEG, OX, OY, K, new_board, Nets, outline, text, add_poly, lib_fp,
                                  place_by_pads, hole_fp, add_art_half, make)
+from compose.pcb.switch_kicad import switch_fp
 
 
 # ---------------------------------------------------------------- half board

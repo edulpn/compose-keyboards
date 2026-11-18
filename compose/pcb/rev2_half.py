@@ -600,10 +600,11 @@ def build(name):
             net(n).SetNetClass(pw)
     near = lambda a, c: math.dist(a, c) < 2e-3
     # ---- switches + diodes (as rev 1)
+    from compose.pcb import switch_kicad as SK
     for ks in s.keys:
         k = ks.k
         dnet = net(f"D{ks.i + 1}")
-        fp = PK.switch_fp(b, variant, ks.ref, net(f"COL{ks.col}"), dnet)
+        fp = SK.switch_fp(b, variant, ks.ref, net(f"COL{ks.col}"), dnet)
         for g in list(fp.GraphicalItems()):                     # no courtyard: on a reversible board the LED,
             if g.GetLayer() == pcbnew.F_CrtYd:                  #   capacitor and other face's copies sit inside
                 fp.Remove(g)                                    #   it by design (clearances checked in plan())

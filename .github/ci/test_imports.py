@@ -45,6 +45,16 @@ CASES = [
                                                      "compose/c.py": "def f():\n    from compose import a\n"}, 1, "reaches rev 1's compose.a"),
     ("the same through a module in between", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'half-rev2': ('compose.c', '')}\n",
                                               "compose/c.py": "from compose.pkg import b\n"}, 1, "compose.a <- compose.pkg.b <- compose.c"),
+    ("a controller command built on what is shared", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'controller': ('compose.c', '')}\n",
+                                                      "compose/c.py": "from compose.pkg import shared\nV = shared.S\n",
+                                                      "compose/pkg/shared.py": "S = 1\n"}, 0, ""),
+    ("a controller command that loads the layout", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'sim-controller': ('compose.c', '')}\n",
+                                                    "compose/c.py": "from compose.pkg import shared\n",
+                                                    "compose/pkg/shared.py": "def f():\n    from compose import geom\n",
+                                                    "compose/geom.py": "LAYOUT = 1\n"}, 1, "compose.geom <- compose.pkg.shared <- compose.c"),
+    ("a controller command that imports a layout's module", {"compose/__main__.py": "COMMANDS = {'build': ('compose.a', ''), 'controller': ('compose.c', '')}\n",
+                                                             "compose/c.py": "from layouts.one import extra\n",
+                                                             "layouts/one/extra.py": "E = 1\n"}, 1, "reaches a layout (layouts.one <- compose.c)"),
     ("other packages' names are not ours to check", {"compose/c.py": "import numpy as np\nfrom shapely.geometry import Nope\nV = np.nope\n"}, 0, ""),
 ]
 # the list of known ones: (tree, the list, how many problems)
