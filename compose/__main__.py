@@ -1,17 +1,22 @@
 """
-python3 -m compose <command> [outdir] [args...]
+python3 -m compose [--layout <name>] <command> [outdir] [args...]
 
 Every command runs one module of the platform as if it were a script: the arguments after the
-command are passed through unchanged (most take the output folder first). The rev of the keyboard follows
-from the command: each one belongs to rev 1 or to rev 2, and the controller rev 2's to neither. Environment
-variables (C58_SPLAY, C58_TENT, C58_TILT, FREEROUTING, ...) work as before.
+command are passed through unchanged (most take the output folder first). A run builds one keyboard:
+--layout names its layout, a folder of layouts/ (Compose58's when it is left out), and its rev follows from
+the command, each of which belongs to rev 1 or to rev 2. The controller rev 2's commands build no keyboard:
+it is one board under every layout, and they take no --layout. Settings a run can change are environment
+variables (COMPOSE_SPLAY, COMPOSE_TENT, COMPOSE_TILT, ...: compose/params.py; FREEROUTING, ...).
 """
 import os
 import runpy
 import sys
 
-# command: (the module it runs, the rev of the keyboard it builds, what it does). The rev reaches the modules
-# through compose/params.py; None is a command of the controller rev 2, one board under every keyboard.
+LAYOUT = "lily58"            # the layout a run builds when no --layout names another: Compose58's
+
+# command: (the module it runs, the rev of the keyboard it builds, what it does). The rev and the layout reach
+# the modules through compose/params.py; None is a command of the controller rev 2, one board under every
+# keyboard.
 COMMANDS = {
     # rev 1 (sandwich mount, controller rev 1)
     "build":            ("compose.case.build",           1, "case, plates, frames, cover (print/, step/, world/) + BOM"),
@@ -41,21 +46,44 @@ COMMANDS = {
 }
 
 
+def layouts():
+    """The layouts there are: the folders of layouts/ that hold a layout.py."""
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "layouts")
+    return sorted(d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "layout.py")))
+
+
 def usage():
-    print(__doc__.strip() + "\n\ncommands:")
+    print(__doc__.strip() + "\n\nlayouts: " + ", ".join(layouts()) + "\n\ncommands:")
     for k, (_, rev, d) in COMMANDS.items():
         print(f"  {k:<17} {'rev ' + str(rev) if rev else '-':<6} {d}")
 
 
+def stop(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(2)
+
+
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help") or sys.argv[1] not in COMMANDS:
+    args, layout = sys.argv[1:], None
+    if args and (args[0] == "--layout" or args[0].startswith("--layout=")):
+        if "=" in args[0]:
+            layout, args = args[0].split("=", 1)[1], args[1:]
+        else:
+            layout, args = (args[1] if len(args) > 1 else ""), args[2:]
+        if layout not in layouts():
+            stop(f"--layout {layout}: there is no layouts/{layout}/layout.py. The layouts: {', '.join(layouts())}."
+                 if layout else f"--layout needs a name. The layouts: {', '.join(layouts())}.")
+    if not args or args[0] in ("-h", "--help", "help") or args[0] not in COMMANDS:
         usage()
-        sys.exit(0 if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help") else 2)
-    mod, rev, _ = COMMANDS[sys.argv[1]]
-    os.environ.pop("COMPOSE_REV", None)                 # the command decides, never what the shell was left with
+        sys.exit(0 if not args or args[0] in ("-h", "--help", "help") else 2)
+    mod, rev, _ = COMMANDS[args[0]]
+    if rev is None and layout is not None:
+        stop(f"{args[0]} takes no --layout: the controller rev 2 is the same board under every layout.")
+    for name in ("COMPOSE_REV", "COMPOSE_LAYOUT"):      # the command line decides, never what the shell was left with
+        os.environ.pop(name, None)
     if rev is not None:
-        os.environ["COMPOSE_REV"] = str(rev)
-    sys.argv = [mod] + sys.argv[2:]
+        os.environ["COMPOSE_REV"], os.environ["COMPOSE_LAYOUT"] = str(rev), layout or LAYOUT
+    sys.argv = [mod] + args[1:]
     runpy.run_module(mod, run_name="__main__", alter_sys=True)
 
 

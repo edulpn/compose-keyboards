@@ -170,7 +170,7 @@ def jumper_row_y():
     src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "layout.py", "pcb/switch.py", "pcb/rev2_half.py",
                                                   "pcb/jumper.py", "controller/rev2_std.py", "case/gasket.py")]
     src.append(os.path.join(here, "..", "..", "layouts", PR.LAYOUT, "layout.py"))
-    # params.py as it resolved, not only as written: C58_TENT, C58_SPLAY, C58_GAP_TOP and the other environment
+    # params.py as it resolved, not only as written: COMPOSE_TENT, COMPOSE_SPLAY, COMPOSE_GAP_TOP and the other environment
     # overrides move the row as much as an edit does
     vals = repr(sorted((k, v) for k, v in vars(PR).items() if k.isupper() and isinstance(v, (int, float, tuple))))
     key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + vals.encode()).hexdigest()
@@ -1069,7 +1069,7 @@ def preroute_report(out, which=None):
             continue
         s, f = laid(name)
         if f is None:
-            print(f"{name}: the layout pre-routes nothing (no layouts/{PR.LAYOUT}/preroute.py, or C58_PREROUTE=0)")
+            print(f"{name}: the layout pre-routes nothing (no layouts/{PR.LAYOUT}/preroute.py, or COMPOSE_PREROUTE=0)")
             continue
         probs = f.problems()
         bad += len(probs)

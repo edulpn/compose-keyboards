@@ -2,7 +2,7 @@
 Tilt risers: printable spacers under the front feet that tip a finished case forward, so negative
 (front-raised) typing tilt can be tried on any case without reprinting it.
 
-    C58_SPLAY=.. C58_TENT=.. C58_TILT=..  python3 -m compose tilt-risers OUT DELTA_DEG [DELTA_DEG ...]
+    COMPOSE_SPLAY=.. COMPOSE_TENT=.. COMPOSE_TILT=..  python3 -m compose tilt-risers OUT DELTA_DEG [DELTA_DEG ...]
 
 The case pivots on its back feet; each other foot gets a riser of height d * tan(delta), d = its distance
 in front of the back-feet line. A riser plugs into the case's foot recess on top and takes the rubber

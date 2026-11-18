@@ -3,7 +3,7 @@ Pre-routed copper: nets a layout lays out itself, by construction, before the au
 
 Autorouting alone is the default, and a new layout needs nothing here. A layout opts in by adding
 layouts/<name>/preroute.py with one function per board family (the rev 2 half boards call
-`half_rev2(field, plan)`); with no such file, or with C58_PREROUTE=0, the boards are built, exported and routed
+`half_rev2(field, plan)`); with no such file, or with COMPOSE_PREROUTE=0, the boards are built, exported and routed
 exactly as before. The same file can name another Freerouting version for a board (`ROUTER`, see router()).
 
   Field        a board's fixed geometry per copper face: pads with their nets, unplated holes, keep-out areas,
@@ -43,8 +43,8 @@ RHO_CU = 1.72e-8             # ohm m
 
 def _layout():
     """The current layout's routing module (layouts/<layout>/preroute.py), or None: no such file, or
-    C58_PREROUTE=0."""
-    if os.environ.get("C58_PREROUTE", "1") == "0":
+    COMPOSE_PREROUTE=0."""
+    if os.environ.get("COMPOSE_PREROUTE", "1") == "0":
         return None
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
