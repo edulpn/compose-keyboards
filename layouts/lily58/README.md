@@ -23,7 +23,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 - **Shape:** one piece. The halves are splayed 10° and tented (6° on rev 1, 12° on rev 2), with the controller in a bridge between them.
 - **Boards:** one reversible half board for both halves, in hotswap or solder-in versions (rev 2 adds optional per-key RGB), plus the controller.
 - **Firmware:** QMK on the RP2040. `keyboard.json` is generated with the boards.
-- **Printer:** the case is a single print of about 330 × 160 mm, sized for a 350 mm bed (a Voron Trident 350, for example).
+- **Printer:** the case is a single print of about 330 × 160 mm.
 
 ## Pages
 

@@ -142,7 +142,7 @@ The controller board, its wiring and the firmware pin map are a fixed interface.
 - The assembly sweeps pass, along with their negative controls.
 - A hex key reaches every screw.
 - No overhang wider than about 11 mm in print orientation.
-- Every part fits the bed.
+- Every part fits a 350 × 350 mm bed with 5 mm to spare at each edge (the bed is set in `compose/params.py`).
 
 ## Print orientation
 

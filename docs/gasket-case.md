@@ -30,13 +30,14 @@ Everything prints without supports, in print orientation:
 
 | part | qty | prints | why |
 |---|---|---|---|
-| tub (both halves and the open middle bay) | 1 | on its floor (Compose58's is 332 × 161 mm, for a 350 mm bed) | the pad ledge runs back to the wall on a smooth 60° chamfer underneath instead of hanging off it |
+| tub (both halves and the open middle bay) | 1 | on its floor (Compose58's is 332 × 161 mm) | the pad ledge runs back to the wall on a smooth 60° chamfer underneath instead of hanging off it |
 | plates | 2 | switch side down, as on rev 1 | the flange (flush with the top face) lies flat on the bed; the switch-clip pockets open upward |
 | frames | 2 | upside down, visible top on the bed | bevels are 56° from the bed |
 | middle cover | 1 | upside down, visible top on the bed | same |
 
 - **Look:** rev 1's bevelled frames (6 mm tall, 4 mm inset) and the reveal line over the tub's top edge. Outer corners are rounded at 4.5 mm so the bevel stays clean all the way round.
 - Every mesh is checked watertight with no non-manifold edges, and sliced layer by layer for overhangs.
+- **Printer:** the tub prints in one piece and is the largest part, so its footprint decides which printers can make a keyboard. Rev 2's checks do not test a bed size: compare the tub with your printer's bed before printing.
 
 
 ## How the gasket mount works

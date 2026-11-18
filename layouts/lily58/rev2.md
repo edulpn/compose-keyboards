@@ -24,7 +24,7 @@ How it works: [the gasket-mount case](../../docs/gasket-case.md).
 
 | | |
 |---|---|
-| tub | one print, 332 × 161 mm, on a 350 mm bed |
+| tub | one print, 332 × 161 mm |
 | pads | 20 pairs per half: 18 found along the plate edge, 2 at the ends of the inner (bridge) edge |
 | frame screws | six M3 per frame |
 

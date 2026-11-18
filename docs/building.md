@@ -177,7 +177,7 @@ docs/               platform docs (this wiki), images: rev 2's case, controller,
   - fit gaps and lip/reveal sizes;
   - Pico, header and perfboard stack heights;
   - screw and insert sizes;
-  - bed size.
+  - the bed size rev 1's checks test its parts against.
 
   Derived values are computed rather than typed in. That includes the inner-edge height, which `geom.solve_z0` derives from `WIRE_DEPTH`, plus the cover pillar positions, window, clamp tab and screw lengths.
 - **Layouts live in `layouts/<name>/layout.py`.** A layout is a list of keys plus its screws, posts and feet expressed relative to keys. Add a folder with a `layout()` function in `layout.py` and a `keyboard.py` beside it, and build it with `--layout <name>`. `validate_layout()` flags:
