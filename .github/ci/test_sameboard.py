@@ -47,6 +47,45 @@ CASES = [
 ]
 
 
+# ---- routed boards: the router's job, result and log beside each
+SEG_B = '(segment (start 0 0) (end 9 9) (width 0.25) (layer "F.Cu") (net 2) (tstamp {i}))'
+ROUTED = board(NETS, fp(), SEG, SEG_B, VIA, ZONE)
+SES = '(session "b" (routes (network_out (net A (wire (path F.Cu 2500 1 1 5 1)) (via "V" 5 1)) (net "B" (wire (path F.Cu 2500 0 0 9 9))))))'
+LOG = """compose: Freerouting 2.5.0 -mp 40 --router.optimizer.max_passes=5
+2026-11-18 15:16:04.758 INFO   Freerouting v2.5.0 (build-date: 2026-10-05)
+2026-11-18 15:16:11.872 INFO   [J] Auto-routing pass #1 on board 'aa01' was completed in 4.47 seconds with score 779.27 (24 unrouted and 116 violations), using 3.69 CPU seconds
+2026-11-18 15:16:13.869 INFO   [J] Auto-routing pass #2 on board 'aa02' was completed in 1.95 seconds with score 988.42 (0 unrouted and 116 violations), using 5.62 CPU seconds
+2026-11-18 15:16:16.383 INFO   [J] Optimization stage started on board 'aa03'. Baseline router score: 988.42, optimizer score: 548.95
+2026-11-18 15:16:27.766 INFO   [J] Optimizer pass #1 on board 'bb01' was completed in 11.25 seconds with the score of 546.96 (0 unrouted and 116 violations).
+2026-11-18 15:16:54.319 INFO   [J] Optimizer pass #2 on board 'bb02' was completed in 26.41 seconds with the score of 553.46 (0 unrouted and 116 violations).
+"""
+A_MOVED = ROUTED.replace("(end 5 1)", "(end 5 1.2)")                       # net A's track ends elsewhere
+SES_A = SES.replace("1 1 5 1))", "1 1 5 1.2))")                             # ... because the router's result says so
+LOG_OPT = LOG.replace("'bb02'", "'bb99'").replace("553.46", "552.68")       # the optimizer's second pass ended elsewhere
+# (what the second run is: board, job, result, log; the verdict; a word its lines must have)
+RUNS = [
+    ("the same board, job and log", (ROUTED, "job", SES, LOG), "same", "handed the same job"),
+    ("the optimizer ended elsewhere and net A's tracks with it", (A_MOVED, "job", SES_A, LOG_OPT), "routing", "optimizer pass 2"),
+    ("the same, but the track that differs is on a net the router left alone",
+     (ROUTED.replace("(end 9 9)", "(end 9 8)"), "job", SES_A, LOG_OPT), "differs", "tracks differ on B"),
+    ("the same, and a part moved too", (A_MOVED.replace("(at 10 20)", "(at 10 20.5)"), "job", SES_A, LOG_OPT), "differs", "more than its tracks"),
+    ("the router ended on the same board, the board made from it differs", (A_MOVED, "job", SES, LOG), "differs", "made after it"),
+    ("the router routed another way", (A_MOVED, "job", SES_A, LOG.replace("'aa02'", "'aa77'")), "differs", "from auto-routing pass 2"),
+    ("another job", (A_MOVED, "job 2", SES_A, LOG_OPT), "differs", "not handed the same job"),
+    ("the same job, the router called another way", (A_MOVED, "job", SES_A, LOG_OPT.replace("max_passes=5", "max_passes=3")), "differs", "called another way"),
+    ("a log from before the call was written down", (A_MOVED, "job", SES_A, LOG_OPT.split("\n", 1)[1]), "differs", "cannot be told"),
+    ("a log with no passes in it", (A_MOVED, "job", SES_A, LOG_OPT.split("\n")[0] + "\n"), "differs", "does not show its passes"),
+    ("the same board from another job", (ROUTED, "job 2", SES, LOG), "same", "not handed the same job"),
+]
+
+
+def write(folder, pcb, dsn, ses, log):
+    os.makedirs(folder, exist_ok=True)
+    for ext, text in ((".kicad_pcb", pcb), (".dsn", dsn), (".ses", ses), ("_freerouting.log", log)):
+        open(os.path.join(folder, "b" + ext), "w").write(text)
+    return os.path.join(folder, "b.kicad_pcb")
+
+
 def main():
     bad = 0
     with tempfile.TemporaryDirectory() as d:
@@ -59,7 +98,19 @@ def main():
             ok = got == want and (got or lines)
             bad += not ok
             print(("ok   " if ok else "FAIL ") + f"{name}: {'the same' if got else 'differs'}")
-    print(f"{len(CASES) - bad}/{len(CASES)} verdicts as expected")
+        was = write(os.path.join(d, "was"), ROUTED, "job", SES, LOG)
+        for n, (name, run, want, word) in enumerate(RUNS):
+            verdict, heads, lines = sameboard.judge(was, write(os.path.join(d, f"now{n}"), *run), "b")
+            ok = verdict == want and word in " ".join(heads + lines)
+            bad += not ok
+            print(("ok   " if ok else "FAIL ") + f"{name}: {verdict}" + ("" if ok else f" {heads + lines}"))
+        # a board with no router files beside it (the jumper): compared as before, no word about a job
+        verdict, heads, lines = sameboard.judge(a, was, "b")
+        ok = verdict == "differs" and len(heads) == 1
+        bad += not ok
+        print(("ok   " if ok else "FAIL ") + f"no router files beside one of them: {verdict}")
+    n = len(CASES) + len(RUNS) + 1
+    print(f"{n - bad}/{n} verdicts as expected")
     sys.exit(1 if bad else 0)
 
 
