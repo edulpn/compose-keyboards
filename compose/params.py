@@ -7,20 +7,28 @@ Naming: *_T = thickness, *_H = height, *_R = radius, *_D = diameter,
 *_GAP = clearance between mating parts.
 """
 
-# ---------------------------------------------------------------- revision
-# The rev of the keyboard follows from the command: compose/__main__.py gives every command its rev and carries
-# it here as COMPOSE_REV. The controller rev 2's commands have none (it is one board under every keyboard), and
-# in such a run the values that differ between the revs do not exist: see the end of this file.
-if "C58_REV" in _os.environ:
-    raise SystemExit("C58_REV is set, and nothing reads it any more: the rev follows from the command "
-                     "(python3 -m compose --help lists them). Unset it and run the command again.")
+# ---------------------------------------------------------------- the keyboard this run builds
+# One keyboard a run: its layout and its rev. Both come from the command line (compose/__main__.py: --layout,
+# and the rev of the command) and are carried here as COMPOSE_LAYOUT and COMPOSE_REV. The controller rev 2's
+# commands build no keyboard (it is one board under every layout), and in such a run the values that belong to
+# a keyboard do not exist: see the end of this file.
+_RENAMED = {"C58_SPLAY": "COMPOSE_SPLAY", "C58_TENT": "COMPOSE_TENT", "C58_TILT": "COMPOSE_TILT", "C58_GAP_TOP": "COMPOSE_GAP_TOP",
+            "C58_BRIDGE_LEN": "COMPOSE_BRIDGE_LEN", "C58_PREROUTE": "COMPOSE_PREROUTE"}
+for _n in sorted(n for n in _os.environ if n.startswith("C58_")):       # an old name must not be passed over in silence
+    raise SystemExit(f"{_n} is set, and nothing reads it any more. " + (
+        f"It is {_RENAMED[_n]} now." if _n in _RENAMED else
+        "The rev follows from the command (python3 -m compose --help lists them)." if _n == "C58_REV" else
+        "There is no setting of that name.") + " Unset it and run the command again.")
 REV = int(_os.environ["COMPOSE_REV"]) if _os.environ.get("COMPOSE_REV") else None
 if REV not in (None, 1, 2):
     raise SystemExit(f"COMPOSE_REV={REV}: there is a rev 1 and a rev 2. It is set by python3 -m compose, not by hand.")
+LAYOUT = _os.environ.get("COMPOSE_LAYOUT") or None       # key layout: layouts/<name>/layout.py
+if (REV is None) != (LAYOUT is None):
+    raise SystemExit("COMPOSE_REV and COMPOSE_LAYOUT say which keyboard a run builds and come together, from python3 -m "
+                     "compose: one of them is set without the other.")
 _D = (lambda r1, r2: r2 if REV == 2 else r1)          # per-revision default (env vars still override)
 
 # ---------------------------------------------------------------- layout
-LAYOUT = "lily58"            # key layout: layouts/<name>/layout.py
 KEY_PITCH = 19.05            # 1u
 KEYCAP_SIZE = 18.0           # 1u cap footprint (used for spacing checks/renders)
 MX_STEM_TOP = 10.44          # MX stem top above the plate surface at rest (Cherry MX 3D model, kiswitch library)
@@ -30,10 +38,10 @@ OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
-SPLAY_DEG = float(_os.environ.get("C58_SPLAY", 10.0))           # each half rotated toward the centre (top view)
-TENT_DEG = float(_os.environ.get("C58_TENT", _D(6.0, 12.0)))    # gable tent: inner edges raised
-TILT_DEG = float(_os.environ.get("C58_TILT", _D(5.0, 0.0)))     # typing tilt: back raised (negative = front raised)
-GAP_TOP = float(_os.environ.get("C58_GAP_TOP", 34.0))          # distance between the halves' inner edges at the back
+SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
+TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _D(6.0, 12.0)))    # gable tent: inner edges raised
+TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _D(5.0, 0.0)))     # typing tilt: back raised (negative = front raised)
+GAP_TOP = float(_os.environ.get("COMPOSE_GAP_TOP", 34.0))          # distance between the halves' inner edges at the back
 
 # ---------------------------------------------------------------- switch plate
 PLATE_T = 5.0                # MX bottom housing sits inside the plate
@@ -74,7 +82,7 @@ KEY_OPENING_CLOSE_R = 3.0    # fills slivers between differently rotated keys
 KEY_OPENING_CORNER_R = 1.0
 
 # ---------------------------------------------------------------- centre section
-BRIDGE_LEN = float(_os.environ.get("C58_BRIDGE_LEN", 62.0))   # depth of the centre section (back face at y = 0)
+BRIDGE_LEN = float(_os.environ.get("COMPOSE_BRIDGE_LEN", 62.0))   # depth of the centre section (back face at y = 0)
 BRIDGE_WALL_T = _D(3.0, 2.5)   # back and front walls of the bay
 COVER_H = BEZEL_H            # cover top sits flush with the frames
 COVER_BEVEL = BEZEL_BEVEL
@@ -227,16 +235,17 @@ COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of
 # Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).
 
 
-# ---------------------------------------------------------------- a run with no rev
-# What differs between rev 1 and rev 2 has no value in a run that builds neither (the controller rev 2's
-# commands, or a module started without python3 -m compose): reading one stops the run and says so.
-_PER_REV = ("TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION")
+# ---------------------------------------------------------------- a run that builds no keyboard
+# What belongs to a keyboard (its layout, and what differs between rev 1 and rev 2) has no value in a run that
+# builds none: the controller rev 2's commands, or a module started without python3 -m compose. Reading one
+# stops the run and says so.
+_KEYBOARD = ("LAYOUT", "TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION")
 if REV is None:
-    del TENT_DEG, TILT_DEG, BRIDGE_WALL_T, REVISION
+    del LAYOUT, TENT_DEG, TILT_DEG, BRIDGE_WALL_T, REVISION
 
 
 def __getattr__(name):
-    if name in _PER_REV:
-        raise AttributeError(f"compose.params.{name} differs between rev 1 and rev 2, and this run has no rev. A keyboard's "
-                             f"command sets it (python3 -m compose --help); the controller rev 2's commands have none.")
+    if name in _KEYBOARD:
+        raise AttributeError(f"compose.params.{name} belongs to a keyboard (its layout, or its rev), and this run builds none. A "
+                             f"keyboard's command sets it (python3 -m compose --help); the controller rev 2's commands have none.")
     raise AttributeError(f"module 'compose.params' has no attribute {name!r}")

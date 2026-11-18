@@ -17,9 +17,9 @@ The rev follows from the command: these are rev 2's, and rev 1's own commands ar
 
 | | default | override |
 |---|---|---|
-| splay | 10° | `C58_SPLAY` |
-| tent | 12° | `C58_TENT` |
-| tilt | 0° | `C58_TILT` |
+| splay | 10° | `COMPOSE_SPLAY` |
+| tent | 12° | `COMPOSE_TENT` |
+| tilt | 0° | `COMPOSE_TILT` |
 | bridge | 62 mm, 2.5 mm end walls | |
 
 The angles come from an ergonomics research pass and stay provisional until the angle test prints are tried.

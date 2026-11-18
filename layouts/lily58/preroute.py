@@ -1,6 +1,6 @@
 """
 Compose58 rev 2 half boards: the copper laid out by hand before the autorouter runs (compose/pcb/preroute.py).
-Optional: delete this file, or set C58_PREROUTE=0, and the autorouter routes everything, as on a new layout.
+Optional: delete this file, or set COMPOSE_PREROUTE=0, and the autorouter routes everything, as on a new layout.
 
   ROW4   the thumb row, on all four boards: the one net Freerouting 2.5 can't finish. From its connector slot
          it runs under the connector's cable side, down the inner edge and along the front of the thumb keys,

@@ -101,7 +101,13 @@ python3 -m compose gasket-render out_r2t   # renders (assembly views need the ro
 
 `sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
 
-The rev follows from the command: each one builds rev 1 or rev 2, and the controller rev 2's three build neither (one board under every keyboard). `C58_REV` is gone, and a run that finds it set stops and says so.
+A run builds one keyboard. `--layout <name>`, before the command, names its layout: a folder of `layouts/` (Compose58's, `lily58`, when it is left out). Its rev follows from the command: each one builds rev 1 or rev 2. The controller rev 2's three commands build no keyboard (one board under every layout) and take no `--layout`.
+
+```bash
+python3 -m compose --layout lily58 gasket-case out_r2t
+```
+
+The settings a run can change are environment variables: `COMPOSE_SPLAY`, `COMPOSE_TENT`, `COMPOSE_TILT`, `COMPOSE_GAP_TOP`, `COMPOSE_BRIDGE_LEN` (angles in degrees, lengths in mm) and `COMPOSE_PREROUTE=0` (below). They were `C58_...` before; a run that finds one of the old names set, `C58_REV` among them, stops and names its replacement.
 
 ### Routing
 
@@ -117,7 +123,7 @@ How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
   - Its fan-out stage is off (`--router.fanout.enabled=false`): left on, it lays 0.19 mm tracks at the connector pads, under the 0.2 mm minimum.
   - **Seeds.** Asking it the same job twice gives the same answer twice. So when an attempt isn't DRC-clean, the next one puts the job another way: the nets of the Specctra file listed in another order, and the routing outline moved in by 0.001 mm per seed. The board that is asked for stays the same; the board the router comes back with changes, the same way on every machine. Attempt n uses the seed the layout names (0 if it names none) plus n - 1, and seed 0 changes nothing. When a later attempt is the clean one, the build prints its seed: name it in `ROUTER` and the board routes in one attempt again. The attempts stay with 2.5.0; 2.1.0 steps in only where 2.5.0 isn't installed.
   - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s: Compose58 routes those three with it, with no seed.
-  - The hotswap RGB board it routes with that board's 5 V rail and D nets pre-routed as well (below) and seed 8: the first that came out clean. Seeds 0 to 6 left 3 to 25 connections open; seed 7 was clean until the M2 holes got their no-copper areas and leaves 5 open since. An attempt on this board ends in 4 to 6 minutes, clean or not. Freerouting 2.1.0 hasn't routed this board with its rail laid. Where 2.5.0 isn't installed (the Docker image has 2.1.0 only), build it with `C58_PREROUTE=0`: 2.1.0 then routes everything, the rail included.
+  - The hotswap RGB board it routes with that board's 5 V rail and D nets pre-routed as well (below) and seed 8: the first that came out clean. Seeds 0 to 6 left 3 to 25 connections open; seed 7 was clean until the M2 holes got their no-copper areas and leaves 5 open since. An attempt on this board ends in 4 to 6 minutes, clean or not. Freerouting 2.1.0 hasn't routed this board with its rail laid. Where 2.5.0 isn't installed (the Docker image has 2.1.0 only), build it with `COMPOSE_PREROUTE=0`: 2.1.0 then routes everything, the rail included.
   - The controller rev 2 board it routes as it is, with nothing pre-routed and no seed, in one attempt of about 5 minutes. The board names it itself (`ROUTER` in `compose/controller/rev2.py`). Freerouting 2.1.0 needed two or three attempts of about a minute each on this board, and still routes it where 2.5.0 isn't installed.
 
 **Pre-routed nets.** Autorouting everything is the default, and a new layout needs nothing more. A layout can also lay chosen nets out itself before the router runs, in `layouts/<name>/preroute.py` (the mechanism is `compose/pcb/preroute.py`):
@@ -125,7 +131,7 @@ How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
 - The rev 2 half boards call the layout's `half_rev2(field, plan)`. `field` holds the board's pads with their nets, its holes, keep-outs and outline, built from the plan; the function adds tracks and vias to it. `field.route()` joins two points with a track that steps round whatever is in the way, and gives the same copper every time.
 - The copper is checked before routing, against the plan and then against the KiCad board's own pads: clearance to other nets, holes, edges and keep-outs, no loose ends, each net in one piece on all its pads. A broken rule stops the build there. `half-rev2 --preroute` runs the plan-level check without KiCad and draws the copper.
 - A pre-routed net leaves the router's job: the Specctra file carries its tracks as keep-outs and its vias as fixed vias, the same way the RGB boards' GND fan-out goes in. DRC and the simulations then see it like any other copper.
-- With no `preroute.py`, or with `C58_PREROUTE=0`, the boards are built and routed exactly as without the mechanism.
+- With no `preroute.py`, or with `COMPOSE_PREROUTE=0`, the boards are built and routed exactly as without the mechanism.
 - Compose58 pre-routes three kinds of net ([`layouts/lily58/preroute.py`](../layouts/lily58/preroute.py)): ROW4, the thumb row, on all four boards; the 5 V rail on both RGB boards; and on the hotswap RGB board every key's D net, from its socket pad on each face to its diode. That board's sockets have pads on both faces, so each key needs two links across the board (D and its column), and with the rail laid as well the router didn't finish it. The D nets are laid the way the router lays them on a board it does finish: the socket pad beside the diode goes straight to the anode on its own face, and on over the top of the switch on that face to a via above the other pad. That keeps the front copper at each key's right-hand edge free for the column's trunk, which the router runs there. What this gives: a 5 V rail of known resistance on both RGB boards (76 to 82 mΩ to the farthest LED, limit 150 mΩ), and four boards that Freerouting 2.5.0 routes in one attempt, the same on every run.
 
 **Board previews** (realistic renders from a board's Gerbers, needs Node):
