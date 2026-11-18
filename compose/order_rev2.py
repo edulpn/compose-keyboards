@@ -1,5 +1,5 @@
 """
-Compose58 rev 2 order folder:  C58_REV=2 python3 -m compose order-rev2 OUT
+Compose58 rev 2 order folder:  python3 -m compose order-rev2 OUT
 
 Collects every rev 2 board's JLCPCB zip into a clean folder, ORDER_OUT (default out_order/), with ORDER.md (what to pick on JLCPCB's form for
 each), after checking that each board's DRC report (<board>_drc.txt, beside it) ends at 0 errors and 0

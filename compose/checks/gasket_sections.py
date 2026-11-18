@@ -1,4 +1,4 @@
-"""Rev 2 assembly section views (matplotlib): C58_REV=2 python3 -m compose gasket-sections OUTDIR."""
+"""Rev 2 assembly section views (matplotlib): python3 -m compose gasket-sections OUTDIR."""
 import os, sys
 import numpy as np
 import cadquery as cq

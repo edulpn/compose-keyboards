@@ -8,9 +8,15 @@ Naming: *_T = thickness, *_H = height, *_R = radius, *_D = diameter,
 """
 
 # ---------------------------------------------------------------- revision
-# C58_REV=2 builds the rev 2 case around the controller rev 2 board (compose/controller/rev2_std.py): wider back gap, 64 mm bridge,
-# corner bosses + M3 standoffs carrying the board and the cover, research-based default angles (README).
-REV = int(_os.environ.get("C58_REV", "1"))
+# The rev of the keyboard follows from the command: compose/__main__.py gives every command its rev and carries
+# it here as COMPOSE_REV. The controller rev 2's commands have none (it is one board under every keyboard), and
+# in such a run the values that differ between the revs do not exist: see the end of this file.
+if "C58_REV" in _os.environ:
+    raise SystemExit("C58_REV is set, and nothing reads it any more: the rev follows from the command "
+                     "(python3 -m compose --help lists them). Unset it and run the command again.")
+REV = int(_os.environ["COMPOSE_REV"]) if _os.environ.get("COMPOSE_REV") else None
+if REV not in (None, 1, 2):
+    raise SystemExit(f"COMPOSE_REV={REV}: there is a rev 1 and a rev 2. It is set by python3 -m compose, not by hand.")
 _D = (lambda r1, r2: r2 if REV == 2 else r1)          # per-revision default (env vars still override)
 
 # ---------------------------------------------------------------- layout
@@ -165,7 +171,7 @@ VIA_D, VIA_DRILL = 0.6, 0.3
 # ---------------------------------------------------------------- board art / naming
 BOARD_NAME = "Compose58"
 HANDLE = "edulpn"
-REVISION = "rev 1"
+REVISION = f"rev {REV}"
 YEAR = 2026
 TAGLINE = {"F": "static func ∘ (lhs: Half, rhs: Half) -> Keyboard",     # Swift on one face...
            "B": "@Composable fun Keyboard(lhs: Half, rhs: Half)"}         # ...Kotlin Compose on the other
@@ -219,3 +225,18 @@ COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of
 # middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
 # standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
 # Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).
+
+
+# ---------------------------------------------------------------- a run with no rev
+# What differs between rev 1 and rev 2 has no value in a run that builds neither (the controller rev 2's
+# commands, or a module started without python3 -m compose): reading one stops the run and says so.
+_PER_REV = ("TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION")
+if REV is None:
+    del TENT_DEG, TILT_DEG, BRIDGE_WALL_T, REVISION
+
+
+def __getattr__(name):
+    if name in _PER_REV:
+        raise AttributeError(f"compose.params.{name} differs between rev 1 and rev 2, and this run has no rev. A keyboard's "
+                             f"command sets it (python3 -m compose --help); the controller rev 2's commands have none.")
+    raise AttributeError(f"module 'compose.params' has no attribute {name!r}")

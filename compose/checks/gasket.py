@@ -1,8 +1,8 @@
 """
-Rev 2 fit checks (C58_REV=2): exact solids (OpenCascade), the controller's part envelopes from its KiCad
+Rev 2 fit checks: exact solids (OpenCascade), the controller's part envelopes from its KiCad
 placement (both faces), the foam pads at their installed thickness.
 
-    C58_REV=2 python3 -m compose gasket-checks [outdir]     -> prints PASS/FAIL lines, writes outdir/checks2.json
+    python3 -m compose gasket-checks [outdir]     -> prints PASS/FAIL lines, writes outdir/checks2.json
 
 What is checked
   A  interference: every pair of parts that must not touch (case, plates, frames, cover, controller board,

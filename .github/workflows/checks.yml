@@ -96,7 +96,6 @@ jobs:
     if: needs.plan.outputs.run_rev2 == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -123,8 +122,10 @@ jobs:
         run: |
           base=${{ github.event.pull_request.base.sha }}
           git worktree add -q --detach "$RUNNER_TEMP/base" $base
-          if ! (cd "$RUNNER_TEMP/base" && python3 -m compose gasket-case "$RUNNER_TEMP/b2" \
-                && python3 -m compose firmware-rev2 "$RUNNER_TEMP/b2") > "$RUNNER_TEMP/base.log" 2>&1; then
+          old=""      # a base from before the rev followed from the command has to be told its rev
+          grep -q 'environ.get("C58_REV"' "$RUNNER_TEMP/base/compose/params.py" && old="C58_REV=2"
+          if ! (cd "$RUNNER_TEMP/base" && env $old python3 -m compose gasket-case "$RUNNER_TEMP/b2" \
+                && env $old python3 -m compose firmware-rev2 "$RUNNER_TEMP/b2") > "$RUNNER_TEMP/base.log" 2>&1; then
             tail -5 "$RUNNER_TEMP/base.log"
             echo "::notice::rev 2: the base ${base:0:9} did not build here, so there is nothing to compare with"; exit 0
           fi
@@ -149,7 +150,6 @@ jobs:
     if: needs.plan.outputs.run_boards == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -164,7 +164,6 @@ jobs:
     needs: controller
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -194,7 +193,7 @@ jobs:
           - { board: half_rev2_hotswap_rgb, shard: 1, shards: 1 }
           - { board: half_rev2_solder_rgb,  shard: 1, shards: 1 }
     name: half (${{ matrix.board }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
-    env: { C58_REV: "2", BOARD: "${{ matrix.board }}" }
+    env: { BOARD: "${{ matrix.board }}" }
     steps:
       - uses: actions/checkout@v4
       # The board as an earlier run routed it (this branch's newest, else main's), with the record of everything
@@ -220,7 +219,7 @@ jobs:
           import os, sys
           sys.argv = ["drc", "o2"]
           import pcbnew
-          from compose.pcb import kicad as PK
+          from compose.pcb import toolbox as PK
           name = os.environ["BOARD"]
           err, warn, unc, rep = PK.drc(pcbnew.LoadBoard(os.path.join(PK.PCB_OUT, name + ".kicad_pcb")), name)
           print(f"{name}, reused: DRC {err} errors, {warn} warnings, {unc} unconnected")
@@ -286,7 +285,6 @@ jobs:
     if: needs.plan.outputs.run_boards == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env: { C58_REV: "2" }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -302,7 +300,9 @@ jobs:
         run: |
           base=${{ github.event.pull_request.base.sha }}
           git worktree add -q --detach "$RUNNER_TEMP/base" $base
-          if ! (cd "$RUNNER_TEMP/base" && python3 -m compose flex-jumper "$RUNNER_TEMP/bj") > "$RUNNER_TEMP/base.log" 2>&1; then
+          old=""      # a base from before the rev followed from the command has to be told its rev
+          grep -q 'environ.get("C58_REV"' "$RUNNER_TEMP/base/compose/params.py" && old="C58_REV=2"
+          if ! (cd "$RUNNER_TEMP/base" && env $old python3 -m compose flex-jumper "$RUNNER_TEMP/bj") > "$RUNNER_TEMP/base.log" 2>&1; then
             tail -5 "$RUNNER_TEMP/base.log"
             echo "::notice::jumper: the base ${base:0:9} did not build here, so there is nothing to compare with"; exit 0
           fi
@@ -313,7 +313,7 @@ jobs:
     needs: [controller, half, jumper]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env: { C58_REV: "2", CTRL_OUT: o2 }
+    env: { CTRL_OUT: o2 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

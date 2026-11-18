@@ -1,6 +1,6 @@
 """
 Copper-level simulation of the rev 2 half boards with controller rev 2:
-    C58_REV=2 python3 -m compose sim-half-rev2 OUT      (after `half-rev2` and `controller`)
+    python3 -m compose sim-half-rev2 OUT      (after `half-rev2` and `controller`)
 
 Independent of the net names the boards were built with:
   1. Copper connectivity of every routed board is rebuilt from geometry (pads, tracks, vias that touch).

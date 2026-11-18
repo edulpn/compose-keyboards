@@ -1,5 +1,5 @@
 """
-QMK keyboard definition for rev 2 (controller rev 2):  C58_REV=2 python3 -m compose firmware-rev2 [outdir]
+QMK keyboard definition for rev 2 (controller rev 2):  python3 -m compose firmware-rev2 [outdir]
 -> outdir/firmware/keyboard.json        plain half boards
    outdir/firmware/rgb/keyboard.json    RGB half boards (per-key SK6812 MINI-E, RGB Matrix)
 

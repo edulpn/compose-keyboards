@@ -2,7 +2,7 @@
 
 [Home](../README.md) › Docs › Rev 2
 
-The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. `C58_REV=2` selects it; rev 1 is the default and is untouched.
+The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. Its commands select it (`gasket-*`, `half-rev2`, `flex-*`, `*-rev2`); rev 1 has its own commands and is untouched.
 
 All of it is generated for the layout set in `compose/params.py`. So far that is one layout, Compose58. Where these pages quote a figure or show a picture of it they say so, and [Compose58's rev 2 page](../layouts/lily58/rev2.md) has that keyboard's sizes, parts and check results.
 
