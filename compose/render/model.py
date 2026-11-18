@@ -8,7 +8,6 @@ position, grouped by material. Used by the checks (clearances) and the renders.
 import sys, json, math, os
 import numpy as np, trimesh
 from compose import params as PR
-from compose import REPO_ROOT
 from compose import geom as G
 from compose.case import sandwich as PT
 from types import SimpleNamespace
@@ -188,11 +187,10 @@ def pcb_half(side, M):
         for p, q in ((c, c + u * 1.85), (an, an - u * 1.85)):
             ms["leg"].append(tube([(*p, 0.5), (*p, zc), (*q, zc)], 0.25, 8))
             ms["solder"].append(trimesh.creation.icosphere(subdivisions=2, radius=0.75).apply_translation([*p, 0.15]))
-    if PR.CONTROLLER != "rev2":     # rev 2 halves get their FFC connector with the rev 2 half board
-        b = PLAN.conn_body.bounds
-        ms["hconn"].append(box((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, -BT - PR.CONN_BODY_UNDER, -BT, b[2] - b[0], b[3] - b[1]))
-        for p in PLAN.conn_pins:
-            ms["solder"].append(trimesh.creation.icosphere(subdivisions=2, radius=0.6).apply_translation([*p, 0.1]))
+    b = PLAN.conn_body.bounds
+    ms["hconn"].append(box((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, -BT - PR.CONN_BODY_UNDER, -BT, b[2] - b[0], b[3] - b[1]))
+    for p in PLAN.conn_pins:
+        ms["solder"].append(trimesh.creation.icosphere(subdivisions=2, radius=0.6).apply_translation([*p, 0.1]))
     for name, lst in ms.items():
         m = trimesh.util.concatenate(lst)
         if side == "L":
@@ -390,122 +388,66 @@ for (side, kind, i), (M, p0) in ({} if PCB else pads).items():
     add("stub" + nm[4:], tube([W(TILTM, ent_P)] + tail_pts, 0.42, 10))
     add("csolder", trimesh.creation.icosphere(subdivisions=2, radius=0.7).apply_translation(tail_pts[-1]))
 
-def ctrl_rev2_model():
-    """Controller rev 2 as built: board (from the routed KiCad board when present), part envelopes with their
-    real heights (mated cable plugs included), Pico male headers, the four standoffs and their threads,
-    through-hole leads under the board. Board frame -> P: (x, y_pc - y)."""
-    from compose.controller import rev2_std as CS
-    import glob
-    cm_ = TILTM
-    bt, bb = ST.board_top, ST.board_bot
-    P_ = lambda x, y: (x, ST.y_pc - y)
-    hol = _uu([_Pt(x, y).buffer(CS.M3_CLEAR / 2) for x, y in ST.standoffs])
-    add("cpcb", slab(ST.outline_P.difference(hol), bb, bt), cm_)
-    path = next((p for p in (os.path.join(OUT_DIR, "pcb", "controller_rev2.kicad_pcb"),
-                             os.path.join(REPO_ROOT, "out", "pcb", "controller_rev2.kicad_pcb"))
-                 if os.path.exists(p)), None)
-    assert path, "controller_rev2.kicad_pcb not found: run `python3 -m compose controller` first"
-    import pcbnew
-    brd = pcbnew.LoadBoard(path)
-    # heights above the board (mm) and what plugs into them
-    H = {"U1": ("header", 8.5, None), "JL": ("cconn", 5.75, None), "JR": ("cconn", 5.75, None),
-         "J4": ("cconn", 8.5, 13.5), "J6": ("cconn", 8.5, 13.5), "J5": ("cconn", 4.3, 10.0),
-         "U2": ("chip", 5.0, None), "C1": ("passive", 6.0, None), "C2": ("passive", 7.0, None),
-         "F1": ("passive", CS.TALL_PART_MAX_H, None), "R": ("passive", 3.0, None)}
-    for fp in brd.GetFootprints():
-        ref = fp.GetReference()
-        key = next((k for k in H if ref.startswith(k)), None)
-        for p in fp.Pads():
-            if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
-                q = p.GetPosition()
-                x_, y_ = P_(pcbnew.ToMM(q.x) - 100.0, pcbnew.ToMM(q.y) - 100.0)
-                add("ctail", box(x_, y_, bb - CS.LEAD_BELOW, bb, 0.8, 0.8), cm_)
-        if key is None:
-            continue
-        fp.BuildCourtyardCaches()
-        r_ = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
-        x0_, x1_ = pcbnew.ToMM(r_.GetLeft()) - 100.0, pcbnew.ToMM(r_.GetRight()) - 100.0
-        y0_, y1_ = pcbnew.ToMM(r_.GetTop()) - 100.0, pcbnew.ToMM(r_.GetBottom()) - 100.0
-        grp, h, plug = H[key]
-        sh = 0.25                                       # courtyards carry margin: the body is a little smaller
-        cx_, cy_ = P_((x0_ + x1_) / 2, (y0_ + y1_) / 2)
-        add(grp, box(cx_, cy_, bt, bt + h, x1_ - x0_ - 2 * sh, y1_ - y0_ - 2 * sh), cm_)
-        if plug:
-            add("plug", box(cx_, cy_, bt + h - 3.0, bt + plug, x1_ - x0_ - 2 * sh, y1_ - y0_ - 2 * sh), cm_)
-    # Pico male headers (plastic spacer + pins)
-    for sx in (-1, 1):
-        hx = sx * 8.89
-        add("headerm", box(hx, ST.pico_cy, ST.female_top, ST.pico_bot, 2.5, 50.8), cm_)
-        for yy in ST.pin_ys:
-            add("pinsm", box(hx, yy, ST.pico_bot + 1.0, ST.pico_bot + 1.7, 0.64, 0.64), cm_)
-    # standoffs (hex across corners) and their male threads through the board into the boss inserts
-    for x_, y_ in ST.standoffs:
-        add("cstandoff", cylz(x_, y_, CS.STANDOFF_AF / 2 / math.cos(math.radians(30)), bt, G.Z_DECK, 6), cm_)
-        add("cscrew", cylz(x_, y_, 1.45, bb - 6.0, bt, 16), cm_)
 
-
-if PR.CONTROLLER == "rev2":
-    ctrl_rev2_model()
+# ---- socket: perfboard carrier, female headers, male header spacer, pins, carrier screws
+cm = TILTM
+x0c, x1c = -C.CARRIER_X, C.CARRIER_X
+yb, yf = C.CARRIER_Y
+if PCB:
+    CPLAN = PLY.plan_ctrl(ST, PT.pillar_positions())
+    hol = _uu([_Pt(x, y).buffer(PR.M2_CLEAR / 2) for x, y in C.CARRIER_HOLES])
+    add("cpcb", slab(CPLAN.outline.difference(hol), C.CARRIER_BOTTOM, C.CARRIER_TOP), cm)
+    n_ = PR.HALF_CONN_PINS
+    for sd, pins in CPLAN.conn.items():
+        sx = -1 if sd == "L" else 1
+        xm = sx * (PR.CTRL_CONN_X + (4.95 - 1.55) / 2)
+        ym = (pins[0][1] + pins[-1][1]) / 2
+        add("cconn", box(xm, ym, C.CARRIER_TOP, C.CARRIER_TOP + 3.6, 6.5, (n_ - 1) * PR.HALF_CONN_PITCH + 3.2), cm)
+        for px_, py_ in pins:
+            add("ctail", box(px_, py_, C.CARRIER_BOTTOM - 1.5, C.CARRIER_BOTTOM, 0.5, 0.5), cm)
+        # mated cable plugs + a loose bundle down to the half board's plug (shown, not checked: it's flexible)
+        L_ = (n_ - 1) * PR.HALF_CONN_PITCH + 3.0
+        wx = sx * (CPLAN.wing_hw + 3.0)
+        add("plug", box(wx, ym, C.CARRIER_TOP + 0.4, C.CARRIER_TOP + 3.4, 6.0, L_), cm)
+        cb = PLAN.conn_body.bounds
+        hz = -BT - PR.CONN_BODY_UNDER
+        hp = box((cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2, hz - 5.5, hz + 0.01, 3.2, L_)
+        hpm = hp.copy().apply_transform(M_L) if sd == "L" else hp.copy().apply_transform(S).apply_transform(M_R)
+        add("plug", hpm)
+        a = W(cm, (sx * (CPLAN.wing_hw + 6.0), ym, C.CARRIER_TOP + 1.9))
+        bl = np.array([(cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2, hz - 5.5])
+        b_ = W(M_L, bl) * (np.array([-1, 1, 1]) if sd == "R" else 1)
+        mid1 = W(cm, (sx * (CPLAN.wing_hw + 9.0), ym, C.CARRIER_TOP - 3.0))
+        mid2 = b_ + np.array([0, 0, -4.0])
+        for off in np.linspace(-L_ / 2 + 1.5, L_ / 2 - 1.5, 4):
+            o = W(cm, (0, off, 0)) - W(cm, (0, 0, 0))
+            add("cable", tube([a + o, mid1 + o, mid2 + o, b_ + o], 0.55, 10))
 else:
-    # ---- socket: perfboard carrier, female headers, male header spacer, pins, carrier screws
-    cm = TILTM
-    x0c, x1c = -C.CARRIER_X, C.CARRIER_X
-    yb, yf = C.CARRIER_Y
-    if PCB:
-        CPLAN = PLY.plan_ctrl(ST, PT.pillar_positions())
-        hol = _uu([_Pt(x, y).buffer(PR.M2_CLEAR / 2) for x, y in C.CARRIER_HOLES])
-        add("cpcb", slab(CPLAN.outline.difference(hol), C.CARRIER_BOTTOM, C.CARRIER_TOP), cm)
-        n_ = PR.HALF_CONN_PINS
-        for sd, pins in CPLAN.conn.items():
-            sx = -1 if sd == "L" else 1
-            xm = sx * (PR.CTRL_CONN_X + (4.95 - 1.55) / 2)
-            ym = (pins[0][1] + pins[-1][1]) / 2
-            add("cconn", box(xm, ym, C.CARRIER_TOP, C.CARRIER_TOP + 3.6, 6.5, (n_ - 1) * PR.HALF_CONN_PITCH + 3.2), cm)
-            for px_, py_ in pins:
-                add("ctail", box(px_, py_, C.CARRIER_BOTTOM - 1.5, C.CARRIER_BOTTOM, 0.5, 0.5), cm)
-            # mated cable plugs + a loose bundle down to the half board's plug (shown, not checked: it's flexible)
-            L_ = (n_ - 1) * PR.HALF_CONN_PITCH + 3.0
-            wx = sx * (CPLAN.wing_hw + 3.0)
-            add("plug", box(wx, ym, C.CARRIER_TOP + 0.4, C.CARRIER_TOP + 3.4, 6.0, L_), cm)
-            cb = PLAN.conn_body.bounds
-            hz = -BT - PR.CONN_BODY_UNDER
-            hp = box((cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2, hz - 5.5, hz + 0.01, 3.2, L_)
-            hpm = hp.copy().apply_transform(M_L) if sd == "L" else hp.copy().apply_transform(S).apply_transform(M_R)
-            add("plug", hpm)
-            a = W(cm, (sx * (CPLAN.wing_hw + 6.0), ym, C.CARRIER_TOP + 1.9))
-            bl = np.array([(cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2, hz - 5.5])
-            b_ = W(M_L, bl) * (np.array([-1, 1, 1]) if sd == "R" else 1)
-            mid1 = W(cm, (sx * (CPLAN.wing_hw + 9.0), ym, C.CARRIER_TOP - 3.0))
-            mid2 = b_ + np.array([0, 0, -4.0])
-            for off in np.linspace(-L_ / 2 + 1.5, L_ / 2 - 1.5, 4):
-                o = W(cm, (0, off, 0)) - W(cm, (0, 0, 0))
-                add("cable", tube([a + o, mid1 + o, mid2 + o, b_ + o], 0.55, 10))
-    else:
-        add("perf", box(0, (yb + yf) / 2, C.CARRIER_BOTTOM, C.CARRIER_TOP, x1c - x0c, yb - yf), cm)
-    for ci in range(0 if PCB else C.CARRIER_COLS):
-        gx = x0c + (ci + 0.5) * C.PITCH_IN
-        for ri in range(C.CARRIER_ROWS):
-            gy = yb - (ri + 0.5) * C.PITCH_IN
-            add("perfpad", cylz(gx, gy, 0.9, C.CARRIER_TOP - 0.01, C.CARRIER_TOP + 0.04, 10), cm)
-            add("perfhole", cylz(gx, gy, 0.5, C.CARRIER_TOP - 0.02, C.CARRIER_TOP + 0.06, 8), cm)
-    pin_rows_y = [C.PICO_C[1] + yy for yy in pad_y]
-    for sx in (-1, 1):
-        hx = sx * 8.89
-        add("header", box(hx, (pin_rows_y[0] + pin_rows_y[-1]) / 2, C.CARRIER_TOP, C.CARRIER_TOP + C.FEMALE_H, 2.5, 50.8), cm)
-        add("headerm", box(hx, (pin_rows_y[0] + pin_rows_y[-1]) / 2, C.PICO_BOARD_BOTTOM - C.MALE_SPACER, C.PICO_BOARD_BOTTOM, 2.5, 50.8), cm)
-        for yy in pin_rows_y:
-            add("perfhole", box(hx, yy, C.CARRIER_TOP + C.FEMALE_H - 0.05, C.CARRIER_TOP + C.FEMALE_H + 0.02, 1.0, 1.0), cm)
-            add("ctail", box(hx, yy, C.CARRIER_BOTTOM - 2.8, C.CARRIER_BOTTOM, 0.64, 0.64), cm)           # female header tails
-            add("pinsm", box(hx, yy, C.PICO_BOARD_BOTTOM + 1.0, C.PICO_BOARD_BOTTOM + 1.7, 0.64, 0.64), cm)  # male pin tops
-            add("pinsm", box(hx, yy, C.PICO_BOARD_BOTTOM - C.MALE_SPACER - 6.0, C.PICO_BOARD_BOTTOM - C.MALE_SPACER, 0.64, 0.64), cm)  # male pins (in the socket)
-    for hx, hy in C.CARRIER_HOLES:
-        add("cscrew", cylz(hx, hy, 1.75, C.CARRIER_TOP, C.CARRIER_TOP + 1.3, 24), cm)
-        add("cscrewhex", cylz(hx, hy, 0.75, C.CARRIER_TOP + 1.25, C.CARRIER_TOP + 1.35, 6), cm)
+    add("perf", box(0, (yb + yf) / 2, C.CARRIER_BOTTOM, C.CARRIER_TOP, x1c - x0c, yb - yf), cm)
+for ci in range(0 if PCB else C.CARRIER_COLS):
+    gx = x0c + (ci + 0.5) * C.PITCH_IN
+    for ri in range(C.CARRIER_ROWS):
+        gy = yb - (ri + 0.5) * C.PITCH_IN
+        add("perfpad", cylz(gx, gy, 0.9, C.CARRIER_TOP - 0.01, C.CARRIER_TOP + 0.04, 10), cm)
+        add("perfhole", cylz(gx, gy, 0.5, C.CARRIER_TOP - 0.02, C.CARRIER_TOP + 0.06, 8), cm)
+pin_rows_y = [C.PICO_C[1] + yy for yy in pad_y]
+for sx in (-1, 1):
+    hx = sx * 8.89
+    add("header", box(hx, (pin_rows_y[0] + pin_rows_y[-1]) / 2, C.CARRIER_TOP, C.CARRIER_TOP + C.FEMALE_H, 2.5, 50.8), cm)
+    add("headerm", box(hx, (pin_rows_y[0] + pin_rows_y[-1]) / 2, C.PICO_BOARD_BOTTOM - C.MALE_SPACER, C.PICO_BOARD_BOTTOM, 2.5, 50.8), cm)
+    for yy in pin_rows_y:
+        add("perfhole", box(hx, yy, C.CARRIER_TOP + C.FEMALE_H - 0.05, C.CARRIER_TOP + C.FEMALE_H + 0.02, 1.0, 1.0), cm)
+        add("ctail", box(hx, yy, C.CARRIER_BOTTOM - 2.8, C.CARRIER_BOTTOM, 0.64, 0.64), cm)           # female header tails
+        add("pinsm", box(hx, yy, C.PICO_BOARD_BOTTOM + 1.0, C.PICO_BOARD_BOTTOM + 1.7, 0.64, 0.64), cm)  # male pin tops
+        add("pinsm", box(hx, yy, C.PICO_BOARD_BOTTOM - C.MALE_SPACER - 6.0, C.PICO_BOARD_BOTTOM - C.MALE_SPACER, 0.64, 0.64), cm)  # male pins (in the socket)
+for hx, hy in C.CARRIER_HOLES:
+    add("cscrew", cylz(hx, hy, 1.75, C.CARRIER_TOP, C.CARRIER_TOP + 1.3, 24), cm)
+    add("cscrewhex", cylz(hx, hy, 0.75, C.CARRIER_TOP + 1.25, C.CARRIER_TOP + 1.35, 6), cm)
 
-    # foam pad on the cover's clamp tab (compressed against the Pico's front edge)
-    fy0 = C.PICO_TOP_Y - C.PICO_L - 1.3
-    fy1 = C.PICO_TOP_Y - C.PICO_L + C.CLAMP_OVERLAP - 0.1
-    add("foam", box(0, (fy0 + fy1) / 2, C.PICO_BOARD_BOTTOM + 1.0, C.Z_DECK, 2 * (C.CLAMP_HW - 0.8), fy1 - fy0), TILTM)
+# foam pad on the cover's clamp tab (compressed against the Pico's front edge)
+fy0 = C.PICO_TOP_Y - C.PICO_L - 1.3
+fy1 = C.PICO_TOP_Y - C.PICO_L + C.CLAMP_OVERLAP - 0.1
+add("foam", box(0, (fy0 + fy1) / 2, C.PICO_BOARD_BOTTOM + 1.0, C.Z_DECK, 2 * (C.CLAMP_HW - 0.8), fy1 - fy0), TILTM)
 
 
 # cover screws (M3 button heads, visible on top)

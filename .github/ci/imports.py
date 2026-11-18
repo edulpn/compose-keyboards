@@ -25,11 +25,7 @@ import sys
 PACKAGES = ("compose", "layouts")
 # Names known not to resolve, with the reason they are left: (file, name as written) -> why. One that starts
 # resolving, or goes away, has to be taken off this list: the check fails until it is.
-KNOWN = {
-    ("compose/render/model.py", "CS.TALL_PART_MAX_H"):
-        "the rev 1 model round the controller rev 2, a build the platform no longer makes; that branch is not "
-        "reached when rev 1 is built",
-}
+KNOWN = {}
 # Rev 1 is released and kept as it is; the controller rev 2 and rev 2 are built on what is shared, not on rev 1's
 # modules, so a change to rev 1's code cannot reach them (nor theirs it). Rev 1's commands, and the modules that
 # are rev 1's without being a command's:

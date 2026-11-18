@@ -176,33 +176,15 @@ if PR.MATRIX == "pcb":
     hp = PLY.plan_half()
     g = min(edge_gap(hp.outline, G.M_LW, -PR.PCB_T / 2, printed["case"], m) for m in (False, True))
     ok(g >= PR.PCB_EDGE_GAP - 0.1, f"half board edges to the case: {g:.2f} mm (designed {PR.PCB_EDGE_GAP})")
-    if PR.CONTROLLER == "rev2":
-        st_ = PT.Stack
-        g = edge_gap(st_.outline_P, G.M_PW, (st_.board_bot + st_.board_top) / 2, printed["case"])
-        ok(g >= 0.44, f"controller rev 2 board edge to the case: {g:.2f} mm (envelope kept 0.45 clear)")
-        cparts = group("cconn", "chip", "passive", "plug", "header")
-        for nm_, solid_, lim in (("case", printed["case"], 0.44), ("cover", printed["cover"], 0.5),
-                                 ("left plate", printed["plate_left"], 0.5), ("right plate", printed["plate_right"], 0.5)):
-            g = min(min_gap(cparts, solid_), min_gap(group("cstandoff"), solid_) if nm_ != "cover" else 9.0)
-            ok(g >= lim, f"controller rev 2 parts, plugs and standoffs to the {nm_}: {g:.2f} mm")
-        # the cover sits on the standoff tops (that's the joint): contact, no overlap
-        g = min_gap(group("cstandoff"), printed["cover"])
-        p_ = penetration(group("cstandoff"), [printed["cover"]])
-        ok(g < 0.05 and p_ <= 0.02, f"cover seats on the standoff tops: gap {g:.2f} mm, overlap {p_:.2f} mm")
-        g = min_gap(group("ctail"), printed["case"])
-        ok(g >= 0.5, f"controller rev 2 leads under the board to the case floor: {g:.2f} mm")
-        g = min_gap(group("pcb"), printed["cover"])
-        ok(g >= PR.STANDOFF_MIN_GAP - 0.05, f"Pico top to the cover: {g:.2f} mm ({st_.standoff_len} mm standoffs)")
-    else:
-        cp = PLY.plan_ctrl(PT.Stack, PT.pillar_positions())
-        g = edge_gap(cp.outline, G.M_PW, (PT.Stack.carrier_bot + PT.Stack.carrier_top) / 2, printed["case"])
-        ok(g >= 0.5, f"controller board edge to the case/pillars: {g:.2f} mm")
+    cp = PLY.plan_ctrl(PT.Stack, PT.pillar_positions())
+    g = edge_gap(cp.outline, G.M_PW, (PT.Stack.carrier_bot + PT.Stack.carrier_top) / 2, printed["case"])
+    ok(g >= 0.5, f"controller board edge to the case/pillars: {g:.2f} mm")
     g = min_gap(group("hsocket", "diode", "hconn", "leg"), printed["case"])
     ok(g >= 0.25, f"half-board parts to the case: {g:.2f} mm")
     g = min_gap(group("cconn"), printed["case"])
     ok(g >= 0.5, f"controller connectors to the case: {g:.2f} mm")
     hb = group("hpcb", "hsocket", "diode", "hconn")
-    for nm in ("cpcb", "cconn") + (("passive", "plug", "cstandoff") if PR.CONTROLLER == "rev2" else ()):
+    for nm in ("cpcb", "cconn"):
         v, u = collide(group(nm), group("hpcb")) if group(nm).is_watertight else collide(group("hpcb"), group(nm))
         ok(v < 0.02, f"{nm} vs half boards: {v:.3f} {u}")
     # every switch pin, plastic leg and centre post must pass through a hole in the board
@@ -251,8 +233,7 @@ print("4. assembly sweeps (part moved along its install direction)")
 up_P = G.up_P_world()
 nL, nR = G.plate_normal_world(-1), G.plate_normal_world(1)
 steps = (0.3, 1.0, 2.0, 4.0, 8.0, 15.0, 30.0)
-socket = group("perf", "cpcb", "cconn", "header", "headerm", "pcb", "silver", "pinsm", "ctail",
-               *(("chip", "passive", "plug", "cstandoff", "cscrew") if PR.CONTROLLER == "rev2" else ()))
+socket = group("perf", "cpcb", "cconn", "header", "headerm", "pcb", "silver", "pinsm", "ctail")
 sw_all = group("switch", "swlegs", "pins", "leg", "diode", "copper", "kapton", "solder", "hpcb", "hsocket", "band", "hconn")
 
 
@@ -323,13 +304,6 @@ for x, y in PT.Stack.carrier_holes:
     if vol_inter(key_path(p, up_P), case) > 0.01:
         bad += 1
 ok(bad == 0, f"Pico carrier screws reachable from above with the cover off ({bad} blocked)")
-if PR.CONTROLLER == "rev2":     # standoffs are tightened with a slim 5.5 mm nut driver before the halves go in
-    bad = 0
-    for x, y in PT.Stack.standoffs:
-        p = G.apply(G.M_PW, (x, y, PT.Stack.board_top + 0.5))
-        if vol_inter(key_path(p, up_P, length=60.0, r=4.0), case) > 0.01:
-            bad += 1
-    ok(bad == 0, f"controller standoffs reachable with a slim 5.5 mm nut driver, 8 mm OD ({bad} blocked)")
 
 print("6. overhangs in print orientation (> 45 deg, off the bed)")
 for f in sorted(os.listdir(os.path.join(OUT, "print"))):

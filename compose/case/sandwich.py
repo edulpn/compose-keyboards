@@ -114,45 +114,7 @@ def _stack():
     s.window_hw = PR.PICO_W / 2 - PR.WINDOW_EDGE_OVER_PCB
     s.window_front = s.pico_front - PR.WINDOW_FRONT_MARGIN
     s.clamp_hw = PR.PICO_PIN_ROW_X - 1.7          # between the header rows, clear of the pin tops
-    if PR.CONTROLLER == "rev2":
-        _stack_rev2(s)
     return s
-
-
-def _stack_rev2(s):
-    """Controller rev 2: the board sits on four case bosses, clamped by M3 male-female standoffs that carry the
-    cover. Pico height from the stock standoff length; board placed back against the bridge's back wall."""
-    from compose.controller import rev2_std as CS
-    need = CS.STACK_ABOVE_BOARD + PR.STANDOFF_MIN_GAP
-    s.standoff_len = min(L_ for L_ in PR.STANDOFF_LENGTHS if L_ >= need)
-    s.board_top = G.Z_DECK - s.standoff_len
-    s.board_bot = s.board_top - CS.PCB_T
-    s.pico_top = s.board_top + CS.STACK_ABOVE_BOARD
-    s.pico_bot = s.pico_top - PR.PICO_T
-    s.female_top = s.pico_bot - PR.MALE_HEADER_SPACER
-    s.y_pc = -PR.BRIDGE_WALL_T - PR.CTRL_BACK_CLEAR + CS.Y_BACK      # Pico centre, P frame
-    s.pico_back = s.y_pc + CS.PICO_HALF_L
-    s.pico_front = s.y_pc - CS.PICO_HALF_L
-    s.pico_cy = s.y_pc
-    s.pin1_y = s.y_pc + CS.PICO_Y
-    s.pin_ys = [s.pin1_y - i * PR.PICO_PIN_PITCH for i in range(PR.PICO_PINS_PER_SIDE)]
-    s.to_P = lambda x, y: (x, s.y_pc - y)                         # board frame -> P frame
-    s.standoffs = [s.to_P(x, y) for x, y in CS.COVER_HOLES]
-    s.outline_P = _ctrl_outline_P(s)
-    s.board_front = s.y_pc - CS.Y_FRONT
-    s.window_hw = PR.PICO_W / 2 - PR.WINDOW_EDGE_OVER_PCB
-    s.window_front = s.pico_front - PR.WINDOW_FRONT_MARGIN
-    s.carrier_holes = []
-    # legacy names some callers read
-    s.carrier_top, s.carrier_bot = s.board_top, s.board_bot
-    s.carrier_back, s.carrier_front = s.y_pc - CS.Y_BACK, s.board_front
-    s.carrier_cy, s.carrier_hw = s.y_pc, CS.W2
-
-
-def _ctrl_outline_P(s):
-    from compose.controller import rev2_std as CS
-    from shapely.affinity import scale as _sc, translate as _tr
-    return _tr(_sc(CS.outline(), 1.0, -1.0, origin=(0, 0)), 0.0, s.y_pc)
 
 
 Stack = _stack()
@@ -160,10 +122,7 @@ Stack = _stack()
 
 def pillar_positions():
     """Cover screw pillars: as far out as possible while staying FIT_GAP clear
-    of the plate (the interface plane is narrowest at plate-underside level).
-    Controller rev 2: the cover screws into the standoffs instead."""
-    if PR.CONTROLLER == "rev2":
-        return list(Stack.standoffs)
+    of the plate (the interface plane is narrowest at plate-underside level)."""
     out = []
     for y in PR.COVER_SCREW_Y:
         x = abs(G.interface_x(y, G.Z0)) - PR.PILLAR_R - PR.FIT_GAP - 0.2
@@ -213,9 +172,7 @@ def floor_details_world(cav_world):
         for x, y in pts:
             fx, fy = floor_pt(G.M_LW, x, y)
             fl += [flare(fx, fy, r), flare(-fx, fy, r)]
-    ctrl = (((Stack.standoffs, PR.CTRL_BOSS_R),) if PR.CONTROLLER == "rev2" else
-            ((Stack.carrier_holes, PR.CARRIER_POST_R), (pillar_positions(), PR.PILLAR_R)))
-    for pts, r in ctrl:
+    for pts, r in ((Stack.carrier_holes, PR.CARRIER_POST_R), (pillar_positions(), PR.PILLAR_R)):
         for x, y in pts:
             fx, fy = floor_pt(G.M_PW, x, y)
             fl.append(flare(fx, fy, r))
@@ -258,22 +215,11 @@ def case_world():
     bosses += [cyl(x, y, PR.POST_R, DEEP, -U) for x, y in L.posts]
     bosses = union(bosses)
     bossL = G.L2W(bosses)
-    if PR.CONTROLLER == "rev2":     # bosses under the board's standoffs; the board sits on their tops
-        cposts = G.P2W(union([cyl(x, y, PR.CTRL_BOSS_R, DEEP, st.board_bot) for x, y in st.standoffs]))
-        pillars = None
-    else:
-        cposts = G.P2W(union([cyl(x, y, PR.CARRIER_POST_R, DEEP, st.carrier_bot) for x, y in st.carrier_holes]))
-        pillars = G.P2W(union([cyl(x, y, PR.PILLAR_R, DEEP, G.Z_DECK) for x, y in pillar_positions()]))
+    cposts = G.P2W(union([cyl(x, y, PR.CARRIER_POST_R, DEEP, st.carrier_bot) for x, y in st.carrier_holes]))
+    pillars = G.P2W(union([cyl(x, y, PR.PILLAR_R, DEEP, G.Z_DECK) for x, y in pillar_positions()]))
     details = floor_details_world(union([cavL, cavR])).intersect(hollow)
-    add = union([s_ for s_ in (bossL, bossL.mirror("YZ"), cposts, pillars, details) if s_ is not None]
-                ).intersect(big_box(-500, 500, -500, 500, 0, 500))
+    add = union([bossL, bossL.mirror("YZ"), cposts, pillars, details]).intersect(big_box(-500, 500, -500, 500, 0, 500))
     body = body.fuse(add).clean()
-    if PR.CONTROLLER == "rev2":     # the controller's envelope (board + leads below, everything above) is kept clear,
-        from compose.controller import rev2_std as CS  # except its own bosses
-        keep = prism(list(Stack.outline_P.buffer(0.45, join_style="mitre").exterior.coords)[:-1],
-                     Stack.board_bot - CS.LEAD_BELOW - 0.6, G.Z_DECK + 1)
-        keep = keep.cut(union([cyl(x, y, PR.CTRL_BOSS_R, DEEP, st.board_bot) for x, y in st.standoffs]))
-        body = body.cut(G.P2W(keep)).clean()
 
     # ---- holes
     cb = [cyl(x, y, PR.M3_CBORE_D / 2, DEEP - 10, -U - PR.SHELF_T) for x, y in L.screws]
@@ -282,12 +228,8 @@ def case_world():
     cb += [cyl(x, y, PR.M2_CLEAR / 2, -U - PR.POST_SHELF_T - 1, 1.0) for x, y in L.posts]
     cbL = G.L2W(union(cb))
     body = body.cut(cbL).cut(cbL.mirror("YZ"))
-    if PR.CONTROLLER == "rev2":
-        # deep enough for the insert plus the standoff's 6 mm male thread
-        holes_P = [cyl(x, y, PR.M3_INSERT_D / 2, st.board_bot - PR.M3_INSERT_L - 2.0, st.board_bot + 1) for x, y in st.standoffs]
-    else:
-        holes_P = [cyl(x, y, PR.M2_INSERT_D / 2, st.carrier_bot - PR.M2_INSERT_L, st.carrier_bot + 1) for x, y in st.carrier_holes]
-        holes_P += [cyl(x, y, PR.M3_INSERT_D / 2, G.Z_DECK - PR.M3_INSERT_L, G.Z_DECK + 1) for x, y in pillar_positions()]
+    holes_P = [cyl(x, y, PR.M2_INSERT_D / 2, st.carrier_bot - PR.M2_INSERT_L, st.carrier_bot + 1) for x, y in st.carrier_holes]
+    holes_P += [cyl(x, y, PR.M3_INSERT_D / 2, G.Z_DECK - PR.M3_INSERT_L, G.Z_DECK + 1) for x, y in pillar_positions()]
     usb_z = st.pico_bot - PR.USB_NOTCH_BELOW_PCB
     holes_P.append(big_box(-PR.USB_NOTCH_W / 2, PR.USB_NOTCH_W / 2, -BW - 3.0, 3.0, usb_z, G.Z_DECK + 10))
     body = body.cut(G.P2W(union(holes_P)))
@@ -316,10 +258,7 @@ def cover_P():
     body = bridge_profile_P(G.Z_DECK, PR.COVER_H, PR.COVER_BEVEL, gap_side=PR.FIT_GAP)
     z0, z1 = G.Z_DECK - 1, G.Z_DECK + PR.COVER_H + 1
     win = big_box(-st.window_hw, st.window_hw, st.window_front, 20.0, z0, z1)
-    if PR.CONTROLLER == "rev2":     # the Pico sits in its sockets on a clamped board: no clamp tab
-        body = body.cut(win)
-    else:
-        tab = big_box(-st.clamp_hw, st.clamp_hw, st.window_front - 1.0, st.pico_front + PR.CLAMP_TAB_OVERLAP, z0 - 1, z1 + 1)
-        body = body.cut(win.cut(tab))
+    tab = big_box(-st.clamp_hw, st.clamp_hw, st.window_front - 1.0, st.pico_front + PR.CLAMP_TAB_OVERLAP, z0 - 1, z1 + 1)
+    body = body.cut(win.cut(tab))
     body = body.cut(union([cyl(x, y, PR.M3_CLEAR / 2, z0, z1) for x, y in pillar_positions()]))
     return body.clean()
