@@ -72,7 +72,7 @@ def keys_mesh():
         for m in (hb, cap):
             m.apply_transform(Tm @ R)
         sw.append(hb)
-        (caps2 if getattr(k, "thumb", False) or k.y < -80 else caps).append(cap)
+        (caps2 if k.accent else caps).append(cap)
     out = {}
     for nm, ms in (("switch", sw), ("keycap", caps), ("keycap2", caps2)):
         if not ms:

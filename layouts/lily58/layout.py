@@ -25,8 +25,9 @@ def layout():
     thumbs = [(-3.0, -3.98, 0.0, 1.0, 2, "Alt", "Gui"), (-1.95, -4.02, -4.0, 1.0, 3, "Gui", "Bksp"),
               (-0.9, -4.12, -10.0, 1.0, 4, "Lower", "Raise"), (0.22, -4.55, -22.0, 1.5, 5, "Space", "Enter")]
     for dx, y, rot, h, col, ll, lr in thumbs:
-        keys.append(Key((inner + dx) * P, y * P, rot, 1.0, h, 4, col, ll, lr))
-    keys.append(Key((inner + 1.0) * P, -3.35 * P, 0.0, 1.0, 1.0, 4, 1, "[", "]"))   # extra inner key
+        keys.append(Key((inner + dx) * P, y * P, rot, 1.0, h, 4, col, ll, lr, grid=False, accent=h > 1.0))   # the 1.5u
+        #                                                             key is the one in the renders' second colour
+    keys.append(Key((inner + 1.0) * P, -3.35 * P, 0.0, 1.0, 1.0, 4, 1, "[", "]", grid=False))   # extra inner key
 
     kk = {k.label_l: k for k in keys}
     s = PR.SCREW_EDGE_INSET

@@ -299,10 +299,10 @@ def _place():
     ledpads_u = unary_union([p for f in leds for d in leds[f].values() for p in d.values()])
 
     # LED chain: up the outer column, down the next and so on, so it leaves the inner column at the front, then
-    # the inner key and the thumb arc from the inside out
-    grid = sorted([i for i in range(len(keys)) if keys[i].row != 4],
+    # the keys the layout marks as off the columns (Compose58: the inner key and the thumb arc) from the inside out
+    grid = sorted([i for i in range(len(keys)) if keys[i].grid],
                   key=lambda i: (keys[i].col, -keys[i].row if keys[i].col % 2 == 0 else keys[i].row))
-    rest = sorted([i for i in range(len(keys)) if keys[i].row == 4], key=lambda i: -keys[i].x)
+    rest = sorted([i for i in range(len(keys)) if not keys[i].grid], key=lambda i: -keys[i].x)
     s.led_order = grid + rest
     s.caps = []
     capshape = []
