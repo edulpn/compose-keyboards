@@ -106,7 +106,7 @@ Negative controls prove it would catch a reversed connector, swapped firmware pi
 - **Build labels:** lhs and rhs on each face.
 - **Hex lattice:** echoes the case floor, filling the free space.
 
-Name, handle, taglines and lattice size are set in `compose/params.py`.
+The name and the layout credit are set in `layouts/lily58/keyboard.py`; the handle, taglines and lattice size in `compose/params.py`.
 
 **Firmware.** `out/firmware/keyboard.json` is a QMK definition.
 - Controller: RP2040, COL2ROW.

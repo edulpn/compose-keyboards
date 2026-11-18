@@ -1,15 +1,20 @@
 """Checks what python3 -m compose does with its command line and with old settings, as far as it goes without
 the toolchain: python3 .github/ci/test_cli.py (exit 1 on a wrong outcome).
 
-Every case here stops before a command's module runs, or only reads compose/params.py, which imports nothing.
+Every case here stops before a command's module runs, or only reads compose/params.py, which imports nothing but
+the layout's keyboard.py (plain constants; the layouts made up for the test are written to a temporary folder).
 """
+import ast
 import os
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SAY = "import compose.params as P; print(P.REV, getattr(P, 'LAYOUT', None), getattr(P, 'TENT_DEG', None))"
+SAY_KB = ("import compose.params as P; print(P.BOARD_NAME, P.CREDIT, P.REVISION, f'{P.TENT_DEG} {P.TILT_DEG}', "
+          "f'{P.USB_VID} {P.USB_PID} {P.USB_PID_RGB}', sep=' | ')")
 # (what is tried, the arguments after `python3`, the environment added, the exit code, a word the output must have)
 CASES = [
     ("the help lists the layouts", ["-m", "compose", "--help"], {}, 0, "layouts: "),
@@ -34,6 +39,24 @@ CASES = [
     ("an old name there never was", ["-c", SAY], {"C58_NOPE": "1"}, 1, "no setting of that name"),
     ("a value only a keyboard has, read with none", ["-c", "import compose.params as P; P.TENT_DEG"], {}, 1, "this run builds none"),
     ("the layout read with none", ["-c", "import compose.params as P; P.LAYOUT"], {}, 1, "this run builds none"),
+    ("the keyboard's name read with none", ["-c", "import compose.params as P; P.BOARD_NAME"], {}, 1, "this run builds none"),
+    ("what the layout says of its keyboard, rev 1", ["-c", SAY_KB], {"COMPOSE_REV": "1", "COMPOSE_LAYOUT": "lily58"}, 0,
+     "Compose58 | layout: Lily58 by kata0510 | rev 1 | 6.0 5.0 | 0xFEED 0x4C58 0x4C59"),
+    ("and rev 2", ["-c", SAY_KB], {"COMPOSE_REV": "2", "COMPOSE_LAYOUT": "lily58"}, 0,
+     "Compose58 | layout: Lily58 by kata0510 | rev 2 | 12.0 0.0 | 0xFEED 0x4C58 0x4C59"),
+]
+
+# layouts made up for the test, each a keyboard.py: (what is tried, the file or None for no file, the rev, the exit
+# code, a word the output must have)
+ONLY2 = 'NAME = "Two"\nCREDIT = "layout: nobody"\nREVS = (2,)\nTENT_DEG = {2: 8.0}\nTILT_DEG = {2: 1.0}\n' \
+        'USB_VID = "0xFEED"\nUSB_PID = "0x0001"\nUSB_PID_RGB = "0x0002"\n'
+MADE_UP = [
+    ("a layout built in rev 2 only, in rev 2", ONLY2, "2", 0, "Two | layout: nobody | rev 2 | 8.0 1.0 | 0xFEED 0x0001 0x0002"),
+    ("the same in rev 1", ONLY2, "1", 1, "Two (layouts/made_up) is not built in rev 1: its keyboard.py lists rev 2."),
+    ("a layout with no keyboard.py", None, "2", 1, "layouts/made_up/keyboard.py is missing"),
+    ("a keyboard.py that leaves two things out", ONLY2.replace("CREDIT", "CREDITS").replace("USB_PID_RGB", "USB_RGB"), "2", 1,
+     "does not say CREDIT, USB_PID_RGB"),
+    ("a rev listed with no angle for it", ONLY2.replace("(2,)", "(1, 2)"), "1", 1, "gives no TENT_DEG for it"),
 ]
 
 
@@ -54,8 +77,39 @@ def named():
     return out
 
 
+def keyboard_files():
+    """Every layout's keyboard.py against what compose/params.py asks of one: [(layout, what is wrong with it)]."""
+    src = open(os.path.join(ROOT, "compose", "params.py"), encoding="utf-8").read()
+    want = ast.literal_eval(re.search(r"^_KB_NAMES = (\(.*\))$", src, re.M).group(1))
+    out = []
+    for name in sorted(os.listdir(os.path.join(ROOT, "layouts"))):
+        if not os.path.isfile(os.path.join(ROOT, "layouts", name, "layout.py")):
+            continue
+        path = os.path.join(ROOT, "layouts", name, "keyboard.py")
+        if not os.path.isfile(path):
+            out.append((name, "no keyboard.py"))
+            continue
+        has = set()
+        for node in ast.parse(open(path, encoding="utf-8").read()).body:
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                continue                                                  # the docstring
+            try:
+                assert isinstance(node, ast.Assign) and all(isinstance(t, ast.Name) for t in node.targets)
+                ast.literal_eval(node.value)
+                has |= {t.id for t in node.targets}
+            except (AssertionError, ValueError):
+                out.append((name, f"line {node.lineno} is not a plain constant"))
+        if set(want) - has:
+            out.append((name, "does not say " + ", ".join(n for n in want if n not in has)))
+    return out
+
+
 def main():
     bad = 0
+    wrong = keyboard_files()
+    bad += bool(wrong)
+    print(("ok   " if not wrong else "FAIL ") + "every layout's keyboard.py is plain constants and says what params.py asks"
+          + ("" if not wrong else f": {wrong}"))
     old = {"C58_" + n[len("COMPOSE_"):] for n in SETTINGS} - {"C58_LAYOUT"}
     stray = {n: f for n, f in named().items() if n not in SETTINGS and not (n in old | {"C58_"} and f == "compose/params.py")
              and not (n == "C58_" and f.startswith("docs/"))}
@@ -69,7 +123,23 @@ def main():
         ok = r.returncode == code and word in out
         bad += not ok
         print(("ok   " if ok else "FAIL ") + f"{name}: exit {r.returncode}" + ("" if ok else f" (expected {code} and {word!r}): {out.strip()[-300:]}"))
-    print(f"{len(CASES) + 1 - bad}/{len(CASES) + 1} outcomes as expected")
+    with tempfile.TemporaryDirectory() as tmp:                 # the made-up layouts: `layouts` found here, `compose` in ROOT
+        for i, (name, text, rev, code, word) in enumerate(MADE_UP):
+            d = os.path.join(tmp, str(i), "layouts", "made_up")
+            os.makedirs(d)
+            for f in (os.path.join(d, "..", "__init__.py"), os.path.join(d, "__init__.py")):
+                open(f, "w").close()
+            if text is not None:
+                with open(os.path.join(d, "keyboard.py"), "w") as fh:
+                    fh.write(text)
+            r = subprocess.run([sys.executable, "-c", SAY_KB], cwd=os.path.join(tmp, str(i)), capture_output=True, text=True,
+                               env={**base, "PYTHONPATH": ROOT, "COMPOSE_REV": rev, "COMPOSE_LAYOUT": "made_up"})
+            out = r.stdout + r.stderr
+            ok = r.returncode == code and word in out
+            bad += not ok
+            print(("ok   " if ok else "FAIL ") + f"{name}: exit {r.returncode}" + ("" if ok else f" (expected {code} and {word!r}): {out.strip()[-300:]}"))
+    n = len(CASES) + len(MADE_UP) + 2
+    print(f"{n - bad}/{n} outcomes as expected")
     sys.exit(1 if bad else 0)
 
 

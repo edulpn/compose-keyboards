@@ -162,8 +162,9 @@ compose/            the platform (Python package)
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
   order_rev2.py       the rev 2 order folder (out_order/)
-layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); optionally the nets it
-                    routes itself (preroute.py)
+layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); what its keyboard is
+                    called, the revs it is built in, its tent and tilt per rev and its USB ids (keyboard.py);
+                    optionally the nets it routes itself (preroute.py)
 docs/               platform docs (this wiki), images: rev 2's case, controller, half boards and jumpers each have a page
   layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
 ```
@@ -171,7 +172,7 @@ docs/               platform docs (this wiki), images: rev 2's case, controller,
 ## Customising
 
 - **All dimensions live in `compose/params.py`.** That covers:
-  - angles (splay, tent, tilt);
+  - the splay angle (tent and tilt are the keyboard's own, in `layouts/<name>/keyboard.py`);
   - plate and wall thicknesses;
   - fit gaps and lip/reveal sizes;
   - Pico, header and perfboard stack heights;
@@ -179,10 +180,12 @@ docs/               platform docs (this wiki), images: rev 2's case, controller,
   - bed size.
 
   Derived values are computed rather than typed in. That includes the inner-edge height, which `geom.solve_z0` derives from `WIRE_DEPTH`, plus the cover pillar positions, window, clamp tab and screw lengths.
-- **Layouts live in `layouts/<name>/layout.py`.** A layout is a list of keys plus its screws, posts and feet expressed relative to keys. Add a folder with a `layout()` function and set `LAYOUT` in `compose/params.py`. `validate_layout()` flags:
+- **Layouts live in `layouts/<name>/layout.py`.** A layout is a list of keys plus its screws, posts and feet expressed relative to keys. Add a folder with a `layout()` function in `layout.py` and a `keyboard.py` beside it, and build it with `--layout <name>`. `validate_layout()` flags:
   - keycaps closer than 0.5 mm;
   - a bridge that's too long for the inner edge;
   - screws too close to the edge.
+
+- **What a keyboard is called lives in `layouts/<name>/keyboard.py`.** It holds plain constants: the keyboard's name, the credit for its key layout, the revs it is built in (`REVS`), its tent and tilt for each of those revs, and its USB ids. A command of a rev the keyboard does not list stops and says so. [Compose58's](../layouts/lily58/keyboard.py) shows what goes in it.
 
 - **Routing is automatic.** A new layout's boards are placed and autorouted with no routing code of its own. `layouts/<name>/preroute.py` is optional: nets worth laying out by hand (a power rail whose resistance should be a design value, a net the router struggles with), see [Routing](#routing).
 

@@ -57,7 +57,7 @@ def main():
         "maintainer": PR.HANDLE,
         "processor": "RP2040",
         "bootloader": "rp2040",
-        "usb": {"vid": "0xFEED", "pid": "0x4C58", "device_version": "1.0.0"},
+        "usb": {"vid": PR.USB_VID, "pid": PR.USB_PID, "device_version": "1.0.0"},
         "diode_direction": "COL2ROW",
         "matrix_pins": {"rows": rows, "cols": cols},
         "features": {"bootmagic": False, "extrakey": True, "mousekey": False, "nkro": True},
