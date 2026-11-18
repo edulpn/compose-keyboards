@@ -12,14 +12,54 @@ runs:
       with:
         distribution: temurin
         java-version: "25"
+    # The packages' .deb files are kept in the Actions cache: the Ubuntu mirror a runner is given can take half an
+    # hour over them (KiCad, its footprints and Java are 100 MB of the download), and a job that waits that long
+    # runs into its time limit. The cache is named after the exact files apt wants, so a new version of any
+    # package makes a new cache; apt checks every file against its index and downloads again what does not match.
+    - name: apt index, and the package files this runner needs
+      id: apt
+      shell: bash
+      env:
+        APT_PACKAGES: >-
+          kicad kicad-footprints kicad-symbols python3-pip python3-dev openjdk-21-jre-headless ngspice
+          fonts-dejavu-core
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -qq --print-uris --no-install-recommends $APT_PACKAGES \
+            | awk '{print $2}' | sort > "$RUNNER_TEMP/apt-debs.txt"
+        echo "packages=$APT_PACKAGES" >> "$GITHUB_OUTPUT"
+        echo "key=apt-debs-$(dpkg --print-architecture)-$(sha256sum < "$RUNNER_TEMP/apt-debs.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - name: apt package files from the cache
+      id: debs
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/apt-debs
+        key: ${{ steps.apt.outputs.key }}
+        restore-keys: apt-debs-
     - name: apt packages
       shell: bash
       run: |
-        sudo apt-get update -q
-        sudo apt-get install -y -q --no-install-recommends kicad kicad-footprints kicad-symbols \
-            python3-pip python3-dev openjdk-21-jre-headless ngspice fonts-dejavu-core
+        mkdir -p ~/apt-debs
+        had=0
+        while read -r f; do
+          if [ -f ~/apt-debs/"$f" ]; then sudo cp ~/apt-debs/"$f" /var/cache/apt/archives/; had=$((had + 1)); fi
+        done < "$RUNNER_TEMP/apt-debs.txt"
+        echo "apt: $had of $(wc -l < "$RUNNER_TEMP/apt-debs.txt" | tr -d ' ') package files came from the cache"
+        # download first, and keep the files: whatever the image does with them after an install
+        sudo apt-get install -y -q --no-install-recommends --download-only ${{ steps.apt.outputs.packages }}
+        rm -f ~/apt-debs/*.deb
+        while read -r f; do
+          cp /var/cache/apt/archives/"$f" ~/apt-debs/ || echo "::warning::apt: $f is not in apt's archive folder, so it is not cached"
+        done < "$RUNNER_TEMP/apt-debs.txt"
+        sudo apt-get install -y -q --no-install-recommends ${{ steps.apt.outputs.packages }}
         J21=/usr/lib/jvm/java-21-openjdk-$(dpkg --print-architecture)/bin
         echo "$J21" >> "$GITHUB_PATH"
+    - name: keep the apt package files (when this exact set was not cached yet)
+      if: steps.debs.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/apt-debs
+        key: ${{ steps.apt.outputs.key }}
     - name: Freerouting cache
       uses: actions/cache@v4
       with:
