@@ -4,7 +4,7 @@
 
 The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames and a lift-off middle cover. It is generated round the layout's keys and the [controller rev 2](controller-rev2.md) board (`compose/case/gasket.py`). Sizes, counts and check results for a keyboard are on its own page ([Compose58](../layouts/lily58/rev2.md#the-case)).
 
-All rev 2 commands need `C58_REV=2` (rev 1 is the default and is untouched).
+The rev follows from the command: these are rev 2's, and rev 1's own commands are untouched.
 
 | command | what it does |
 |---|---|

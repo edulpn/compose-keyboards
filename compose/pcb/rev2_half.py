@@ -1,5 +1,5 @@
 """
-Rev 2 half boards (controller rev 2 standard):  C58_REV=2 python3 -m compose half-rev2 OUT [board ...]
+Rev 2 half boards (controller rev 2 standard):  python3 -m compose half-rev2 OUT [board ...]
 
   half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 18)
   half_rev2_hotswap_rgb / half_rev2_solder_rgb   an SK6812 MINI-E under every switch, chained, 100 nF per 3 LEDs
@@ -712,7 +712,6 @@ def build(name):
         PK.add_keepout(b, Point(x, y).buffer(M2_KEEP), PK.OX, PK.OY)   # no copper under the head or the insert
     # ---- art + connector labels
     from compose.pcb import art as pcb_art
-    PR.REVISION = "rev 2"
     art = pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else ""))
     PK.add_art_half(b, art, PK.OX, PK.OY)
     p1 = np.array(s.ffc.pads[0])
@@ -1047,7 +1046,6 @@ def laid(name):
     if not pre:
         return s, None
     from compose.pcb import art as pcb_art
-    PR.REVISION = "rev 2"
     f = field(s, [pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else "")).keepout])
     pre(f, s)
     return s, f

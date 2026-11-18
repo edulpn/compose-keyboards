@@ -48,7 +48,7 @@ docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards
 
 ```sh
 python3 -c "import pcbnew, cadquery; print(pcbnew.Version())"      # 7.0.11
-C58_REV=2 python3 -m compose half-rev2 out_r2t --plan                # placement drawing, about a minute
+python3 -m compose half-rev2 out_r2t --plan                # placement drawing, about a minute
 python3 -m compose build /tmp/r1 && python3 -m compose model /tmp/r1 && python3 -m compose checks /tmp/r1   # ALL CHECKS PASSED
 ```
 
@@ -85,21 +85,23 @@ python3 -m compose controller out       # route, DRC, Gerbers (add --resilk to r
 python3 -m compose sim-controller out   # copper-level simulation
 python3 -m compose spice-controller out # ngspice simulation
 
-# Rev 2 (docs/rev2.md; Compose58's own page: layouts/lily58/rev2.md): set C58_REV=2
-C58_REV=2 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
-C58_REV=2 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
-C58_REV=2 python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
-C58_REV=2 python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
-C58_REV=2 python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
-C58_REV=2 python3 -m compose flex-sim out_r2t        # the jumper as an elastic strip: seated, insertion, gasket travel, length
-C58_REV=2 python3 -m compose order-rev2 out_r2t      # every board's JLCPCB zip, checked against its board and its DRC report, in out_order/ + ORDER.md
-C58_REV=2 python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
-C58_REV=2 python3 -m compose gasket-case out_r2t     # printable parts
-C58_REV=2 python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
-C58_REV=2 python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
+# Rev 2 (docs/rev2.md; Compose58's own page: layouts/lily58/rev2.md)
+python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
+python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
+python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
+python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
+python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
+python3 -m compose flex-sim out_r2t        # the jumper as an elastic strip: seated, insertion, gasket travel, length
+python3 -m compose order-rev2 out_r2t      # every board's JLCPCB zip, checked against its board and its DRC report, in out_order/ + ORDER.md
+python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
+python3 -m compose gasket-case out_r2t     # printable parts
+python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
+python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
 ```
 
 `sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
+
+The rev follows from the command: each one builds rev 1 or rev 2, and the controller rev 2's three build neither (one board under every keyboard). `C58_REV` is gone, and a run that finds it set stops and says so.
 
 ### Routing
 

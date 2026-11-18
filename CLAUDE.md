@@ -1,6 +1,6 @@
 # Compose keyboards: notes for Claude Code
 
-- Unibody split keyboards generated from Python: `compose/` is the platform, `layouts/<name>/` the layouts. Commands: `python3 -m compose --help`; setup, commands and how to check a change: `docs/building.md`. Rev 2 work needs `C58_REV=2`.
+- Unibody split keyboards generated from Python: `compose/` is the platform, `layouts/<name>/` the layouts. Commands: `python3 -m compose --help`; setup, commands and how to check a change: `docs/building.md`. The rev follows from the command (`python3 -m compose --help` lists each with its rev); nothing sets it by hand.
 - Git: never add trailers or AI attribution of any kind (Co-Authored-By, "Generated with" footers, session links) to commits, PRs, issues or anything on the repo. Work on a branch; the maintainer merges PRs.
 - The repo is public: no personal notes, handover files or business plans in it.
 - Rev 1 is released and built: changes to shared code must leave its outputs byte-identical (build STLs, BOM, keyboard.json) and its checks passing. See "Checking a change" in `docs/building.md`.

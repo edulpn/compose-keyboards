@@ -1,5 +1,5 @@
 """
-Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle (C58_REV=2).
+Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle.
 
   plate2_local()   left plate, local frame (right = mirror): core with the switches + a thin perimeter
                    flange, notched around the frame screws

@@ -1,5 +1,5 @@
 """
-Rev 2 flex jumper as an elastic strip:  C58_REV=2 python3 -m compose flex-sim OUT
+Rev 2 flex jumper as an elastic strip:  python3 -m compose flex-sim OUT
 
 compose.pcb.jumper designs the jumper along an ideal path (three r 2 mm bends). Here the real strip finds its
 own shape: clamped at both ends by the connectors and left to settle, it takes the shape of least bending
