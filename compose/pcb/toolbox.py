@@ -37,10 +37,12 @@ ROUTER_JOBS = int(os.environ.get("ROUTER_JOBS", max(1, (os.cpu_count() or 2) // 
 ROUTER = "2.1.0"               # the Freerouting version every board is routed with unless its layout names another
 ROUTERS = {                    # the versions a board can be routed with: the Java each needs, its extra arguments,
     #                            and how many runs go side by side (None: ROUTER_JOBS)
-    #                            and whether it gives the same board every time it is put the same job (seeds)
+    #                            and whether it routes the same job the same way every time (seeds)
     "2.1.0": dict(java=21, args=[], jobs=None, seeds=False),      # randomized: several runs, and attempts until one
     #                                                               is clean
-    "2.5.0": dict(java=25, jobs=1, seeds=True,           # routes the same way every time: one run says it all.
+    "2.5.0": dict(java=25, jobs=1, seeds=True,           # routes the same way every time: one run says it all
+                  #                                         (its optimizer can then finish that routing in more
+                  #                                         than one way: .github/ci/sameboard.py tells the two apart).
                   args=["--router.fanout.enabled=false",          #   Its fan-out stage lays 0.19 mm tracks at the
                         "--router.optimizer.max_threads=1"]),     #   connector pads, under the 0.2 mm minimum
 }
@@ -426,6 +428,10 @@ def route(board, name, passes=40, attempt=1):
                f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
                "--usage_and_diagnostic_data.disable_analytics=true"] + extra
         log = open(logf, "w")
+        # how the router is called, at the head of its log: the same .dsn put to it another way is another job
+        # (.github/ci/sameboard.py reads it)
+        log.write(f"compose: Freerouting {version} " + " ".join(cmd[cmd.index("-mp"):]) + "\n")
+        log.flush()
         jobs.append(SimpleNamespace(ses=out, logf=logf, log=log, best=None, best_pass=0, done=False,
                                     proc=subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)))
 

@@ -233,7 +233,8 @@ jobs:
         if: steps.reuse.outputs.clean != 'true'
         run: |
           rm -rf "$RUNNER_TEMP/was"; mkdir -p "$RUNNER_TEMP/was"      # the board as it was routed before, to compare with
-          cp o2/pcb/$BOARD.kicad_pcb o2/pcb/$BOARD.dsn o2/routed/$BOARD.json "$RUNNER_TEMP/was/" 2>/dev/null || true
+          cp o2/pcb/$BOARD.kicad_pcb o2/pcb/$BOARD.dsn o2/pcb/$BOARD.ses o2/pcb/${BOARD}_freerouting.log o2/routed/$BOARD.json \
+              "$RUNNER_TEMP/was/" 2>/dev/null || true
           rm -rf o2 deps
           if [ "${{ matrix.shards }}" = 1 ]; then      # the board's own job: no clean route fails it
             timeout --signal=INT 55m $T deps/boards.txt half-rev2 o2 $BOARD \
@@ -250,19 +251,18 @@ jobs:
           python3 .github/ci/routed.py record deps/boards.txt o2/routed/$BOARD.json \
               commit=${{ github.event.pull_request.head.sha || github.sha }} run=${{ github.run_id }} \
               kicad="$(python3 -c 'import pcbnew; print(pcbnew.Version())')"
-      # Freerouting 2.5.0 gives the same board for the same job. Routing again because a file moved or the workflow
-      # changed should therefore end in the board there was: the same router input (.dsn), then the same copper,
-      # parts and silkscreen (.github/ci/sameboard.py). Reported, not failed: a design change differs on purpose.
+      # Freerouting 2.5.0 routes the same job the same way, and its optimizer then finishes that routing in one of
+      # a few ways. Routing again because a file moved or the workflow changed should therefore end in the board
+      # there was, or in the same routing finished another way: .github/ci/sameboard.py says which, from the job
+      # (.dsn and how the router was called), the router's log and the boards. Reported, not failed: a design
+      # change differs on purpose.
       - name: the same board as the one routed before? (reported)
         if: steps.route.outputs.routed == 'true'
         run: |
           was="$RUNNER_TEMP/was"
           [ -f "$was/$BOARD.kicad_pcb" ] && [ -f "$was/$BOARD.dsn" ] || { echo "$BOARD: no earlier board to compare with"; exit 0; }
           from=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('extra', {}).get('commit', '?')[:9])" "$was/$BOARD.json" 2>/dev/null || echo "?")
-          if cmp -s "$was/$BOARD.dsn" o2/pcb/$BOARD.dsn; then dsn="the router was handed the same job as at $from"
-          else dsn="the router's job (.dsn) differs from the one at $from"; fi
-          echo "$BOARD: $dsn"; echo "**$BOARD**: $dsn" >> "$GITHUB_STEP_SUMMARY"
-          python3 .github/ci/sameboard.py "$was/$BOARD.kicad_pcb" o2/pcb/$BOARD.kicad_pcb name=$BOARD was="routed at $from"
+          python3 .github/ci/sameboard.py "$was/$BOARD.kicad_pcb" o2/pcb/$BOARD.kicad_pcb name=$BOARD was="routed at $from" at=$from
       - if: steps.record.outputs.key
         uses: actions/cache/save@v4
         with:
