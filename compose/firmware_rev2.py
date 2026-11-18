@@ -76,7 +76,7 @@ def board(rgb):
         "maintainer": PR.HANDLE,
         "processor": "RP2040",
         "bootloader": "rp2040",
-        "usb": {"vid": "0xFEED", "pid": "0x4C59" if rgb else "0x4C58", "device_version": "2.0.0"},
+        "usb": {"vid": PR.USB_VID, "pid": PR.USB_PID_RGB if rgb else PR.USB_PID, "device_version": "2.0.0"},
         "diode_direction": "COL2ROW",
         "matrix_pins": {"rows": ROWS, "cols": COLS_L + COLS_R[::-1]},
         "features": {"bootmagic": False, "extrakey": True, "mousekey": False, "nkro": True},

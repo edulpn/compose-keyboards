@@ -28,6 +28,31 @@ if (REV is None) != (LAYOUT is None):
                      "compose: one of them is set without the other.")
 _D = (lambda r1, r2: r2 if REV == 2 else r1)          # per-revision default (env vars still override)
 
+# What the layout says about its keyboard: layouts/<name>/keyboard.py, plain constants (its name, the credit for its
+# key layout, the revs it is built in, its angles per rev, its USB ids). Read only when a run builds a keyboard.
+_KB_NAMES = ("NAME", "CREDIT", "REVS", "TENT_DEG", "TILT_DEG", "USB_VID", "USB_PID", "USB_PID_RGB")
+_KB = None
+if LAYOUT is not None:
+    import importlib as _importlib
+    try:
+        _KB = _importlib.import_module(f"layouts.{LAYOUT}.keyboard")
+    except ModuleNotFoundError as _e:
+        if _e.name != f"layouts.{LAYOUT}.keyboard":
+            raise
+        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, which revs "
+                         f"it is built in, and its angles and USB ids. layouts/lily58/keyboard.py shows what goes in it.")
+    _missing = [_n for _n in _KB_NAMES if not hasattr(_KB, _n)]
+    if _missing:
+        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/lily58/keyboard.py shows "
+                         f"what goes in it.")
+    if REV not in _KB.REVS:
+        raise SystemExit(f"{_KB.NAME} (layouts/{LAYOUT}) is not built in rev {REV}: its keyboard.py lists rev "
+                         f"{' and rev '.join(str(_r) for _r in _KB.REVS)}.")
+    for _n in ("TENT_DEG", "TILT_DEG"):
+        if REV not in getattr(_KB, _n):
+            raise SystemExit(f"layouts/{LAYOUT}/keyboard.py lists rev {REV} in REVS and gives no {_n} for it.")
+_K = (lambda name: getattr(_KB, name) if _KB else None)      # a value of the keyboard's; None in a run that builds none
+
 # ---------------------------------------------------------------- layout
 KEY_PITCH = 19.05            # 1u
 KEYCAP_SIZE = 18.0           # 1u cap footprint (used for spacing checks/renders)
@@ -39,8 +64,9 @@ OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
 SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
-TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _D(6.0, 12.0)))    # gable tent: inner edges raised
-TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _D(5.0, 0.0)))     # typing tilt: back raised (negative = front raised)
+if _KB:                                                              # the keyboard's own, per rev: layouts/<name>/keyboard.py
+    TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG[REV]))    # gable tent: inner edges raised
+    TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG[REV]))    # typing tilt: back raised (negative = front raised)
 GAP_TOP = float(_os.environ.get("COMPOSE_GAP_TOP", 34.0))          # distance between the halves' inner edges at the back
 
 # ---------------------------------------------------------------- switch plate
@@ -177,13 +203,13 @@ TRACE_W, CLEARANCE = 0.25, 0.2
 VIA_D, VIA_DRILL = 0.6, 0.3
 
 # ---------------------------------------------------------------- board art / naming
-BOARD_NAME = "Compose58"
+BOARD_NAME = _K("NAME")          # the keyboard's name: layouts/<name>/keyboard.py
 HANDLE = "edulpn"
 REVISION = f"rev {REV}"
 YEAR = 2026
 TAGLINE = {"F": "static func ∘ (lhs: Half, rhs: Half) -> Keyboard",     # Swift on one face...
            "B": "@Composable fun Keyboard(lhs: Half, rhs: Half)"}         # ...Kotlin Compose on the other
-CREDIT = "layout: Lily58 by kata0510"
+CREDIT = _K("CREDIT")            # whose key layout it is: layouts/<name>/keyboard.py
 HALF_NAMES = ("lhs", "rhs")      # left / right half, as in operator overloading
 ART_TITLE_FONT = ("DejaVu Sans", "bold")
 ART_CODE_FONT = ("DejaVu Sans Mono", "normal")
@@ -235,13 +261,17 @@ COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of
 # Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).
 
 
+# ---------------------------------------------------------------- firmware
+USB_VID, USB_PID, USB_PID_RGB = _K("USB_VID"), _K("USB_PID"), _K("USB_PID_RGB")     # layouts/<name>/keyboard.py
+
+
 # ---------------------------------------------------------------- a run that builds no keyboard
-# What belongs to a keyboard (its layout, and what differs between rev 1 and rev 2) has no value in a run that
-# builds none: the controller rev 2's commands, or a module started without python3 -m compose. Reading one
-# stops the run and says so.
-_KEYBOARD = ("LAYOUT", "TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION")
+# What belongs to a keyboard (its layout and what the layout says of it, and what differs between rev 1 and
+# rev 2) has no value in a run that builds none: the controller rev 2's commands, or a module started without
+# python3 -m compose. Reading one stops the run and says so.
+_KEYBOARD = ("LAYOUT", "TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION", "BOARD_NAME", "CREDIT", "USB_VID", "USB_PID", "USB_PID_RGB")
 if REV is None:
-    del LAYOUT, TENT_DEG, TILT_DEG, BRIDGE_WALL_T, REVISION
+    del LAYOUT, BRIDGE_WALL_T, REVISION, BOARD_NAME, CREDIT, USB_VID, USB_PID, USB_PID_RGB
 
 
 def __getattr__(name):
