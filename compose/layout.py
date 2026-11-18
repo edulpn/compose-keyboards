@@ -5,7 +5,9 @@ outer key of the top row), plus where the case hardware goes. The right half
 is the mirror image.
 
 Each key: x, y (mm), rot (deg, + = counter-clockwise), w, h (units),
-row/col (matrix position), label_l / label_r (legends for renders).
+row/col (matrix position), label_l / label_r (legends for renders),
+grid (False for a key that is not one of the columns' keys: a thumb key, an extra key), accent (True for a
+keycap in the renders' second colour).
 Hardware positions are expressed relative to keys/outline so they follow
 pitch and margin changes.
 
@@ -27,6 +29,9 @@ class Key:
     col: int = 0
     label_l: str = ""
     label_r: str = ""
+    grid: bool = True       # one of the columns' keys. False: a thumb key or an extra key; rev 2's LED chain runs
+    #                         through the columns first, then through these from the inner edge outwards
+    accent: bool = False    # its keycap takes the second colour in the rev 2 renders
 
 
 @dataclass
