@@ -30,7 +30,7 @@ Everything prints without supports, in print orientation:
 
 | part | qty | prints | why |
 |---|---|---|---|
-| tub (both halves and the open middle bay) | 1 | on its floor (Compose58's is 332 × 161 mm) | the pad ledge runs back to the wall on a smooth 60° chamfer underneath instead of hanging off it |
+| tub (both halves and the open middle bay) | 1 | on its floor (its size is on the layout's page) | the pad ledge runs back to the wall on a smooth 60° chamfer underneath instead of hanging off it |
 | plates | 2 | switch side down, as on rev 1 | the flange (flush with the top face) lies flat on the bed; the switch-clip pockets open upward |
 | frames | 2 | upside down, visible top on the bed | bevels are 56° from the bed |
 | middle cover | 1 | upside down, visible top on the bed | same |
@@ -81,6 +81,6 @@ The layout is checked first, before anything is built round it: keycaps at least
 - **assembly paths:** plates and frames drop in along the plate normal; the controller and the cover drop straight down ([how the parts fit together](case-geometry.md));
 - **hardware:** thread engagement of the cover screws and the standoffs, the Pico's gap, the header plugs under the cover;
 - **jumpers:** the bent shape solved from the case, clear of the plate (by the gasket's travel), the half board, the cover, the standoffs and the Pico;
-- **printability:** every part sliced in print orientation, each layer resting on the one below.
+- **printability:** every part sliced in print orientation, each layer resting on the one below. Each part's size on the bed is printed, and the tub's has to be the one the layout's page quotes.
 
 The figures each of these returns are on the layout's page ([Compose58's](../layouts/compose58/rev2.md#the-case)).
