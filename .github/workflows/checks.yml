@@ -226,11 +226,7 @@ jobs:
             o2/pcb/${{ matrix.board }}*
             o2/routed
           key: routed-${{ matrix.layout }}-${{ matrix.board }}-newest   # nothing is saved under this name: the newest below is taken
-          # the second line: Compose58's boards as they were cached before the caches carried the layout's name.
-          # To be removed once a run on main has saved them under the new one.
-          restore-keys: |
-            routed-${{ matrix.layout }}-${{ matrix.board }}-
-            ${{ matrix.layout == 'compose58' && format('routed-{0}-', matrix.board) || '' }}
+          restore-keys: routed-${{ matrix.layout }}-${{ matrix.board }}-
       - id: cached
         run: python3 .github/ci/routed.py verify o2/routed/$BOARD.json board=$BOARD quiet=1
       - uses: ./.github/actions/setup
