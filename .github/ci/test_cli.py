@@ -27,6 +27,7 @@ CASES = [
     ("the same with =", ["-m", "compose", "--layout=nope", "firmware"], {}, 2, "no layouts/nope/layout.py"),
     ("--layout with no name", ["-m", "compose", "--layout"], {}, 2, "needs a name"),
     ("the folder's old name", ["-m", "compose", "--layout", "lily58", "firmware"], {}, 2, "no layouts/lily58/layout.py"),
+    ("a path for a layout", ["-m", "compose", "--layout", "../layouts/compose58", "firmware"], {}, 2, "no layouts/../layouts/compose58/layout.py"),
     ("a layout and no command: the help", ["-m", "compose", "--layout", "compose58"], {}, 0, "commands:"),
     ("the controller takes no layout", ["-m", "compose", "--layout", "compose58", "controller", "out"], {}, 2, "takes no --layout"),
     ("its simulation neither", ["-m", "compose", "--layout=compose58", "spice-controller", "out"], {}, 2, "takes no --layout"),
