@@ -458,9 +458,11 @@ jobs:
           print('failed:', bad) if bad else print('all suites that ran passed')
           sys.exit(1 if bad else 0)"
 
+  # always(): without a status function a job is skipped when any job behind it was, however far back, and on main
+  # rev 1's boards usually are. The record was not saved on the first run after that job came in.
   record-deps:
     needs: checks-passed
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && needs.checks-passed.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8

@@ -73,7 +73,8 @@ def plan(repo, deps_dir, record, event="pull_request", base_ref="main", before="
     open(out, "w").close()
     env = dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_BASE_REF=base_ref, GITHUB_OUTPUT=out, GITHUB_STEP_SUMMARY=os.devnull,
                BEFORE_SHA=before)
-    subprocess.run([sys.executable, PLAN, deps_dir], cwd=repo, env=env, capture_output=True, text=True, check=True)
+    r = subprocess.run([sys.executable, PLAN, deps_dir], cwd=repo, env=env, capture_output=True, text=True, check=True)
+    plan.said = r.stdout
     got = dict(l.strip().split("=", 1) for l in open(out) if l.strip())
     runs = set()
     for k in ("rev1", "rev2", "boards"):
@@ -164,6 +165,22 @@ def main():
             if "preroute.py" in "".join(files):                      # that layout no longer names a router: it races
                 w[1]["compose58"] = [P.RACING]
             check(name, plan(repo, deps, record), w)
+        # a record that main's runs have stopped saving falls behind: the plan says so aloud past a few merges
+        pull_request(doc)
+        plan(repo, deps, moved)
+        quiet = "::warning" not in plan.said
+        git(repo, "checkout", "-q", "-B", "main", moved)
+        for i in range(P.BEHIND + 1):
+            ahead = commit(repo, {"docs/notes.md": f"{i}\n"}, f"main moves on {i}")
+        git(repo, "checkout", "-q", "-B", "pr", ahead)
+        commit(repo, doc, "the pull request")
+        git(repo, "checkout", "-q", "--detach", ahead)
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
+        plan(repo, deps, moved)
+        loud = f"::warning title=The record is {P.BEHIND + 1} merges behind" in plan.said
+        bad += not (quiet and loud)
+        print(("ok    " if quiet and loud else "WRONG ") + f"a record of the base says nothing; one {P.BEHIND + 1} merges behind is called out")
+        git(repo, "checkout", "-q", "-B", "main", moved)
         # base.py, which the comparisons with the base go by: the merge's first parent, not the commit the event
         # names (here an older one, as GitHub's can be); the event's only where there is no merge and no branch
         pull_request(doc)
