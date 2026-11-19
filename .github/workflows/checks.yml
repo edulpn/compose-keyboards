@@ -37,6 +37,7 @@ env:
   PYTHONUNBUFFERED: "1"
   T: python3 .github/ci/traced.py
   BASE_SHA: ${{ github.event.pull_request.base.sha }}    # .github/ci/base.py falls back on it
+  BEFORE_SHA: ${{ github.event.before }}                 # a push: the commit the branch was at (.github/ci/plan.py)
 
 jobs:
   plan:
@@ -50,6 +51,8 @@ jobs:
       rev2: ${{ steps.plan.outputs.rev2 }}
       boards: ${{ steps.plan.outputs.boards }}
       half: ${{ steps.plan.outputs.half }}          # the half-board jobs: {layout, board, shard, shards}
+      run_rev1_boards: ${{ steps.plan.outputs.run_rev1_boards }}
+      rev1_boards: ${{ steps.plan.outputs.rev1_boards }}
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -117,22 +120,24 @@ jobs:
 
   # Rev 1's boards are released: what was ordered is in the release, and nothing here replaces it. This shows that
   # the code still builds them (placed, routed, DRC clean) and that what it builds passes the matrix simulation.
-  # The router is the random one, so no two runs give the same copper and nothing is compared with the base.
+  # It runs only when a change touches rev 1's own code (.github/ci/plan.py), or a run is started by hand: the
+  # router is the random one, which took one attempt on one run and nine of its ten on the next. So no two runs
+  # give the same copper, nothing is compared with the base, and a job that fails on routing alone is run again.
   rev1-boards:
     needs: plan
-    if: needs.plan.outputs.run_rev1 == 'true'
+    if: needs.plan.outputs.run_rev1_boards == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        layout: ${{ fromJSON(needs.plan.outputs.rev1) }}
+        layout: ${{ fromJSON(needs.plan.outputs.rev1_boards) }}
     name: rev1-boards (${{ matrix.layout }})
     env: { LAYOUT: "${{ matrix.layout }}" }
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT pcb o1
+      - run: python3 -m compose --layout $LAYOUT pcb o1
       # Rev 1's bar is 0 errors and 0 unconnected, which pcb holds itself. Its warnings are listed by kind, so that
       # a change in them can be seen from one run to the next (the library-path notes left out, as pcb leaves them).
       - name: the boards' DRC warnings, by kind
@@ -141,11 +146,8 @@ jobs:
             echo "$(basename "$r" _drc.txt): $(awk '/^\[/ {k = $1} /Severity: warning/ && k != "[lib_footprint_issues]:" {c[k]++}
                  END {for (k in c) print c[k], k}' "$r" | sort -k2 | tr '\n' ' ')"
           done
-      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT firmware o1
-      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT sim o1
-      - if: always()
-        uses: actions/upload-artifact@v7
-        with: { name: "deps-rev1-${{ matrix.layout }}-boards", path: deps, retention-days: 7, if-no-files-found: ignore }
+      - run: python3 -m compose --layout $LAYOUT firmware o1
+      - run: python3 -m compose --layout $LAYOUT sim o1
 
   # ---------------------------------------------------------------- rev 2, per layout: case, fit checks, firmware
   rev2:
