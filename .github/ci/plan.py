@@ -48,6 +48,7 @@ from imports import REV1_ALSO  # noqa: E402
 KINDS = {"rev1": 1, "rev2": 2, "boards": 2}      # a layout's suites, and the rev of the platform each belongs to
 SAME_EVERY_RUN = ("2.5.0",)                      # the routers with seeds=True in compose/pcb/toolbox.py's ROUTERS
 RACING = 3                                       # jobs per board under a random router: the first clean one is taken
+BEHIND = 3                                       # merges the record may lag the base by before the plan says so aloud
 
 
 def constant(path, name, default=None):
@@ -189,6 +190,12 @@ def main():
             run = {s: True for s in SUITES}
             lines.append(f"All suites run: can't diff against {traced[:9]}.")
         else:
+            code, n, _ = git("rev-list", "--count", "--first-parent", f"{traced}..{base}") if base else (1, "", "")
+            if code == 0 and n.isdigit() and int(n) > BEHIND:
+                # one or two behind is a run on main still going; more means main's runs are not saving the record
+                print(f"::warning title=The record is {n} merges behind::The record of what the suites read is of {traced[:9]}, "
+                      f"{n} commits of the base branch behind this pull request's base {base[:9]}: see whether the "
+                      f"record-deps job of the runs on that branch ran")
             lines.append(f"The pull request changes {len(own)} files" + (f" from its base {base[:9]}" if base else "")
                          + f". The record is of {traced[:9]}, the last full run on main"
                          + (f", {len(since)} changed files behind the base.\n" if since else ".\n"))
