@@ -8,9 +8,9 @@ import sys
 import tempfile
 
 PLAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plan.py")
-SUITES = ("rev1", "rev2", "boards")
+SUITES = ("rev1", "rev2", "boards", "controller")
 DEPS = {"rev1": ["compose/params.py", "compose/firmware.py"], "rev2": ["compose/params.py", "compose/firmware_rev2.py"],
-        "boards": ["compose/params.py", "compose/sim/half.py"]}
+        "boards": ["compose/params.py", "compose/sim/half.py"], "controller": ["compose/params.py", "compose/controller/rev2.py"]}
 
 
 def git(repo, *args):
@@ -50,7 +50,7 @@ def main():
             open(os.path.join(deps, s + ".txt"), "w").write("\n".join(files) + "\n")
         git(repo, "init", "-q", "-b", "main")
         recorded = commit(repo, {"compose/params.py": "A = 1\n", "compose/firmware.py": "1\n", "compose/firmware_rev2.py": "1\n",
-                                 "compose/sim/half.py": "1\n", "README.md": "one\n", "docs/images/top.png": "png 1\n"}, "recorded")
+                                 "compose/sim/half.py": "1\n", "compose/controller/rev2.py": "1\n", "README.md": "one\n", "docs/images/top.png": "png 1\n"}, "recorded")
         moved = commit(repo, {"compose/firmware_rev2.py": "2\n"}, "main gains a rev 2 change after the record")
 
         def pull_request(files):
@@ -61,13 +61,15 @@ def main():
             git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
 
         cases = [
-            ("pictures and a document, record behind the base", {"docs/images/top.png": "png 2\n", "README.md": "two\n"}, recorded, (False, False, False)),
-            ("pictures and a document, record of the base", {"docs/images/top.png": "png 2\n", "README.md": "two\n"}, moved, (False, False, False)),
-            ("a file no suite reads, record behind the base: rev2 can't vouch for its list", {"compose/new.py": "1\n"}, recorded, (False, True, False)),
-            ("a file no suite reads, record of the base", {"compose/new.py": "1\n"}, moved, (False, False, False)),
-            ("a rev 1 file, record behind the base", {"compose/firmware.py": "2\n"}, recorded, (True, True, False)),
-            ("shared params", {"compose/params.py": "A = 2\n"}, moved, (True, True, True)),
-            ("a CI file", {".github/workflows/checks.yml": "x\n"}, moved, (True, True, True)),
+            ("pictures and a document, record behind the base", {"docs/images/top.png": "png 2\n", "README.md": "two\n"}, recorded, (False, False, False, False)),
+            ("pictures and a document, record of the base", {"docs/images/top.png": "png 2\n", "README.md": "two\n"}, moved, (False, False, False, False)),
+            ("a file no suite reads, record behind the base: rev2 can't vouch for its list", {"compose/new.py": "1\n"}, recorded, (False, True, False, False)),
+            ("a file no suite reads, record of the base", {"compose/new.py": "1\n"}, moved, (False, False, False, False)),
+            ("a rev 1 file, record behind the base", {"compose/firmware.py": "2\n"}, recorded, (True, True, False, False)),
+            ("shared params", {"compose/params.py": "A = 2\n"}, moved, (True, True, True, True)),
+            ("a CI file", {".github/workflows/checks.yml": "x\n"}, moved, (True, True, True, True)),
+            ("a controller file: the boards run with it", {"compose/controller/rev2.py": "2\n"}, moved, (False, False, True, True)),
+            ("a half-board file: the controller suite is skipped", {"compose/sim/half.py": "2\n"}, moved, (False, False, True, False)),
         ]
         for name, files, record, want in cases:
             pull_request(files)
@@ -78,11 +80,18 @@ def main():
         git(repo, "checkout", "-q", "-B", "pr", moved)
         commit(repo, {"README.md": "three\n"}, "a document")
         got = plan(repo, deps, recorded, base_ref="")
-        bad += got != (False, True, False)
-        print(("ok    " if got == (False, True, False) else "WRONG ") + f"no merge to split at, record behind: rev2 {'runs' if got[1] else 'skipped'}")
+        bad += got != (False, True, False, False)
+        print(("ok    " if got == (False, True, False, False) else "WRONG ") + f"no merge to split at, record behind: rev2 {'runs' if got[1] else 'skipped'}")
         got = plan(repo, deps, recorded, event="push")
-        bad += got != (True, True, True)
-        print(("ok    " if got == (True, True, True) else "WRONG ") + "a push: everything runs")
+        bad += got != (True, True, True, True)
+        print(("ok    " if got == (True, True, True, True) else "WRONG ") + "a push: everything runs")
+        # a record from before the controller had its own suite: no list for it, so it runs, and the boards with it
+        os.remove(os.path.join(deps, "controller.txt"))
+        pull_request({"compose/new.py": "2\n"})
+        got, want = plan(repo, deps, moved), (False, False, True, True)
+        bad += got != want
+        print(("ok    " if got == want else "WRONG ") + "a record with no controller list: "
+              + ", ".join(f"{s} {'runs' if r else 'skipped'}" for s, r in zip(SUITES, got)))
     sys.exit(1 if bad else 0)
 
 

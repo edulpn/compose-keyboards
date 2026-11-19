@@ -3,6 +3,8 @@
 # A pull request runs only the suites its changes can affect: every full run on main records which repository
 # files each suite read (.github/ci/traced.py), and the plan job compares that list with the files the pull
 # request changes (.github/ci/plan.py). A docs-only change runs nothing; a rev 2 change skips rev 1.
+# The controller is a suite of its own (it has no keyboard): when it runs the boards run with it, since the half
+# boards are simulated against its board; a change to the boards alone builds that board and skips its SPICE job.
 # Only the pull request's own changes count: what main gained between that full run and the pull request's base is
 # main's own run to check.
 # Pushes to main and manual runs always run everything.
@@ -39,6 +41,7 @@ jobs:
       run_rev1: ${{ steps.plan.outputs.run_rev1 }}
       run_rev2: ${{ steps.plan.outputs.run_rev2 }}
       run_boards: ${{ steps.plan.outputs.run_boards }}
+      run_controller: ${{ steps.plan.outputs.run_controller }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -144,6 +147,8 @@ jobs:
         with: { name: deps-rev2, path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- rev 2 boards: route, DRC, copper and circuit sims
+  # The controller's board is built whenever the boards run (boards-sim reads it), and the boards run whenever
+  # the controller suite does (plan.py): run_boards covers both. Its SPICE job runs with the controller suite only.
   controller:
     needs: plan
     if: needs.plan.outputs.run_boards == 'true'
@@ -152,15 +157,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: $T deps/boards.txt controller o2
-      - run: $T deps/boards.txt sim-controller o2
+      - run: $T deps/controller.txt controller o2
+      - run: $T deps/controller.txt sim-controller o2
       - uses: actions/upload-artifact@v4
         with: { name: board-controller-s1, path: o2/pcb, retention-days: 7 }
       - uses: actions/upload-artifact@v4
-        with: { name: deps-boards-controller, path: deps, retention-days: 7 }
+        with: { name: deps-controller, path: deps, retention-days: 7 }
 
   spice:
-    needs: controller
+    needs: [plan, controller]
+    if: needs.plan.outputs.run_controller == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -168,9 +174,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: board-controller-s1, path: o2/pcb }
       - uses: ./.github/actions/setup
-      - run: $T deps/boards.txt spice-controller o2
+      - run: $T deps/controller.txt spice-controller o2
       - uses: actions/upload-artifact@v4
-        with: { name: deps-boards-spice, path: deps, retention-days: 7 }
+        with: { name: deps-controller-spice, path: deps, retention-days: 7 }
 
   half:
     needs: plan
@@ -353,7 +359,7 @@ jobs:
       - name: merge each suite's dependency lists
         run: |
           mkdir deps
-          for s in rev1 rev2 boards; do cat in/deps-$s*/$s.txt | sort -u > deps/$s.txt; wc -l deps/$s.txt; done
+          for s in rev1 rev2 boards controller; do cat in/deps-$s*/$s.txt | sort -u > deps/$s.txt; wc -l deps/$s.txt; done
           echo "${{ github.sha }}" > deps/SHA
       - uses: actions/cache/save@v4
         with: { path: deps, key: "deps-${{ github.sha }}" }

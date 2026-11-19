@@ -7,6 +7,10 @@ suite (the files each suite read, from traced.py). On a pull request a suite run
 changes anything the suite read (see affected.py); everywhere else, and whenever a record is missing, every
 suite runs. Writes run_<suite>=true|false to $GITHUB_OUTPUT and the reasons to the job summary.
 
+The controller is a suite of its own: it has no keyboard, and every keyboard's boards are simulated against its
+board. So when the controller suite runs, the boards suite runs with it. The other way round is the workflow's:
+it builds the controller's board whenever the boards run, and leaves the controller's circuit simulation out.
+
 The record can be older than the pull request's base: a full run on main takes a while, and a pull request opened
 meanwhile is planned against the record before it. What main gained in between is not the pull request's to
 check, so the changes are split in two: base to head (the pull request's own) and record to base.
@@ -18,7 +22,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from affected import decide_pr  # noqa: E402
 
-SUITES = ("rev1", "rev2", "boards")
+SUITES = ("rev1", "rev2", "boards", "controller")
 
 
 def git(*args):
@@ -67,10 +71,16 @@ def main():
             lines.append(f"The pull request changes {len(own)} files" + (f" from its base {base[:9]}" if base else "")
                          + f". The record is of {traced[:9]}, the last full run on main"
                          + (f", {len(since)} changed files behind the base.\n" if since else ".\n"))
+            found = {}
             for s in SUITES:
                 f = os.path.join(d, s + ".txt")
                 deps = [l.strip() for l in open(f) if l.strip()] if os.path.exists(f) else []
-                why = decide_pr(deps, own, since) if deps else ["no dependency record for this suite"]
+                found[s] = (decide_pr(deps, own, since) if deps else ["no dependency record for this suite"]), deps
+            if found["controller"][0] and not found["boards"][0]:
+                found["boards"] = (["the controller suite runs, and the half boards are simulated against its board"],
+                                   found["boards"][1])
+            for s in SUITES:
+                why, deps = found[s]
                 run[s] = bool(why)
                 lines.append(f"- **{s}**: " + ("runs: " + "; ".join(why[:8]) + (" ..." if len(why) > 8 else "")
                                                if why else f"skipped: the pull request changes none of the {len(deps)} "
