@@ -2,9 +2,9 @@
 
 [Home](../README.md) › Docs › [Rev 2](rev2.md) › Half boards
 
-One reversible board serves both halves of a keyboard, in four variants. `python3 -m compose half-rev2 out_r2t` builds all four (place, route, DRC, Gerbers; `--plan` draws the placement only). The code is `compose/pcb/rev2_half.py`. A keyboard's own boards, with their figures and check results, are on its page ([Compose58](../layouts/lily58/rev2.md#the-half-boards)).
+One reversible board serves both halves of a keyboard, in four variants. `python3 -m compose half-rev2 out_r2t` builds all four (place, route, DRC, Gerbers; `--plan` draws the placement only). The code is `compose/pcb/rev2_half.py`. A keyboard's own boards, with their figures and check results, are on its page ([Compose58](../layouts/compose58/rev2.md#the-half-boards)).
 
-![the four Compose58 rev 2 half boards, bottom face](../layouts/lily58/images/rev2_half_boards.png)
+![the four Compose58 rev 2 half boards, bottom face](../layouts/compose58/images/rev2_half_boards.png)
 
 *Compose58's four boards.*
 
@@ -55,7 +55,7 @@ The jumper itself: [flex jumpers](flex-jumper.md).
 
 ## RGB boards
 
-![close-up of one key on Compose58's hotswap RGB board, bottom face: socket pads, diode, LED in its cutout, capacitor](../layouts/lily58/images/rev2_half_rgb_closeup.png)
+![close-up of one key on Compose58's hotswap RGB board, bottom face: socket pads, diode, LED in its cutout, capacitor](../layouts/compose58/images/rev2_half_rgb_closeup.png)
 
 | | |
 |---|---|

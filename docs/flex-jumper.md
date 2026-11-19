@@ -2,13 +2,13 @@
 
 [Home](../README.md) › Docs › [Rev 2](rev2.md) › Flex jumpers
 
-![flex jumper flat pattern](../layouts/lily58/images/rev2_jumper_flat.png)
+![flex jumper flat pattern](../layouts/compose58/images/rev2_jumper_flat.png)
 
 | half end: into the Molex 200528 | controller end: down into the Molex 52610 |
 |---|---|
-| ![the jumper entering the half board's connector](../layouts/lily58/images/rev2_jumper_half_end.png) | ![the jumper dropping into the controller's connector](../layouts/lily58/images/rev2_jumper_controller_end.png) |
+| ![the jumper entering the half board's connector](../layouts/compose58/images/rev2_jumper_half_end.png) | ![the jumper dropping into the controller's connector](../layouts/compose58/images/rev2_jumper_controller_end.png) |
 
-![section through the left jumper: half board connector, climb, drop into the controller](../layouts/lily58/images/rev2_jumper_section.png)
+![section through the left jumper: half board connector, climb, drop into the controller](../layouts/compose58/images/rev2_jumper_section.png)
 
 *Compose58's jumper. The jumper in these renders is the shape `flex-sim` settles it into, not the idealised design.*
 
@@ -26,7 +26,7 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 | controller end (52610) | 0.7 mm gold fingers, 3.5 mm exposed, two C0.3 chamfers; conductors face inboard, toward the Pico |
 | stiffeners | polyimide on the back of each end, 5.0 mm at the half end and 5.1 mm at the controller end; both connectors take 0.3 ± 0.05 mm at the fingers |
 
-The climb, the bend angles, the skews and the length are solved for each layout's case. Compose58's, with its DRC and simulation results: [its page](../layouts/lily58/rev2.md#flex-jumper).
+The climb, the bend angles, the skews and the length are solved for each layout's case. Compose58's, with its DRC and simulation results: [its page](../layouts/compose58/rev2.md#flex-jumper).
 
 **Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper. `python3 -m compose order-rev2 out_r2t` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out_order/` with an ORDER.md of these settings.
 

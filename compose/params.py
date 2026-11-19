@@ -40,10 +40,10 @@ if LAYOUT is not None:
         if _e.name != f"layouts.{LAYOUT}.keyboard":
             raise
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, which revs "
-                         f"it is built in, and its angles and USB ids. layouts/lily58/keyboard.py shows what goes in it.")
+                         f"it is built in, and its angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.")
     _missing = [_n for _n in _KB_NAMES if not hasattr(_KB, _n)]
     if _missing:
-        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/lily58/keyboard.py shows "
+        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/compose58/keyboard.py shows "
                          f"what goes in it.")
     if REV not in _KB.REVS:
         raise SystemExit(f"{_KB.NAME} (layouts/{LAYOUT}) is not built in rev {REV}: its keyboard.py lists rev "

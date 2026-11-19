@@ -71,7 +71,7 @@ A mismatch doesn't mean the geometry changed: compare the meshes (volume, bounds
 Everything runs from the repo root as `python3 -m compose <command> [outdir]`; `python3 -m compose --help` lists the commands.
 
 ```sh
-# Compose58 rev 1 (the default; see layouts/lily58/rev1.md)
+# Compose58 rev 1 (the default; see layouts/compose58/rev1.md)
 python3 -m compose build out            # case, plates, frames, cover (out/print, out/step), BOM
 python3 -m compose pcb out              # half boards + controller rev 1: route, DRC, Gerbers
 python3 -m compose firmware out         # QMK keyboard.json
@@ -85,7 +85,7 @@ python3 -m compose controller out       # route, DRC, Gerbers (add --resilk to r
 python3 -m compose sim-controller out   # copper-level simulation
 python3 -m compose spice-controller out # ngspice simulation
 
-# Rev 2 (docs/rev2.md; Compose58's own page: layouts/lily58/rev2.md)
+# Rev 2 (docs/rev2.md; Compose58's own page: layouts/compose58/rev2.md)
 python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
 python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
 python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
@@ -101,10 +101,10 @@ python3 -m compose gasket-render out_r2t   # renders (assembly views need the ro
 
 `sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
 
-A run builds one keyboard. `--layout <name>`, before the command, names its layout: a folder of `layouts/` (Compose58's, `lily58`, when it is left out). Its rev follows from the command: each one builds rev 1 or rev 2. The controller rev 2's three commands build no keyboard (one board under every layout) and take no `--layout`.
+A run builds one keyboard. `--layout <name>`, before the command, names its layout: a folder of `layouts/` (Compose58's, `compose58`, when it is left out). Its rev follows from the command: each one builds rev 1 or rev 2. The controller rev 2's three commands build no keyboard (one board under every layout) and take no `--layout`.
 
 ```bash
-python3 -m compose --layout lily58 gasket-case out_r2t
+python3 -m compose --layout compose58 gasket-case out_r2t
 ```
 
 The settings a run can change are environment variables: `COMPOSE_SPLAY`, `COMPOSE_TENT`, `COMPOSE_TILT`, `COMPOSE_GAP_TOP`, `COMPOSE_BRIDGE_LEN` (angles in degrees, lengths in mm) and `COMPOSE_PREROUTE=0` (below). They were `C58_...` before; a run that finds one of the old names set, `C58_REV` among them, stops and names its replacement.
@@ -132,7 +132,7 @@ How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
 - The copper is checked before routing, against the plan and then against the KiCad board's own pads: clearance to other nets, holes, edges and keep-outs, no loose ends, each net in one piece on all its pads. A broken rule stops the build there. `half-rev2 --preroute` runs the plan-level check without KiCad and draws the copper.
 - A pre-routed net leaves the router's job: the Specctra file carries its tracks as keep-outs and its vias as fixed vias, the same way the RGB boards' GND fan-out goes in. DRC and the simulations then see it like any other copper.
 - With no `preroute.py`, or with `COMPOSE_PREROUTE=0`, the boards are built and routed exactly as without the mechanism.
-- Compose58 pre-routes three kinds of net ([`layouts/lily58/preroute.py`](../layouts/lily58/preroute.py)): ROW4, the thumb row, on all four boards; the 5 V rail on both RGB boards; and on the hotswap RGB board every key's D net, from its socket pad on each face to its diode. That board's sockets have pads on both faces, so each key needs two links across the board (D and its column), and with the rail laid as well the router didn't finish it. The D nets are laid the way the router lays them on a board it does finish: the socket pad beside the diode goes straight to the anode on its own face, and on over the top of the switch on that face to a via above the other pad. That keeps the front copper at each key's right-hand edge free for the column's trunk, which the router runs there. What this gives: a 5 V rail of known resistance on both RGB boards (76 to 82 mΩ to the farthest LED, limit 150 mΩ), and four boards that Freerouting 2.5.0 routes in one attempt, the same on every run.
+- Compose58 pre-routes three kinds of net ([`layouts/compose58/preroute.py`](../layouts/compose58/preroute.py)): ROW4, the thumb row, on all four boards; the 5 V rail on both RGB boards; and on the hotswap RGB board every key's D net, from its socket pad on each face to its diode. That board's sockets have pads on both faces, so each key needs two links across the board (D and its column), and with the rail laid as well the router didn't finish it. The D nets are laid the way the router lays them on a board it does finish: the socket pad beside the diode goes straight to the anode on its own face, and on over the top of the switch on that face to a via above the other pad. That keeps the front copper at each key's right-hand edge free for the column's trunk, which the router runs there. What this gives: a 5 V rail of known resistance on both RGB boards (76 to 82 mΩ to the farthest LED, limit 150 mΩ), and four boards that Freerouting 2.5.0 routes in one attempt, the same on every run.
 
 **Board previews** (realistic renders from a board's Gerbers, needs Node):
 
@@ -185,7 +185,7 @@ docs/               platform docs (this wiki), images: rev 2's case, controller,
   - a bridge that's too long for the inner edge;
   - screws too close to the edge.
 
-- **What a keyboard is called lives in `layouts/<name>/keyboard.py`.** It holds plain constants: the keyboard's name, the credit for its key layout, the revs it is built in (`REVS`), its tent and tilt for each of those revs, and its USB ids. A command of a rev the keyboard does not list stops and says so. [Compose58's](../layouts/lily58/keyboard.py) shows what goes in it.
+- **What a keyboard is called lives in `layouts/<name>/keyboard.py`.** It holds plain constants: the keyboard's name, the credit for its key layout, the revs it is built in (`REVS`), its tent and tilt for each of those revs, and its USB ids. A command of a rev the keyboard does not list stops and says so. [Compose58's](../layouts/compose58/keyboard.py) shows what goes in it.
 
 - **Routing is automatic.** A new layout's boards are placed and autorouted with no routing code of its own. `layouts/<name>/preroute.py` is optional: nets worth laying out by hand (a power rail whose resistance should be a design value, a net the router struggles with), see [Routing](#routing).
 
