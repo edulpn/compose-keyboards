@@ -3,7 +3,8 @@
 The repository is built the way a pull request reaches the plan job: main with a recorded commit, a commit main
 gained after the record, a branch from there, and HEAD on the merge of the two (what Actions checks out). It holds
 two layouts: compose58 (rev 1 and rev 2, its half boards on a router that routes the same way every run) and
-other40 (rev 2 only, the default router). Each case names the suites that have to run, all others skipped."""
+other40 (rev 2 only, the default router). Each case names the suites that have to run, all others skipped;
+"rev1-boards-<layout>" stands for rev 1's boards, which are built only when rev 1's own code changes."""
 import ast
 import json
 import os
@@ -21,7 +22,9 @@ import plan as P  # noqa: E402
 BOARDS = ("half_rev2_hotswap", "half_rev2_solder", "half_rev2_hotswap_rgb", "half_rev2_solder_rgb")
 FILES = {
     "compose/params.py": "A = 1\n", "compose/firmware.py": "1\n", "compose/firmware_rev2.py": "1\n",
-    "compose/sim/half.py": "1\n", "compose/controller/rev2.py": "1\n",
+    "compose/sim/half.py": "1\n", "compose/controller/rev2.py": "1\n", "compose/pcb/kicad.py": "1\n",
+    "compose/__main__.py": 'COMMANDS = {"pcb": ("compose.pcb.kicad", 1, "x"), "firmware": ("compose.firmware", 1, "x"),\n'
+                           '            "firmware-rev2": ("compose.firmware_rev2", 2, "x"), "controller": ("compose.controller.rev2", None, "x")}\n',
     "compose/pcb/rev2_half.py": "import os\nBOARDS = {" + ", ".join(f'"{b}": ("x", False)' for b in BOARDS) + "}\n",
     "layouts/__init__.py": "",
     "layouts/compose58/layout.py": "1\n", "layouts/other40/layout.py": "1\n", "layouts/images/top.png": "not a layout\n",
@@ -62,13 +65,14 @@ def commit(repo, files, msg):
     return git(repo, "rev-parse", "HEAD")
 
 
-def plan(repo, deps_dir, record, event="pull_request", base_ref="main"):
+def plan(repo, deps_dir, record, event="pull_request", base_ref="main", before=""):
     """What plan.py hands the workflow: (the suites that run, the half-board jobs as {layout: jobs per board}).
     Stops when the true|false switches and the lists disagree."""
     open(os.path.join(deps_dir, "SHA"), "w").write(record + "\n")
     out = os.path.join(deps_dir, "out.txt")
     open(out, "w").close()
-    env = dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_BASE_REF=base_ref, GITHUB_OUTPUT=out, GITHUB_STEP_SUMMARY=os.devnull)
+    env = dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_BASE_REF=base_ref, GITHUB_OUTPUT=out, GITHUB_STEP_SUMMARY=os.devnull,
+               BEFORE_SHA=before)
     subprocess.run([sys.executable, PLAN, deps_dir], cwd=repo, env=env, capture_output=True, text=True, check=True)
     got = dict(l.strip().split("=", 1) for l in open(out) if l.strip())
     runs = set()
@@ -78,6 +82,9 @@ def plan(repo, deps_dir, record, event="pull_request", base_ref="main"):
         runs |= {f"{k}-{name}" for name in names}
     if got["run_controller"] == "true":
         runs.add("controller")
+    names = json.loads(got["rev1_boards"])
+    assert (got["run_rev1_boards"] == "true") == bool(names), got
+    runs |= {f"rev1-boards-{name}" for name in names}
     half = {}
     for j in json.loads(got["half"]):
         assert j["board"] in BOARDS and 1 <= j["shard"] <= j["shards"], j
@@ -135,9 +142,12 @@ def main():
             ("pictures and a document, record of the base", doc, moved, set()),
             ("a file no suite reads, record behind the base: rev 2 can't vouch for its lists", {"compose/new.py": "1\n"}, recorded, rev2s),
             ("a file no suite reads, record of the base", {"compose/new.py": "1\n"}, moved, set()),
-            ("a rev 1 file, record behind the base", {"compose/firmware.py": "2\n"}, recorded, {"rev1-compose58"} | rev2s),
-            ("a platform file every suite reads", {"compose/params.py": "A = 2\n"}, moved, ALL),
-            ("a CI file", {".github/workflows/checks.yml": "x\n"}, moved, ALL),
+            ("a rev 1 file, record behind the base: rev 1's boards are built too", {"compose/firmware.py": "2\n"}, recorded,
+             {"rev1-compose58", "rev1-boards-compose58"} | rev2s),
+            ("rev 1's board code, which no suite reads: rev 1's boards and nothing else", {"compose/pcb/kicad.py": "2\n"}, moved,
+             {"rev1-boards-compose58"}),
+            ("a platform file every suite reads: not rev 1's own, so its boards are not built", {"compose/params.py": "A = 2\n"}, moved, ALL),
+            ("a CI file: every suite, and not rev 1's boards", {".github/workflows/checks.yml": "x\n"}, moved, ALL),
             ("a controller file: every layout's boards run with it", {"compose/controller/rev2.py": "2\n"}, moved,
              {"controller", "boards-compose58", "boards-other40"}),
             ("a half-board file: the controller suite is skipped", {"compose/sim/half.py": "2\n"}, moved,
@@ -170,7 +180,16 @@ def main():
         git(repo, "checkout", "-q", "-B", "pr", moved)
         commit(repo, {"README.md": "three\n"}, "a document")
         check("no merge to split at, record behind", plan(repo, deps, recorded, base_ref=""), want(rev2s))
-        check("a push: everything runs", plan(repo, deps, recorded, event="push"), want(ALL))
+        check("a push of a document: every suite, and not rev 1's boards", plan(repo, deps, recorded, event="push"), want(ALL))
+        check("a run started by hand: every suite and rev 1's boards", plan(repo, deps, recorded, event="workflow_dispatch"),
+              want(ALL | {"rev1-boards-compose58"}))
+        commit(repo, {"compose/pcb/kicad.py": "3\n"}, "rev 1's board code")
+        check("a push that changes rev 1's board code: its boards too", plan(repo, deps, recorded, event="push"),
+              want(ALL | {"rev1-boards-compose58"}))
+        commit(repo, {"README.md": "four\n"}, "a document on top")
+        check("a push of two commits, the first on rev 1's board code (told by the commit before the push)",
+              plan(repo, deps, recorded, event="push", before=moved), want(ALL | {"rev1-boards-compose58"}))
+        check("the same push seen from its last commit only: not built", plan(repo, deps, recorded, event="push"), want(ALL))
         # a record from before a suite existed has no list for it: it runs (and with the controller, the boards)
         os.remove(os.path.join(deps, "controller.txt"))
         os.remove(os.path.join(deps, "rev1-compose58.txt"))

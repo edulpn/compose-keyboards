@@ -20,6 +20,12 @@ builds its jobs from:
 A half board is one job when its layout names a router that routes the same job the same way every time (ROUTER
 in layouts/<layout>/preroute.py), and three racing jobs under the default router, which is random.
 
+Rev 1's boards are not a suite and have no record. Rev 1 is released and what was ordered is in its release; its
+boards route with the random router, which can take one attempt or nine. So they are built only when a change
+touches rev 1's own code (the modules of rev 1's commands and the ones imports.py names beside them): for a pull
+request its own changes, for a push what that push changed, and always on a run started by hand. Shared code and
+CI files do not count. The outputs: run_rev1_boards and rev1_boards (the layouts built in rev 1), like the others.
+
 The controller is a suite of its own: it has no keyboard, and every keyboard's boards are simulated against its
 board. So when the controller suite runs, every layout's boards suite runs with it. The other way round is the
 workflow's: it builds the controller's board whenever boards run, and leaves the controller's circuit simulation
@@ -37,6 +43,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from affected import decide_pr  # noqa: E402
+from imports import REV1_ALSO  # noqa: E402
 
 KINDS = {"rev1": 1, "rev2": 2, "boards": 2}      # a layout's suites, and the rev of the platform each belongs to
 SAME_EVERY_RUN = ("2.5.0",)                      # the routers with seeds=True in compose/pcb/toolbox.py's ROUTERS
@@ -94,6 +101,31 @@ def half_jobs(names, root="."):
     return jobs
 
 
+def rev1_files(root="."):
+    """Rev 1's own code: the files of the modules rev 1's commands run and of the ones imports.py names beside
+    them (what no rev 2 or controller command may reach)."""
+    cmds = constant(os.path.join(root, "compose", "__main__.py"), "COMMANDS") or {}
+    mods = {c[0] for c in cmds.values() if c[1] == 1} | set(REV1_ALSO)
+    return sorted(m.replace(".", "/") + ".py" for m in mods)
+
+
+def rev1_boards(event, own, lay):
+    """(the layouts whose rev 1 boards are built, the line for the summary). own: the paths this pull request or
+    this push changes, or None when that can't be told."""
+    names = [name for name, revs in lay.items() if 1 in revs]
+    files = rev1_files()
+    if not names:
+        return [], ""
+    if event not in ("pull_request", "push"):
+        return names, "- **rev 1's boards**: built: a run started by hand builds everything"
+    if own is None:
+        return names, "- **rev 1's boards**: built: the changes can't be told"
+    hit = [c for c in own if c in files]
+    if hit:
+        return names, "- **rev 1's boards**: built: " + ", ".join(hit[:6]) + (" ..." if len(hit) > 6 else "") + ": rev 1's own code"
+    return [], f"- **rev 1's boards**: not built: the change touches none of the {len(files)} files of rev 1's own code"
+
+
 def outputs(run, lay):
     """The lines for $GITHUB_OUTPUT (see the top of this file) from {suite: runs or not}."""
     lines, names = [], {}
@@ -101,6 +133,7 @@ def outputs(run, lay):
         names[k] = [name for name in lay if run.get(f"{k}-{name}")]
         lines += [f"run_{k}={'true' if names[k] else 'false'}", f"{k}={json.dumps(names[k])}"]
     lines.append(f"run_controller={'true' if run['controller'] else 'false'}")
+    lines += [f"run_rev1_boards={'true' if run.get('rev1 boards') else 'false'}", f"rev1_boards={json.dumps(run.get('rev1 boards', []))}"]
     lines.append("half=" + json.dumps(half_jobs(names["boards"])))
     return lines
 
@@ -136,6 +169,11 @@ def main():
     lines, run = [], {}
     lay = layouts()
     SUITES = suites(lay)
+    changed = None                                       # what this pull request, or this push, changes itself
+    if event == "push":                                  # the commit main was at before, else the first parent
+        before = os.environ.get("BEFORE_SHA", "")
+        ok = bool(before.strip("0")) and git("cat-file", "-e", before + "^{commit}")[0] == 0
+        changed = names(before if ok else "HEAD^1", "HEAD")
     if event != "pull_request" or not traced:
         why = "not a pull request" if event != "pull_request" else "no dependency record from main yet"
         run = {s: True for s in SUITES}
@@ -143,6 +181,7 @@ def main():
     else:
         base = base_of_head()
         own = names(base, "HEAD") if base else None
+        changed = own
         since = names(traced, base) if base else None
         if own is None or since is None:                 # no base to split at: everything since the record counts
             own, since, base = names(traced, "HEAD"), [], None
@@ -168,6 +207,11 @@ def main():
                 lines.append(f"- **{s}**: " + ("runs: " + "; ".join(why[:8]) + (" ..." if len(why) > 8 else "")
                                                if why else f"skipped: the pull request changes none of the {len(deps)} "
                                                            f"files it reads"))
+    if event == "pull_request" and changed is None and traced:      # not on a merge: everything since the record
+        changed = names(traced, "HEAD")
+    run["rev1 boards"], line = rev1_boards(event, changed, lay)
+    if line:
+        lines.append(line)
     with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as o:
         o.write("\n".join(outputs(run, lay)) + "\n")
     jobs = half_jobs([name for name in lay if run.get(f"boards-{name}")])
