@@ -8,7 +8,7 @@ runs:
   using: composite
   steps:
     - name: Java 25 (before the apt step, which puts Java 21 first on PATH again)
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         distribution: temurin
         java-version: "25"
@@ -33,7 +33,7 @@ runs:
         echo "key=apt-debs-$(dpkg --print-architecture)-$(sha256sum < "$RUNNER_TEMP/apt-debs.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
     - name: apt package files from the cache
       id: debs
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: ~/apt-debs
         key: ${{ steps.apt.outputs.key }}
@@ -60,12 +60,12 @@ runs:
         echo "$J21" >> "$GITHUB_PATH"
     - name: keep the apt package files (when this exact set was not cached yet)
       if: steps.debs.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: ~/apt-debs
         key: ${{ steps.apt.outputs.key }}
     - name: Freerouting cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/tools/freerouting.jar
         key: freerouting-2.1.0
@@ -77,7 +77,7 @@ runs:
             https://github.com/freerouting/freerouting/releases/download/v2.1.0/freerouting-2.1.0.jar
         echo "FREEROUTING=$HOME/tools/freerouting.jar" >> "$GITHUB_ENV"
     - name: Freerouting 2.5.0 cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/tools/freerouting-2.5.0.jar
         key: freerouting-2.5.0
@@ -87,7 +87,7 @@ runs:
         [ -f ~/tools/freerouting-2.5.0.jar ] || bash "$GITHUB_ACTION_PATH/limit.sh" 180 "Downloading Freerouting 2.5.0" curl -fsSL -o ~/tools/freerouting-2.5.0.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
     - name: pip cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/pip
         key: pip-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements.txt') }}
