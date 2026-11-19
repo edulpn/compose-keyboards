@@ -50,9 +50,9 @@ jobs:
       boards: ${{ steps.plan.outputs.boards }}
       half: ${{ steps.plan.outputs.half }}          # the half-board jobs: {layout, board, shard, shards}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with: { path: deps, key: "deps-${{ github.sha }}", restore-keys: "deps-" }
       - run: python3 .github/ci/test_affected.py
       - run: python3 .github/ci/test_plan.py
@@ -78,7 +78,7 @@ jobs:
     name: rev1 (${{ matrix.layout }})
     env: { LAYOUT: "${{ matrix.layout }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - name: build the base for comparison (in the background)
@@ -105,7 +105,7 @@ jobs:
           cmp o1/bom.txt "$RUNNER_TEMP/b1/bom.txt"
           cmp o1/firmware/keyboard.json "$RUNNER_TEMP/b1/firmware/keyboard.json"
           echo "$LAYOUT: rev 1 outputs identical to ${{ github.event.pull_request.base.sha }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: "deps-rev1-${{ matrix.layout }}", path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- rev 2, per layout: case, fit checks, firmware
@@ -121,7 +121,7 @@ jobs:
     name: rev2 (${{ matrix.layout }})
     env: { LAYOUT: "${{ matrix.layout }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - run: $T deps/rev2-$LAYOUT.txt --layout $LAYOUT gasket-case o2
@@ -130,7 +130,7 @@ jobs:
       # both keyboard.json files against QMK's own schema, as its master has it today
       - id: qmk
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: { repository: qmk/qmk_firmware, path: qmk, sparse-checkout: data/schemas }
       - name: keyboard.json against QMK's schema
         run: |
@@ -163,7 +163,7 @@ jobs:
             echo "::notice title=rev 2 outputs changed::$msg"
           fi
           echo "$msg"; echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: "deps-rev2-${{ matrix.layout }}", path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- rev 2 boards: route, DRC, copper and circuit sims
@@ -175,13 +175,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: $T deps/controller.txt controller o2
       - run: $T deps/controller.txt sim-controller o2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: board-controller-s1, path: o2/pcb, retention-days: 7 }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: deps-controller, path: deps, retention-days: 7 }
 
   spice:
@@ -190,12 +190,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: board-controller-s1, path: o2/pcb }
       - uses: ./.github/actions/setup
       - run: $T deps/controller.txt spice-controller o2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: deps-controller-spice, path: deps, retention-days: 7 }
 
   half:
@@ -216,11 +216,11 @@ jobs:
     name: half (${{ matrix.layout }} ${{ matrix.board }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
     env: { BOARD: "${{ matrix.board }}", LAYOUT: "${{ matrix.layout }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The board as an earlier run routed it (this branch's newest, else main's), with the record of everything
       # that route read. It stands in for a fresh route only if none of that has changed (.github/ci/routed.py),
       # KiCad is the same version and the board still passes DRC here. Otherwise the board is routed as before.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             o2/pcb/${{ matrix.board }}*
@@ -284,17 +284,17 @@ jobs:
           from=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('extra', {}).get('commit', '?')[:9])" "$was/$BOARD.json" 2>/dev/null || echo "?")
           python3 .github/ci/sameboard.py "$was/$BOARD.kicad_pcb" o2/pcb/$BOARD.kicad_pcb name=$BOARD was="routed at $from" at=$from
       - if: steps.record.outputs.key
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             o2/pcb/${{ matrix.board }}*
             o2/routed
           key: routed-${{ matrix.layout }}-${{ matrix.board }}-${{ steps.record.outputs.key }}
       - if: steps.route.outputs.routed == 'true' || steps.reuse.outputs.clean == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: { name: "board-${{ matrix.layout }}-${{ matrix.board }}-s${{ matrix.shard }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "deps-boards-${{ matrix.layout }}-${{ matrix.board }}-s${{ matrix.shard }}"
           path: deps
@@ -313,14 +313,14 @@ jobs:
     name: jumper (${{ matrix.layout }})
     env: { LAYOUT: "${{ matrix.layout }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT flex-jumper o2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: "board-${{ matrix.layout }}-jumper-s1", path: "o2/pcb/jumper_rev2*", retention-days: 7 }
       - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT flex-sim o2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: "deps-boards-${{ matrix.layout }}-jumper", path: deps, retention-days: 7 }
       - name: the same jumper as the base's? (reported)
         if: github.event_name == 'pull_request'
@@ -346,10 +346,10 @@ jobs:
     name: boards-sim (${{ matrix.layout }})
     env: { CTRL_OUT: o2, LAYOUT: "${{ matrix.layout }}" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { pattern: "board-${{ matrix.layout }}-*", path: boards }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { name: board-controller-s1, path: boards/board-controller-s1 }
       - name: one routed copy of every board
         run: |
@@ -363,7 +363,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT sim-half-rev2 o2
       - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT order-rev2 o2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: "deps-boards-${{ matrix.layout }}-sim", path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
@@ -385,7 +385,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { pattern: "deps-*", path: in }
       - name: merge each suite's dependency lists
         run: |
@@ -394,5 +394,5 @@ jobs:
             cat in/deps-*/"$s" | sort -u > "deps/$s"; wc -l "deps/$s"
           done
           echo "${{ github.sha }}" > deps/SHA
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with: { path: deps, key: "deps-${{ github.sha }}" }
