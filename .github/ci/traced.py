@@ -18,6 +18,7 @@ ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SKIP_TOP = ("out", ".git", ".github")
 PACKAGES = ("compose", "layouts", "pointers")        # the repository's importable top-level packages
 seen_files, seen_dirs, seen_imports = set(), set(), set()
+COMMAND = " ".join(sys.argv[2:])                     # as given: the command's module rewrites sys.argv
 
 
 def _rel(p):
@@ -59,6 +60,8 @@ def _write(path):
         f = _rel(getattr(m, "__file__", None) or "") if getattr(m, "__file__", None) else None
         if f:
             seen_files.add(f)
+    if "layouts/" in seen_dirs:                       # every layout's change would then count as a change to this suite
+        print(f"::warning::{COMMAND}: the run listed layouts/, so a change to any layout runs its suite")
     with open(path, "a") as fh:
         for r in sorted(seen_files | seen_dirs) + sorted("import:" + m for m in seen_imports):
             fh.write(r + "\n")

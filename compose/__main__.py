@@ -50,10 +50,18 @@ COMMANDS = {
 }
 
 
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "layouts")
+
+
 def layouts():
     """The layouts there are: the folders of layouts/ that hold a layout.py."""
-    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "layouts")
-    return sorted(d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "layout.py")))
+    return sorted(d for d in os.listdir(ROOT) if is_layout(d))
+
+
+def is_layout(name):
+    """Whether layouts/ holds a layout by that name. Asked of the one folder: a run that names its layout does not
+    look at the others, so CI does not count another layout's change as a change to this one's checks."""
+    return name.isidentifier() and os.path.isfile(os.path.join(ROOT, name, "layout.py"))
 
 
 def usage():
@@ -80,7 +88,7 @@ def main():
             layout, args = args[0].split("=", 1)[1], args[1:]
         else:
             layout, args = (args[1] if len(args) > 1 else ""), args[2:]
-        if layout not in layouts():
+        if not is_layout(layout):
             stop(f"--layout {layout}: there is no layouts/{layout}/layout.py. The layouts: {', '.join(layouts())}."
                  if layout else f"--layout needs a name. The layouts: {', '.join(layouts())}.")
     if not args or args[0] in ("-h", "--help", "help") or args[0] not in COMMANDS:

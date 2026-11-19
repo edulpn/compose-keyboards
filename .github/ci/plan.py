@@ -2,19 +2,35 @@
 
     python3 .github/ci/plan.py <deps-dir>
 
+The suites follow from the layouts there are (the folders of layouts/ with a layout.py, and the revs each one's
+keyboard.py says it is built in): rev1-<layout>, rev2-<layout> and boards-<layout>, plus controller. A new layout needs nothing
+here or in the workflow.
+
 <deps-dir> holds what the last full run on main recorded: SHA (the commit it ran on) and <suite>.txt for every
 suite (the files each suite read, from traced.py). On a pull request a suite runs if the pull request itself
-changes anything the suite read (see affected.py); everywhere else, and whenever a record is missing, every
-suite runs. Writes run_<suite>=true|false to $GITHUB_OUTPUT and the reasons to the job summary.
+changes anything the suite read (see affected.py); everywhere else, and whenever a record is missing (a new
+layout has none), every suite runs. The reasons go to the job summary, and to $GITHUB_OUTPUT what the workflow
+builds its jobs from:
+
+    run_rev1, run_rev2, run_boards, run_controller    true | false: any job of that kind at all
+    rev1, rev2, boards                                the layouts whose suite of that kind runs, as a JSON list
+    half                                              the half-board jobs of those layouts, as a JSON list of
+                                                      {layout, board, shard, shards}
+
+A half board is one job when its layout names a router that routes the same job the same way every time (ROUTER
+in layouts/<layout>/preroute.py), and three racing jobs under the default router, which is random.
 
 The controller is a suite of its own: it has no keyboard, and every keyboard's boards are simulated against its
-board. So when the controller suite runs, the boards suite runs with it. The other way round is the workflow's:
-it builds the controller's board whenever the boards run, and leaves the controller's circuit simulation out.
+board. So when the controller suite runs, every layout's boards suite runs with it. The other way round is the
+workflow's: it builds the controller's board whenever boards run, and leaves the controller's circuit simulation
+out.
 
 The record can be older than the pull request's base: a full run on main takes a while, and a pull request opened
 meanwhile is planned against the record before it. What main gained in between is not the pull request's to
 check, so the changes are split in two: base to head (the pull request's own) and record to base.
 """
+import ast
+import json
 import os
 import subprocess
 import sys
@@ -22,7 +38,71 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from affected import decide_pr  # noqa: E402
 
-SUITES = ("rev1", "rev2", "boards", "controller")
+KINDS = {"rev1": 1, "rev2": 2, "boards": 2}      # a layout's suites, and the rev of the platform each belongs to
+SAME_EVERY_RUN = ("2.5.0",)                      # the routers with seeds=True in compose/pcb/toolbox.py's ROUTERS
+RACING = 3                                       # jobs per board under a random router: the first clean one is taken
+
+
+def constant(path, name, default=None):
+    """The value a module gives a name at its top level, read without importing it (None-like default when the
+    file or the name is missing). Stops when the value is not a plain constant: the plan can't run the module."""
+    if not os.path.isfile(path):
+        return default
+    for node in ast.parse(open(path).read()).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            try:
+                return ast.literal_eval(node.value)
+            except (ValueError, TypeError):
+                sys.exit(f"{path}: {name} has to be a plain constant (the CI plan reads it without running the file).")
+    return default
+
+
+def layouts(root="."):
+    """{layout: the revs it is built in}, for every folder of layouts/ that holds a layout.py (what the command
+    line takes for a layout), from the keyboard.py beside it."""
+    d = os.path.join(root, "layouts")
+    found = {}
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if os.path.isfile(os.path.join(d, name, "layout.py")):
+            f = os.path.join(d, name, "keyboard.py")
+            revs = constant(f, "REVS")
+            if not isinstance(revs, tuple) or not revs:
+                sys.exit(f"{f}: REVS has to list the revs the keyboard is built in, like (2,).")
+            found[name] = revs
+    return found
+
+
+def suites(lay):
+    """Every suite there is, in the order the summary lists them."""
+    return [f"{k}-{name}" for name, revs in lay.items() for k, rev in KINDS.items() if rev in revs] + ["controller"]
+
+
+def half_jobs(names, root="."):
+    """The half-board jobs of the layouts named: one per board, or RACING per board under a random router."""
+    boards = constant(os.path.join(root, "compose", "pcb", "rev2_half.py"), "BOARDS")
+    if not isinstance(boards, dict) or not boards:
+        sys.exit("compose/pcb/rev2_half.py: BOARDS, the half boards there are, was not found as a plain constant.")
+    jobs = []
+    for name in names:
+        router = constant(os.path.join(root, "layouts", name, "preroute.py"), "ROUTER", {})
+        if not isinstance(router, dict):
+            sys.exit(f"layouts/{name}/preroute.py: ROUTER has to be {{board name: Freerouting version}}.")
+        for b in boards:
+            v = router.get(b)
+            n = 1 if (v[0] if isinstance(v, tuple) else v) in SAME_EVERY_RUN else RACING
+            jobs += [{"layout": name, "board": b, "shard": i, "shards": n} for i in range(1, n + 1)]
+    return jobs
+
+
+def outputs(run, lay):
+    """The lines for $GITHUB_OUTPUT (see the top of this file) from {suite: runs or not}."""
+    lines, names = [], {}
+    for k in KINDS:
+        names[k] = [name for name in lay if run.get(f"{k}-{name}")]
+        lines += [f"run_{k}={'true' if names[k] else 'false'}", f"{k}={json.dumps(names[k])}"]
+    lines.append(f"run_controller={'true' if run['controller'] else 'false'}")
+    lines.append("half=" + json.dumps(half_jobs(names["boards"])))
+    return lines
 
 
 def git(*args):
@@ -54,6 +134,8 @@ def main():
     sha_f = os.path.join(d, "SHA")
     traced = open(sha_f).read().strip() if os.path.exists(sha_f) else None
     lines, run = [], {}
+    lay = layouts()
+    SUITES = suites(lay)
     if event != "pull_request" or not traced:
         why = "not a pull request" if event != "pull_request" else "no dependency record from main yet"
         run = {s: True for s in SUITES}
@@ -76,9 +158,10 @@ def main():
                 f = os.path.join(d, s + ".txt")
                 deps = [l.strip() for l in open(f) if l.strip()] if os.path.exists(f) else []
                 found[s] = (decide_pr(deps, own, since) if deps else ["no dependency record for this suite"]), deps
-            if found["controller"][0] and not found["boards"][0]:
-                found["boards"] = (["the controller suite runs, and the half boards are simulated against its board"],
-                                   found["boards"][1])
+            for s in SUITES:
+                if s.startswith("boards-") and found["controller"][0] and not found[s][0]:
+                    found[s] = (["the controller suite runs, and the half boards are simulated against its board"],
+                                found[s][1])
             for s in SUITES:
                 why, deps = found[s]
                 run[s] = bool(why)
@@ -86,8 +169,15 @@ def main():
                                                if why else f"skipped: the pull request changes none of the {len(deps)} "
                                                            f"files it reads"))
     with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as o:
-        for s in SUITES:
-            o.write(f"run_{s}={'true' if run[s] else 'false'}\n")
+        o.write("\n".join(outputs(run, lay)) + "\n")
+    jobs = half_jobs([name for name in lay if run.get(f"boards-{name}")])
+    if jobs:
+        per = {}
+        for j in jobs:
+            per.setdefault((j["layout"], j["shards"]), []).append(j["board"])
+        lines.append("\nHalf-board jobs: " + "; ".join(
+            f"{name}: {len(set(b))} boards, " + ("one job each" if n == 1 else f"{n} racing jobs each (a random router)")
+            for (name, n), b in per.items()) + ".")
     with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a") as o:
         o.write("## Check suites\n\n" + "\n".join(lines) + "\n")
     print("\n".join(lines))
