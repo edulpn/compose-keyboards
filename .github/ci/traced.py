@@ -3,8 +3,9 @@
     python3 .github/ci/traced.py <deps.txt> <command> [args...]
 
 Every module imported, file opened and directory listed inside the repository is recorded through Python's
-audit hooks, then appended to <deps.txt> as repo-relative paths (directories end in "/"). Generated
-outputs (out/, out_*/) and caches are left out. The command's exit code is passed through.
+audit hooks, then appended to <deps.txt> as repo-relative paths (directories end in "/"). Only what git tracks
+at the top level counts: the folder a command writes to and reads back from (out/, or whatever the run named),
+caches and other checkouts are results or strangers, not inputs. The command's exit code is passed through.
 
 `affected.py` compares those paths with a change set: a run can only differ if one of them changed, or if a
 file was added to or removed from a directory it listed.
@@ -12,11 +13,24 @@ file was added to or removed from a directory it listed.
 import atexit
 import os
 import runpy
+import subprocess
 import sys
 
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SKIP_TOP = ("out", ".git", ".github")
 PACKAGES = ("compose", "layouts", "pointers")        # the repository's importable top-level packages
+
+
+def _tracked_tops():
+    """The repository's top-level names as git has them (None when git can't say: then every folder counts)."""
+    try:
+        r = subprocess.run(["git", "-C", ROOT, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True)
+    except OSError:
+        return None
+    return (set(r.stdout.split("\n")) - {""}) if r.returncode == 0 and r.stdout.strip() else None
+
+
+TOPS = _tracked_tops()
 seen_files, seen_dirs, seen_imports = set(), set(), set()
 COMMAND = " ".join(sys.argv[2:])                     # as given: the command's module rewrites sys.argv
 
@@ -29,7 +43,7 @@ def _rel(p):
     if not p.startswith(ROOT + os.sep):
         return None
     parts = os.path.relpath(p, ROOT).split(os.sep)
-    if parts[0].startswith(SKIP_TOP):
+    if parts[0].startswith(SKIP_TOP) or (TOPS is not None and parts[0] not in TOPS):
         return None
     if "__pycache__" in parts:                        # a compiled module: record its source
         i = parts.index("__pycache__")
