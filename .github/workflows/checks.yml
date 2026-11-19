@@ -106,8 +106,38 @@ jobs:
           cmp o1/bom.txt "$RUNNER_TEMP/b1/bom.txt"
           cmp o1/firmware/keyboard.json "$RUNNER_TEMP/b1/firmware/keyboard.json"
           echo "$LAYOUT: rev 1 outputs identical to $(python3 .github/ci/base.py)"
+      # the prints nobody needs for a build: nothing compares them, they have to come out (after the comparison
+      # above: the risers go into print/ too)
+      - name: coupons, tilt risers
+        run: |
+          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT coupons o1
+          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT tilt-risers o1
       - uses: actions/upload-artifact@v7
         with: { name: "deps-rev1-${{ matrix.layout }}", path: deps, retention-days: 7 }
+
+  # Rev 1's boards are released: what was ordered is in the release, and nothing here replaces it. This shows that
+  # the code still builds them (placed, routed, DRC clean) and that what it builds passes the matrix simulation.
+  # The router is the random one, so no two runs give the same copper and nothing is compared with the base.
+  rev1-boards:
+    needs: plan
+    if: needs.plan.outputs.run_rev1 == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: ${{ fromJSON(needs.plan.outputs.rev1) }}
+    name: rev1-boards (${{ matrix.layout }})
+    env: { LAYOUT: "${{ matrix.layout }}" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT pcb o1
+      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT firmware o1
+      - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT sim o1
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with: { name: "deps-rev1-${{ matrix.layout }}-boards", path: deps, retention-days: 7, if-no-files-found: ignore }
 
   # ---------------------------------------------------------------- rev 2, per layout: case, fit checks, firmware
   rev2:
@@ -164,6 +194,16 @@ jobs:
             echo "::notice title=rev 2 outputs changed::$msg"
           fi
           echo "$msg"; echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
+      - name: section drawings
+        run: $T deps/rev2-$LAYOUT.txt --layout $LAYOUT gasket-sections o2
+      # Every job names its folder. One command without: it has to go to the layout's own folder under out/ and
+      # write the same files there.
+      - name: a command with no folder named
+        run: |
+          $T deps/rev2-$LAYOUT.txt --layout $LAYOUT firmware-rev2
+          cmp out/$LAYOUT/rev2/firmware/keyboard.json o2/firmware/keyboard.json
+          cmp out/$LAYOUT/rev2/firmware/rgb/keyboard.json o2/firmware/rgb/keyboard.json
+          echo "$LAYOUT: firmware-rev2 with no folder named wrote out/$LAYOUT/rev2, the same files as with one"
       - uses: actions/upload-artifact@v7
         with: { name: "deps-rev2-${{ matrix.layout }}", path: deps, retention-days: 7 }
 
@@ -396,7 +436,7 @@ jobs:
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
   checks-passed:
-    needs: [plan, rev1, rev2, controller, spice, half, jumper, boards-sim]
+    needs: [plan, rev1, rev1-boards, rev2, controller, spice, half, jumper, boards-sim]
     if: always()
     runs-on: ubuntu-24.04
     steps:
