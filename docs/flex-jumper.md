@@ -12,7 +12,7 @@
 
 *Compose58's jumper. The jumper in these renders is the shape `flex-sim` settles it into, not the idealised design.*
 
-The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair. It ships flat and takes its bends by itself once both ends are plugged in: the clamped ends and its length leave it one easy shape, with nothing twisted and nothing hanging loose. `python3 -m compose flex-jumper out_r2t` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
+The controller's two connectors are vertical (Molex 52610) and square to its edges; each half's connector runs along the half's splayed, tented edge. A custom flex PCB joins each pair. It ships flat and takes its bends by itself once both ends are plugged in: the clamped ends and its length leave it one easy shape, with nothing twisted and nothing hanging loose. `python3 -m compose flex-jumper` solves the shape from the case and writes the board (`compose/pcb/jumper.py`).
 
 **One part for both halves**, like the half boards: the flat strip is straight and symmetric. On the left it's bent one way, on the right as the mirror image, so there's one design to order. Its conductors are straight across, so each one joins the same physical slot at both ends whichever side it's on: slot 1 on the left jumper is slot 20 on the right one, and that doesn't matter.
 
@@ -28,7 +28,7 @@ The controller's two connectors are vertical (Molex 52610) and square to its edg
 
 The climb, the bend angles, the skews and the length are solved for each layout's case. Compose58's, with its DRC and simulation results: [its page](../layouts/compose58/rev2.md#flex-jumper).
 
-**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper. `python3 -m compose order-rev2 out_r2t` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out_order/` with an ORDER.md of these settings.
+**Ordering (JLCPCB, Flex):** upload `jumper_rev2_JLCPCB.zip`, one design, 2 per keyboard. It's laid out as a 2-layer flex (much cheaper there than 1-layer) with nothing on the back copper. `python3 -m compose order-rev2` puts every rev 2 board's zip (controller, half boards, jumper), each checked against its routed board, into `out/<layout>/order` with an ORDER.md of these settings.
 
 | field | choose | why |
 |---|---|---|
@@ -44,7 +44,7 @@ The climb, the bend angles, the skews and the length are solved for each layout'
 | Confirm production file | Yes | to check the stiffener areas and the finger thickness before they build |
 | Remark | "PI stiffener 0.20 mm on the bottom side, areas in the Stiffener_PI_bottom file (one under each finger field). Finished thickness at the fingers 0.30 ± 0.05 mm (FPC connectors Molex 200528 and 52610). Bottom copper is intentionally empty." | |
 
-**Will the real strip take that shape?** `python3 -m compose flex-sim out_r2t` (`compose/checks/flex_sim.py`) lets it find its own. The strip is modelled as a sheet that can't stretch, folded along straight lines across it: the exact structure of a bent flex, so it bends and twists the way a real one does. It's clamped by the two connectors and settles into the shape of least bending, which is then checked against the case model. Strain is judged at the copper (the outermost conductors' outer edges); the bare polyimide edge takes far tighter bends.
+**Will the real strip take that shape?** `python3 -m compose flex-sim` (`compose/checks/flex_sim.py`) lets it find its own. The strip is modelled as a sheet that can't stretch, folded along straight lines across it: the exact structure of a bent flex, so it bends and twists the way a real one does. It's clamped by the two connectors and settles into the shape of least bending, which is then checked against the case model. Strain is judged at the copper (the outermost conductors' outer edges); the bare polyimide edge takes far tighter bends.
 
 | scenario | what is judged |
 |---|---|

@@ -6,7 +6,7 @@ into OUTDIR/png/: case, plates, frames, cover, gasket pads, the controller with 
 keycaps, and, for the assembly views, the half boards and the controller wearing their own Gerber renders
 (board_preview.js; each texture's placement checked against the board's drill holes and pads), the parts of one
 build (hotswap + RGB) and both flex jumpers in the shape flex-sim settles them into.
-Needs the routed boards (half-rev2 in OUTDIR, controller in CTRL_OUT, default out).
+Needs the routed boards (half-rev2 in OUTDIR, controller in CTRL_OUT, default out/controller).
 """
 import os
 import sys
@@ -17,6 +17,7 @@ import subprocess
 import numpy as np
 import cadquery as cq
 import trimesh
+from compose import outputs
 from compose import params as PR
 from compose import geom as G
 from compose.case import gasket as C
@@ -31,7 +32,7 @@ PNG = os.path.join(OUT, "png")
 CT = C.CT
 L = G.LAYOUT
 
-CTRL_OUT = os.environ.get("CTRL_OUT", "out")
+CTRL_OUT = outputs.controller()
 BUILD = "half_rev2_hotswap_rgb"            # the half board shown in the assembly views
 METAL = ("standoff", "hhead", "hmetal", "cmetal", "cusb", "cpin")
 COL = dict(jumper=(0xc98a2b, 0.45), hsock=(0x1a1a1a, 0.55), hdiode=(0xd2662e, 0.25), hband=(0x101010, 0.4),

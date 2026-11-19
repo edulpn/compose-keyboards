@@ -25,15 +25,16 @@ A one-piece tented, splayed case with a screwed sandwich mount (case boss → ha
 From the repo root (requirements: [Building from source](../../docs/building.md)):
 
 ```
-python3 -m compose build out      # parts → out/print, out/step (incl. assembly.step), out/world, out/bom.txt   (~50 s)
-python3 -m compose model out      # switches, wiring, Pico etc. for checks/renders → out/render
-python3 -m compose checks out     # fit, assembly and print checks; exit 1 on failure                   (~40 s)
-python3 -m compose render out     # PNGs → out/png  (needs node + playwright; cross-sections need only matplotlib)
-python3 -m compose pcb out        # PCBs → out/pcb: KiCad boards, DRC reports, *_JLCPCB.zip, previews
-                                  #   needs KiCad 7 (pcbnew), Java 21+, and freerouting.jar (github.com/freerouting/freerouting releases)
-                                  #   at ../tools/freerouting.jar or set FREEROUTING=/path/to/jar
-python3 -m compose firmware out   # QMK keyboard.json for the PCB build → out/firmware
-python3 -m compose sim out        # electrical simulation of the routed boards + firmware pins (~10 s)
+# everything is written to out/compose58/rev1 (name another folder after the command to change that)
+python3 -m compose build      # parts → print/, step/ (incl. assembly.step), world/, bom.txt   (~50 s)
+python3 -m compose model      # switches, wiring, Pico etc. for checks/renders → render/
+python3 -m compose checks     # fit, assembly and print checks; exit 1 on failure               (~40 s)
+python3 -m compose render     # PNGs → png/  (needs node + playwright; cross-sections need only matplotlib)
+python3 -m compose pcb        # PCBs → pcb/: KiCad boards, DRC reports, *_JLCPCB.zip, previews
+                              #   needs KiCad 7 (pcbnew), Java 21+, and freerouting.jar (github.com/freerouting/freerouting releases)
+                              #   at ../tools/freerouting.jar or set FREEROUTING=/path/to/jar
+python3 -m compose firmware   # QMK keyboard.json for the PCB build → firmware/
+python3 -m compose sim        # electrical simulation of the routed boards + firmware pins (~10 s)
 ```
 
 ## PCBs (MATRIX = "pcb")
@@ -46,7 +47,7 @@ There are three designs, all 2-layer and 1.6 mm. Each one routes until KiCad's D
 | `half_solder` | The same board with plated holes; switches soldered in | 5 (makes 2 keyboards + a spare) |
 | `controller` | Socket for the Pico (two 20-pin female headers) and two cable connectors. Replaces the perfboard carrier: same screws, same height. | 5 |
 
-Upload `out/pcb/<name>_JLCPCB.zip` to JLCPCB as-is. Default options are fine (HASL, any colour).
+Upload `out/compose58/rev1/pcb/<name>_JLCPCB.zip` to JLCPCB as-is. Default options are fine (HASL, any colour).
 
 **Building the reversible boards.**
 - Left half: switches go in from the side labelled "LEFT: switches this side". Sockets, diodes and the connector go on the other side.
@@ -108,7 +109,7 @@ Negative controls prove it would catch a reversed connector, swapped firmware pi
 
 The name and the layout credit are set in `layouts/compose58/keyboard.py`; the handle, taglines and lattice size in `compose/params.py`.
 
-**Firmware.** `out/firmware/keyboard.json` is a QMK definition.
+**Firmware.** `out/compose58/rev1/firmware/keyboard.json` is a QMK definition.
 - Controller: RP2040, COL2ROW.
 - Matrix: 10 rows × 12 columns, with the left half at `[row, col]` and the right half at `[5+row, 6+col]`.
 - Pins:

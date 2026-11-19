@@ -8,10 +8,10 @@ The rev follows from the command: these are rev 2's, and rev 1's own commands ar
 
 | command | what it does |
 |---|---|
-| `gasket-case out_r2t` | builds the printable parts into `out_r2t/print/` (`compose/case/gasket.py`) |
-| `gasket-checks out_r2t` | fit, gasket, assembly, jumper and printability checks |
-| `gasket-sections out_r2t` | cross-section drawings |
-| `gasket-render out_r2t` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the jumpers as `flex-sim` settles them |
+| `gasket-case` | builds the printable parts into `out/<layout>/rev2/print/` (`compose/case/gasket.py`) |
+| `gasket-checks` | fit, gasket, assembly, jumper and printability checks |
+| `gasket-sections` | cross-section drawings |
+| `gasket-render` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the jumpers as `flex-sim` settles them |
 
 ## Defaults
 

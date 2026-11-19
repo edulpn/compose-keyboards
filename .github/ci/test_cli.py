@@ -13,6 +13,9 @@ import tempfile
 
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SAY = "import compose.params as P; print(P.REV, getattr(P, 'LAYOUT', None), getattr(P, 'TENT_DEG', None))"
+SAY_OUT = ("from compose.__main__ import passed; from compose import outputs as O; "
+           "print(passed([], 1, 'a'), passed(['--plan'], 2, 'a'), passed(['--resilk'], None, 'a'), passed(['mine', '--plan'], 2, 'a'), "
+           "'|', O.controller(), O.order('a'), O.cache('a'))")
 SAY_KB = ("import compose.params as P; print(P.BOARD_NAME, P.CREDIT, P.REVISION, f'{P.TENT_DEG} {P.TILT_DEG}', "
           "f'{P.USB_VID} {P.USB_PID} {P.USB_PID_RGB}', sep=' | ')")
 # (what is tried, the arguments after `python3`, the environment added, the exit code, a word the output must have)
@@ -40,6 +43,10 @@ CASES = [
     ("an old name there never was", ["-c", SAY], {"C58_NOPE": "1"}, 1, "no setting of that name"),
     ("a value only a keyboard has, read with none", ["-c", "import compose.params as P; P.TENT_DEG"], {}, 1, "this run builds none"),
     ("the layout read with none", ["-c", "import compose.params as P; P.LAYOUT"], {}, 1, "this run builds none"),
+    ("no folder named: one per keyboard and rev, and the controller's; a folder named: that one", ["-c", SAY_OUT], {}, 0,
+     "['out/a/rev1'] ['out/a/rev2', '--plan'] ['out/controller', '--resilk'] ['mine', '--plan'] | out/controller out/a/order out_cache/a"),
+    ("the controller's and the order folder named by the environment", ["-c", SAY_OUT], {"CTRL_OUT": "c", "ORDER_OUT": "o"}, 0,
+     "| c o out_cache/a"),
     ("the keyboard's name read with none", ["-c", "import compose.params as P; P.BOARD_NAME"], {}, 1, "this run builds none"),
     ("what the layout says of its keyboard, rev 1", ["-c", SAY_KB], {"COMPOSE_REV": "1", "COMPOSE_LAYOUT": "compose58"}, 0,
      "Compose58 | layout: Lily58 by kata0510 | rev 1 | 6.0 5.0 | 0xFEED 0x4C58 0x4C59"),
@@ -117,7 +124,7 @@ def main():
     bad += bool(stray)
     print(("ok   " if not stray else "FAIL ") + "the settings named in the code and the docs are the ones there are"
           + ("" if not stray else f": {stray}"))
-    base = {k: v for k, v in os.environ.items() if not k.startswith(("C58_", "COMPOSE_"))}
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("C58_", "COMPOSE_")) and k not in ("CTRL_OUT", "ORDER_OUT")}
     for name, args, env, code, word in CASES:
         r = subprocess.run([sys.executable] + args, cwd=ROOT, env={**base, **env}, capture_output=True, text=True)
         out = r.stdout + r.stderr

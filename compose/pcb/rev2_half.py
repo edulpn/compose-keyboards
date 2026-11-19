@@ -30,6 +30,7 @@ from types import SimpleNamespace
 from shapely.geometry import Point, Polygon, LineString, box as sbox
 from shapely.affinity import rotate as srot, translate as strans
 from shapely.ops import unary_union
+from compose import outputs
 from compose import params as PR
 from compose import geom as G
 from compose import layout as layouts
@@ -158,7 +159,7 @@ _ROW = {}
 def jumper_row_y():
     """The connector's row centre in the controller's frame (y): JUMPER_ROW_Y if set, else derived. Place the
     connector, solve the jumper with the half connector free to slide along its row (least bend skew), move
-    the row by that slide, repeat until it settles (rounded to 0.01 mm). Cached in out_cache/, keyed by the
+    the row by that slide, repeat until it settles (rounded to 0.01 mm). Cached in out_cache/<layout>/, keyed by the
     sources and the parameter values it depends on, since the solve takes a minute."""
     if JUMPER_ROW_Y is not None:
         return JUMPER_ROW_Y
@@ -174,7 +175,7 @@ def jumper_row_y():
     # overrides move the row as much as an edit does
     vals = repr(sorted((k, v) for k, v in vars(PR).items() if k.isupper() and isinstance(v, (int, float, tuple))))
     key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + vals.encode()).hexdigest()
-    cache = os.path.join("out_cache", "jumper_row_y.json")
+    cache = os.path.join(outputs.cache(PR.LAYOUT), "jumper_row_y.json")
     try:
         got = json.load(open(cache))
         if got.get("key") == key:
@@ -195,7 +196,7 @@ def jumper_row_y():
     _ROW["v"] = y
     _PLACEMENT.clear()
     J._SOLVED.clear()
-    os.makedirs("out_cache", exist_ok=True)
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
     json.dump({"key": key, "row_y": y}, open(cache, "w"))
     return y
 

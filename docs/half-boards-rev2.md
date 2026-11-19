@@ -2,7 +2,7 @@
 
 [Home](../README.md) › Docs › [Rev 2](rev2.md) › Half boards
 
-One reversible board serves both halves of a keyboard, in four variants. `python3 -m compose half-rev2 out_r2t` builds all four (place, route, DRC, Gerbers; `--plan` draws the placement only). The code is `compose/pcb/rev2_half.py`. A keyboard's own boards, with their figures and check results, are on its page ([Compose58](../layouts/compose58/rev2.md#the-half-boards)).
+One reversible board serves both halves of a keyboard, in four variants. `python3 -m compose half-rev2` builds all four (place, route, DRC, Gerbers; `--plan` draws the placement only). The code is `compose/pcb/rev2_half.py`. A keyboard's own boards, with their figures and check results, are on its page ([Compose58](../layouts/compose58/rev2.md#the-half-boards)).
 
 ![the four Compose58 rev 2 half boards, bottom face](../layouts/compose58/images/rev2_half_boards.png)
 
@@ -69,7 +69,7 @@ The jumper itself: [flex jumpers](flex-jumper.md).
 
 ## Firmware
 
-`python3 -m compose firmware-rev2 out_r2t` writes:
+`python3 -m compose firmware-rev2` writes:
 
 | file | for |
 |---|---|
@@ -87,7 +87,7 @@ Past the cap each LED can draw up to 36 mA (2.1 A for Compose58's 58); the contr
 
 ## What `sim-half-rev2` checks
 
-`python3 -m compose sim-half-rev2 out_r2t` rebuilds each board's netlist from its copper alone and fits the parts as a builder would, the left half one way up and the right half flipped. For each board and both halves it checks:
+`python3 -m compose sim-half-rev2` rebuilds each board's netlist from its copper alone and fits the parts as a builder would, the left half one way up and the right half flipped. For each board and both halves it checks:
 
 - every key runs column slot → switch → diode → row slot;
 - spare slots stay unconnected;

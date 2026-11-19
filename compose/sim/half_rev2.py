@@ -61,7 +61,8 @@ import pcbnew
 from shapely.affinity import affine_transform
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
-CTRL_OUT = os.environ.get("CTRL_OUT", "out")
+from compose import outputs
+CTRL_OUT = outputs.controller()
 sys.argv = sys.argv[:1] + [OUT]
 from compose import params as PR
 from compose import geom as G
