@@ -14,6 +14,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 PLAN = os.path.join(HERE, "plan.py")
+BASE = os.path.join(HERE, "base.py")
 sys.path.insert(0, HERE)
 import plan as P  # noqa: E402
 
@@ -153,6 +154,18 @@ def main():
             if "preroute.py" in "".join(files):                      # that layout no longer names a router: it races
                 w[1]["compose58"] = [P.RACING]
             check(name, plan(repo, deps, record), w)
+        # base.py, which the comparisons with the base go by: the merge's first parent, not the commit the event
+        # names (here an older one, as GitHub's can be); the event's only where there is no merge and no branch
+        pull_request(doc)
+        env = dict(os.environ, GITHUB_BASE_REF="main", BASE_SHA=recorded)
+        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True).stdout.strip()
+        bad += got != moved
+        print(("ok    " if got == moved else "WRONG ") + "the base of a merge is its first parent, whatever the event says")
+        git(repo, "checkout", "-q", "--detach", "pr")
+        env = dict(os.environ, GITHUB_BASE_REF="", BASE_SHA=recorded)
+        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True).stdout.strip()
+        bad += got != recorded
+        print(("ok    " if got == recorded else "WRONG ") + "no merge and no base branch: the event's base")
         # not on a merge and no base branch to find: everything since the record counts, as it did before
         git(repo, "checkout", "-q", "-B", "pr", moved)
         commit(repo, {"README.md": "three\n"}, "a document")
