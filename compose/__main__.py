@@ -2,7 +2,9 @@
 python3 -m compose [--layout <name>] <command> [outdir] [args...]
 
 Every command runs one module of the platform as if it were a script: the arguments after the
-command are passed through unchanged (most take the output folder first). A run builds one keyboard:
+command are passed through unchanged, the output folder first. When no folder is named the run writes to
+out/<layout>/rev1 or out/<layout>/rev2, and the controller rev 2's commands to out/controller
+(compose/outputs.py). A run builds one keyboard:
 --layout names its layout, a folder of layouts/ (Compose58's when it is left out), and its rev follows from
 the command, each of which belongs to rev 1 or to rev 2. The controller rev 2's commands build no keyboard:
 it is one board under every layout, and they take no --layout. Settings a run can change are environment
@@ -11,6 +13,8 @@ variables (COMPOSE_SPLAY, COMPOSE_TENT, COMPOSE_TILT, ...: compose/params.py; FR
 import os
 import runpy
 import sys
+
+from compose import outputs
 
 LAYOUT = "compose58"         # the layout a run builds when no --layout names another: Compose58's
 
@@ -40,7 +44,7 @@ COMMANDS = {
     "firmware-rev2":    ("compose.firmware_rev2",         2, "rev 2 QMK keyboard.json (plain and RGB)"),
     "sim-half-rev2":    ("compose.sim.half_rev2",         2, "rev 2 half boards + controller rev 2: copper-level simulation"),
     "flex-jumper":      ("compose.pcb.jumper",             2, "rev 2 flex jumper (half <-> controller, one part for both sides): solve the path, board, DRC, Gerbers"),
-    "order-rev2":       ("compose.order_rev2",             2, "Compose58 rev 2 order folder: every board's JLCPCB zip, checked against its board and its DRC report, + ORDER.md"),
+    "order-rev2":       ("compose.order_rev2",             2, "rev 2 order folder: every board's JLCPCB zip, checked against its board and its DRC report, + ORDER.md"),
     "flex-sim":         ("compose.checks.flex_sim",        2, "rev 2 flex jumper as an elastic strip: seated, insertion, gasket travel, length; clearances"),
     "half-rev2":        ("compose.pcb.rev2_half",        2, "rev 2 half boards (hotswap/solder, +rgb): place, route, DRC, Gerbers (--plan: drawing only; --preroute: pre-routed copper only)"),
 }
@@ -56,6 +60,12 @@ def usage():
     print(__doc__.strip() + "\n\nlayouts: " + ", ".join(layouts()) + "\n\ncommands:")
     for k, (_, rev, d) in COMMANDS.items():
         print(f"  {k:<17} {'rev ' + str(rev) if rev else '-':<6} {d}")
+
+
+def passed(rest, rev, layout):
+    """The arguments a command's module gets: the ones given, with the folder it writes to put first when none was
+    named (nothing given, or flags only)."""
+    return rest if rest and not rest[0].startswith("-") else [outputs.default(rev, layout)] + rest
 
 
 def stop(msg):
@@ -83,7 +93,7 @@ def main():
         os.environ.pop(name, None)
     if rev is not None:
         os.environ["COMPOSE_REV"], os.environ["COMPOSE_LAYOUT"] = str(rev), layout or LAYOUT
-    sys.argv = [mod] + args[1:]
+    sys.argv = [mod] + passed(args[1:], rev, layout or LAYOUT)
     runpy.run_module(mod, run_name="__main__", alter_sys=True)
 
 

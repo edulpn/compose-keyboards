@@ -14,10 +14,10 @@ The shared controller board for every Compose split layout: one board, one conne
 
 | command | what it does |
 |---|---|
-| `python3 -m compose controller out` | builds, routes and DRC-checks `out/pcb/controller_rev2.*` (KiCad board, JLCPCB Gerber zip, previews) |
-| `python3 -m compose controller out --resilk` | redraws only the silkscreen on the routed board (DRC and Gerbers, no re-route) |
-| `python3 -m compose sim-controller out` | copper-level simulation |
-| `python3 -m compose spice-controller out` | ngspice simulation |
+| `python3 -m compose controller` | builds, routes and DRC-checks `out/controller/pcb/controller_rev2.*` (KiCad board, JLCPCB Gerber zip, previews) |
+| `python3 -m compose controller --resilk` | redraws only the silkscreen on the routed board (DRC and Gerbers, no re-route) |
+| `python3 -m compose sim-controller` | copper-level simulation |
+| `python3 -m compose spice-controller` | ngspice simulation |
 
 It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
@@ -65,7 +65,7 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
 ## Pins
 
-QMK `keyboard.json`, also written to `out/pcb/controller_rev2_qmk.json`:
+QMK `keyboard.json`, also written to `out/controller/pcb/controller_rev2_qmk.json`:
 
 | function | pins |
 |---|---|
@@ -127,7 +127,7 @@ All of the RGB group except F1 sits in the box under the Pico on the bottom face
 
 ## Simulation
 
-Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controller_spice.py`, report in `out/sim_controller_rev2/report.md`. Result: **0 failures**, 3 warnings (hot-plug dip, the buffer's supply at USB's lowest voltage, 5 V pointing stick).
+Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controller_spice.py`, report in `out/controller/sim_controller_rev2/report.md`. Result: **0 failures**, 3 warnings (hot-plug dip, the buffer's supply at USB's lowest voltage, 5 V pointing stick).
 
 | what | result |
 |---|---|

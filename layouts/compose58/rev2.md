@@ -130,4 +130,4 @@ How it works, and how to order it: [flex jumpers](../../docs/flex-jumper.md).
 
 ## Firmware
 
-`python3 -m compose firmware-rev2 out_r2t` writes `firmware/keyboard.json` for the plain boards and `firmware/rgb/keyboard.json` for the RGB boards: 58 keys, and on the RGB boards 58 LEDs with the brightness capped at 32. What the cap covers and how to build with it: [firmware](../../docs/half-boards-rev2.md#firmware).
+`python3 -m compose firmware-rev2` writes `firmware/keyboard.json` for the plain boards and `firmware/rgb/keyboard.json` for the RGB boards: 58 keys, and on the RGB boards 58 LEDs with the brightness capped at 32. What the cap covers and how to build with it: [firmware](../../docs/half-boards-rev2.md#firmware).

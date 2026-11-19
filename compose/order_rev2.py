@@ -1,13 +1,16 @@
 """
-Compose58 rev 2 order folder:  python3 -m compose order-rev2 OUT
+A keyboard's rev 2 order folder:  python3 -m compose order-rev2 OUT
 
-Collects every rev 2 board's JLCPCB zip into a clean folder, ORDER_OUT (default out_order/), with ORDER.md (what to pick on JLCPCB's form for
-each), after checking that each board's DRC report (<board>_drc.txt, beside it) ends at 0 errors and 0
+Collects every rev 2 board's JLCPCB zip into a clean folder, ORDER_OUT (default out/<layout>/order), with ORDER.md
+(what to pick on JLCPCB's form for each), after checking that each board's DRC report (<board>_drc.txt, beside it) ends at 0 errors and 0
 unconnected, and that each zip is what its routed board exports today: the Gerbers are exported again
 from the .kicad_pcb into a scratch folder and compared file by file (KiCad's date and version comment lines
 aside). It reads the boards the build commands left: the half boards and the jumper from OUT, the controller
-from CTRL_OUT (default out). It doesn't re-route anything; run the build commands and their checks first
+from CTRL_OUT (default out/controller). It doesn't re-route anything; run the build commands and their checks first
 (docs/building.md, "Checking a change").
+
+In the order folder the keyboard's own boards carry its layout's name (compose58_half_rev2_hotswap_JLCPCB.zip), so
+that two keyboards' orders can sit side by side; the controller's zip does not, being the same board under each.
 """
 import os
 import shutil
@@ -15,9 +18,13 @@ import sys
 import tempfile
 import zipfile
 
+from compose import outputs
+from compose import params as PR
+
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
-CTRL_OUT = os.environ.get("CTRL_OUT", "out")
-ORDER_OUT = os.environ.get("ORDER_OUT", "out_order")      # wiped and rebuilt on every run: only the zips + ORDER.md
+CTRL_OUT = outputs.controller()
+ORDER_OUT = outputs.order(PR.LAYOUT)                      # wiped and rebuilt on every run: only the zips + ORDER.md
+SHARED = ("controller_rev2",)                             # one board under every layout: its zip keeps its name
 
 FR4 = ("FR-4, 2 layers, 1.6 mm, 1 oz outer copper, any solder mask colour, HASL (with lead: the easiest to "
        "hand-solder; lead-free if you prefer; OSP works too if you solder within a few months, but the unused pads "
@@ -95,17 +102,18 @@ def main():
         if not ok:
             bad.append(f"{stem}: zip differs from the board ({', '.join(diff[:4])})")
             continue
-        shutil.copy(z, dst)
-        rows.append((stem, qty, notes))
-    md = ["# Compose58 rev 2: what to order\n",
+        name = stem if stem in SHARED else f"{PR.LAYOUT}_{stem}"
+        shutil.copy(z, os.path.join(dst, name + "_JLCPCB.zip"))
+        rows.append((name, qty, notes))
+    md = [f"# {PR.BOARD_NAME} rev 2: what to order\n",
           "Every zip here was checked against its routed board when this folder was made, and that board's DRC",
           "report shows 0 errors and 0 unconnected. Order the controller,",
-          "one of the four half boards, and the jumper. Parts: see the BOM in layouts/compose58/rev2.md and",
+          f"one of the four half boards, and the jumper. Parts: see the BOM in layouts/{PR.LAYOUT}/rev2.md and",
           "docs/controller-rev2.md.\n",
           "| zip | per keyboard | JLCPCB |", "|---|---|---|"]
     md += [f"| `{s}_JLCPCB.zip` | {q} | {n} |" for s, q, n in rows]
     open(os.path.join(dst, "ORDER.md"), "w").write("\n".join(md) + "\n")
-    print(f"\n{dst}: {len(rows)} zips + ORDER.md" + ("" if not bad else f"; {len(bad)} problem(s): " + "; ".join(bad)))
+    print(f"\n{dst}: {len(rows)} zips ({', '.join(r[0] for r in rows)}) + ORDER.md" + ("" if not bad else f"; {len(bad)} problem(s): " + "; ".join(bad)))
     return len(bad)
 
 

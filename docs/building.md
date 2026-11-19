@@ -48,7 +48,7 @@ docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards
 
 ```sh
 python3 -c "import pcbnew, cadquery; print(pcbnew.Version())"      # 7.0.11
-python3 -m compose half-rev2 out_r2t --plan                # placement drawing, about a minute
+python3 -m compose half-rev2 --plan                        # placement drawing, about a minute
 python3 -m compose build /tmp/r1 && python3 -m compose model /tmp/r1 && python3 -m compose checks /tmp/r1   # ALL CHECKS PASSED
 ```
 
@@ -71,40 +71,49 @@ A mismatch doesn't mean the geometry changed: compare the meshes (volume, bounds
 Everything runs from the repo root as `python3 -m compose <command> [outdir]`; `python3 -m compose --help` lists the commands.
 
 ```sh
-# Compose58 rev 1 (the default; see layouts/compose58/rev1.md)
-python3 -m compose build out            # case, plates, frames, cover (out/print, out/step), BOM
-python3 -m compose pcb out              # half boards + controller rev 1: route, DRC, Gerbers
-python3 -m compose firmware out         # QMK keyboard.json
-python3 -m compose model out            # assembled model (the checks and renders use it)
-python3 -m compose checks out           # fit / assembly / print checks
-python3 -m compose sim out              # copper-level matrix simulation
-python3 -m compose render out           # images
+# Compose58 rev 1 (the default; see layouts/compose58/rev1.md)        -> out/compose58/rev1
+python3 -m compose build              # case, plates, frames, cover (print/, step/), BOM
+python3 -m compose pcb                # half boards + controller rev 1: route, DRC, Gerbers
+python3 -m compose firmware           # QMK keyboard.json
+python3 -m compose model              # assembled model (the checks and renders use it)
+python3 -m compose checks             # fit / assembly / print checks
+python3 -m compose sim                # copper-level matrix simulation
+python3 -m compose render             # images
 
-# Controller rev 2 (docs/controller-rev2.md)
-python3 -m compose controller out       # route, DRC, Gerbers (add --resilk to redraw only the silkscreen)
-python3 -m compose sim-controller out   # copper-level simulation
-python3 -m compose spice-controller out # ngspice simulation
+# Controller rev 2 (docs/controller-rev2.md)                          -> out/controller
+python3 -m compose controller         # route, DRC, Gerbers (add --resilk to redraw only the silkscreen)
+python3 -m compose sim-controller     # copper-level simulation
+python3 -m compose spice-controller   # ngspice simulation
 
-# Rev 2 (docs/rev2.md; Compose58's own page: layouts/compose58/rev2.md)
-python3 -m compose half-rev2 out_r2t       # the four half boards: place, route, DRC, Gerbers
-python3 -m compose half-rev2 out_r2t --plan            # placement drawing only (fast)
-python3 -m compose half-rev2 out_r2t --preroute        # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
-python3 -m compose flex-jumper out_r2t     # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
-python3 -m compose sim-half-rev2 out_r2t   # half boards + jumpers + controller rev 2, copper level (after all are built)
-python3 -m compose flex-sim out_r2t        # the jumper as an elastic strip: seated, insertion, gasket travel, length
-python3 -m compose order-rev2 out_r2t      # every board's JLCPCB zip, checked against its board and its DRC report, in out_order/ + ORDER.md
-python3 -m compose firmware-rev2 out_r2t   # QMK keyboard.json, plain and RGB
-python3 -m compose gasket-case out_r2t     # printable parts
-python3 -m compose gasket-checks out_r2t   # fit, gasket, assembly, jumper and printability checks
-python3 -m compose gasket-render out_r2t   # renders (assembly views need the routed half boards and controller)
+# Rev 2 (docs/rev2.md; Compose58's own page: layouts/compose58/rev2.md) -> out/compose58/rev2
+python3 -m compose half-rev2          # the four half boards: place, route, DRC, Gerbers
+python3 -m compose half-rev2 --plan             # placement drawing only (fast)
+python3 -m compose half-rev2 --preroute         # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
+python3 -m compose flex-jumper        # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
+python3 -m compose sim-half-rev2      # half boards + jumpers + controller rev 2, copper level (after all are built)
+python3 -m compose flex-sim           # the jumper as an elastic strip: seated, insertion, gasket travel, length
+python3 -m compose order-rev2         # every board's JLCPCB zip, checked against its board and its DRC report, in out/compose58/order + ORDER.md
+python3 -m compose firmware-rev2      # QMK keyboard.json, plain and RGB
+python3 -m compose gasket-case        # printable parts
+python3 -m compose gasket-checks      # fit, gasket, assembly, jumper and printability checks
+python3 -m compose gasket-render      # renders (assembly views need the routed half boards and controller)
 ```
 
-`sim-half-rev2` reads the controller from `out/` (set `CTRL_OUT` to change that).
+**Where a run writes.** A command writes to the folder named after it, as in `python3 -m compose build mine`. With none named, each keyboard and rev has its own (`compose/outputs.py`):
+
+| folder | what writes there |
+|---|---|
+| `out/<layout>/rev1` | the keyboard's rev 1 commands |
+| `out/<layout>/rev2` | its rev 2 commands |
+| `out/<layout>/order` | `order-rev2` (set `ORDER_OUT` to change that) |
+| `out/controller` | the controller rev 2's commands: it is one board under every layout |
+
+The rev 2 commands that need the controller's board (`sim-half-rev2`, `gasket-render`, `order-rev2`) read it from `out/controller`; set `CTRL_OUT` if it was built elsewhere. In the order folder a keyboard's own boards carry its layout's name (`compose58_half_rev2_hotswap_JLCPCB.zip`); the controller's zip does not.
 
 A run builds one keyboard. `--layout <name>`, before the command, names its layout: a folder of `layouts/` (Compose58's, `compose58`, when it is left out). Its rev follows from the command: each one builds rev 1 or rev 2. The controller rev 2's three commands build no keyboard (one board under every layout) and take no `--layout`.
 
 ```bash
-python3 -m compose --layout compose58 gasket-case out_r2t
+python3 -m compose --layout compose58 gasket-case      # writes out/compose58/rev2/print
 ```
 
 The settings a run can change are environment variables: `COMPOSE_SPLAY`, `COMPOSE_TENT`, `COMPOSE_TILT`, `COMPOSE_GAP_TOP`, `COMPOSE_BRIDGE_LEN` (angles in degrees, lengths in mm) and `COMPOSE_PREROUTE=0` (below). They were `C58_...` before; a run that finds one of the old names set, `C58_REV` among them, stops and names its replacement.
@@ -137,9 +146,9 @@ How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
 **Board previews** (realistic renders from a board's Gerbers, needs Node):
 
 ```sh
-node compose/render/web/board_preview.js out_r2t/pcb/<board>_gerbers out_r2t/png/board_<board>   # _top.svg, _bottom.svg
-node compose/render/web/svg2png.js out_r2t/png/board_<board>_bottom.svg out.png 1400             # 1400 px wide
-node compose/render/web/svg2png.js out_r2t/png/board_<board>_bottom.svg big.png 1400 3           # 3x, for close-ups
+node compose/render/web/board_preview.js out/compose58/rev2/pcb/<board>_gerbers out/compose58/rev2/png/board_<board>   # _top.svg, _bottom.svg
+node compose/render/web/svg2png.js out/compose58/rev2/png/board_<board>_bottom.svg out.png 1400     # 1400 px wide
+node compose/render/web/svg2png.js out/compose58/rev2/png/board_<board>_bottom.svg big.png 1400 3   # 3x, for close-ups
 ```
 
 Outputs go to `out*/`, which is not committed: releases carry them.
@@ -161,7 +170,8 @@ compose/            the platform (Python package)
   sim/                copper-level and ngspice simulations (copper.py: a board's copper as geometry)
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware.py         QMK keyboard definition (rev 1); firmware_rev2.py for rev 2
-  order_rev2.py       the rev 2 order folder (out_order/)
+  order_rev2.py       the rev 2 order folder (out/<layout>/order)
+  outputs.py          where a run writes when no folder is named
 layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); what its keyboard is
                     called, the revs it is built in, its tent and tilt per rev and its USB ids (keyboard.py);
                     optionally the nets it routes itself (preroute.py)
