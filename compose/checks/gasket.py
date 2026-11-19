@@ -14,7 +14,8 @@ What is checked
      home and slides back onto its hooks, the controller goes in tongues-first, tilted
   E  hardware: screw / standoff / insert engagement, Pico gap, cable plugs under the cover
   F  printability: each exported part in its print orientation is watertight and has no overhang steeper
-     than 45 degrees off the bed (short bridges over holes allowed)
+     than 45 degrees off the bed (short bridges over holes allowed). Every part's size on the bed is printed;
+     the tub's has to be the one its layout's page quotes (layouts/<layout>/rev2.md)
 """
 import os
 import sys
@@ -396,6 +397,17 @@ def main():
         u, cnt = np.unique(m.edges_sorted, axis=0, return_counts=True)
         rec(f"F {f}: watertight, no non-manifold edges", m.is_watertight and not (cnt > 2).any(),
             f"{int((cnt > 2).sum())} non-manifold edges")
+        w, d, h = (float(v) for v in m.bounds[1] - m.bounds[0])
+        if f == "rev2_case.stl":                     # the one size a layout's page quotes: held to the part
+            size, page = f"{w:.0f} × {d:.0f} mm", f"layouts/{PR.LAYOUT}/rev2.md"
+            path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), page)
+            if os.path.isfile(path):
+                rec(f"F {f}: its size on the bed is the one {page} gives", size in open(path).read(),
+                    f"{size} ({w:.1f} × {d:.1f}, {h:.1f} tall)")
+            else:
+                print(f"      F {f}: {size} on the bed ({w:.1f} × {d:.1f}, {h:.1f} tall); no {page} to hold to it", flush=True)
+        else:
+            print(f"      F {f}: {w:.1f} × {d:.1f} mm on the bed, {h:.1f} tall", flush=True)
         seats = []
         if f == "rev2_case.stl":                     # the frame screws' counterbore shoulders, in the STL's frame
             bb = parts["case"].BoundingBox()

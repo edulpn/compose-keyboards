@@ -28,7 +28,7 @@ How it works: [the gasket-mount case](../../docs/gasket-case.md).
 | pads | 20 pairs per half: 18 found along the plate edge, 2 at the ends of the inner (bridge) edge |
 | frame screws | six M3 per frame |
 
-### Checked (`gasket-checks`: 132 checks, all passing)
+### Checked (`gasket-checks`: 133 checks, all passing)
 
 | check | result |
 |---|---|
