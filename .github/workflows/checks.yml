@@ -133,6 +133,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT pcb o1
+      # Rev 1's bar is 0 errors and 0 unconnected, which pcb holds itself. Its warnings are listed by kind, so that
+      # a change in them can be seen from one run to the next (the library-path notes left out, as pcb leaves them).
+      - name: the boards' DRC warnings, by kind
+        run: |
+          for r in o1/pcb/*_drc.txt; do
+            echo "$(basename "$r" _drc.txt): $(awk '/^\[/ {k = $1} /Severity: warning/ && k != "[lib_footprint_issues]:" {c[k]++}
+                 END {for (k in c) print c[k], k}' "$r" | sort -k2 | tr '\n' ' ')"
+          done
       - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT firmware o1
       - run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT sim o1
       - if: always()
