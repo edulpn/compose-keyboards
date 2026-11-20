@@ -35,7 +35,7 @@ ENV FREEROUTING=/opt/freerouting.jar
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt cairosvg pillow
 
-# Render helpers (optional: only `render` / `gasket-render` / board previews need them)
+# Render helpers (optional: only `gasket-render` and the board previews need them)
 COPY compose/render/web/package.json /opt/render-web/package.json
 RUN cd /opt/render-web && npm install --no-audit --no-fund && npx playwright install --with-deps chromium
 ENV NODE_PATH=/opt/render-web/node_modules

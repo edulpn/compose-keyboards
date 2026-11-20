@@ -1,36 +1,28 @@
 import os as _os
 """
-Every design parameter lives here. Edit a value, run `python3 -m compose build`, and every part
-is regenerated from it. Units: millimetres and degrees.
+Every design parameter lives here. Edit a value, run the commands again (`python3 -m compose --help`),
+and every part is regenerated from it. Units: millimetres and degrees.
 
 Naming: *_T = thickness, *_H = height, *_R = radius, *_D = diameter,
 *_GAP = clearance between mating parts.
 """
 
 # ---------------------------------------------------------------- the keyboard this run builds
-# One keyboard a run: its layout and its rev. Both come from the command line (compose/__main__.py: --layout,
-# and the rev of the command) and are carried here as COMPOSE_LAYOUT and COMPOSE_REV. The controller rev 2's
-# commands build no keyboard (it is one board under every layout), and in such a run the values that belong to
-# a keyboard do not exist: see the end of this file.
+# One keyboard a run. Its layout comes from the command line (compose/__main__.py: --layout) and is carried
+# here as COMPOSE_LAYOUT. The controller rev 2's commands build no keyboard (it is one board under every
+# layout), and in such a run the values that belong to a keyboard do not exist: see the end of this file.
 _RENAMED = {"C58_SPLAY": "COMPOSE_SPLAY", "C58_TENT": "COMPOSE_TENT", "C58_TILT": "COMPOSE_TILT", "C58_GAP_TOP": "COMPOSE_GAP_TOP",
             "C58_BRIDGE_LEN": "COMPOSE_BRIDGE_LEN", "C58_PREROUTE": "COMPOSE_PREROUTE"}
 for _n in sorted(n for n in _os.environ if n.startswith("C58_")):       # an old name must not be passed over in silence
     raise SystemExit(f"{_n} is set, and nothing reads it any more. " + (
         f"It is {_RENAMED[_n]} now." if _n in _RENAMED else
-        "The rev follows from the command (python3 -m compose --help lists them)." if _n == "C58_REV" else
+        "There is one rev, and nothing to set." if _n == "C58_REV" else
         "There is no setting of that name.") + " Unset it and run the command again.")
-REV = int(_os.environ["COMPOSE_REV"]) if _os.environ.get("COMPOSE_REV") else None
-if REV not in (None, 1, 2):
-    raise SystemExit(f"COMPOSE_REV={REV}: there is a rev 1 and a rev 2. It is set by python3 -m compose, not by hand.")
 LAYOUT = _os.environ.get("COMPOSE_LAYOUT") or None       # key layout: layouts/<name>/layout.py
-if (REV is None) != (LAYOUT is None):
-    raise SystemExit("COMPOSE_REV and COMPOSE_LAYOUT say which keyboard a run builds and come together, from python3 -m "
-                     "compose: one of them is set without the other.")
-_D = (lambda r1, r2: r2 if REV == 2 else r1)          # per-revision default (env vars still override)
 
 # What the layout says about its keyboard: layouts/<name>/keyboard.py, plain constants (its name, the credit for its
-# key layout, the revs it is built in, its angles per rev, its USB ids). Read only when a run builds a keyboard.
-_KB_NAMES = ("NAME", "CREDIT", "REVS", "TENT_DEG", "TILT_DEG", "USB_VID", "USB_PID", "USB_PID_RGB")
+# key layout, its angles, its USB ids). Read only when a run builds a keyboard.
+_KB_NAMES = ("NAME", "CREDIT", "TENT_DEG", "TILT_DEG", "USB_VID", "USB_PID", "USB_PID_RGB")
 _KB = None
 if LAYOUT is not None:
     import importlib as _importlib
@@ -39,34 +31,30 @@ if LAYOUT is not None:
     except ModuleNotFoundError as _e:
         if _e.name != f"layouts.{LAYOUT}.keyboard":
             raise
-        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, which revs "
-                         f"it is built in, and its angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.")
+        raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, and its "
+                         f"angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.")
     _missing = [_n for _n in _KB_NAMES if not hasattr(_KB, _n)]
     if _missing:
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/compose58/keyboard.py shows "
                          f"what goes in it.")
-    if REV not in _KB.REVS:
-        raise SystemExit(f"{_KB.NAME} (layouts/{LAYOUT}) is not built in rev {REV}: its keyboard.py lists rev "
-                         f"{' and rev '.join(str(_r) for _r in _KB.REVS)}.")
     for _n in ("TENT_DEG", "TILT_DEG"):
-        if REV not in getattr(_KB, _n):
-            raise SystemExit(f"layouts/{LAYOUT}/keyboard.py lists rev {REV} in REVS and gives no {_n} for it.")
+        if isinstance(getattr(_KB, _n), bool) or not isinstance(getattr(_KB, _n), (int, float)):
+            raise SystemExit(f"layouts/{LAYOUT}/keyboard.py: {_n} has to be a number of degrees, and is {getattr(_KB, _n)!r}.")
 _K = (lambda name: getattr(_KB, name) if _KB else None)      # a value of the keyboard's; None in a run that builds none
 
 # ---------------------------------------------------------------- layout
 KEY_PITCH = 19.05            # 1u
 KEYCAP_SIZE = 18.0           # 1u cap footprint (used for spacing checks/renders)
 MX_STEM_TOP = 10.44          # MX stem top above the plate surface at rest (Cherry MX 3D model, kiswitch library)
-MX_TRAVEL = 4.0              # total travel
 PLATE_MARGIN = 10.0          # key cell edge -> outer edge of plate/case
 OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
 SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
-if _KB:                                                              # the keyboard's own, per rev: layouts/<name>/keyboard.py
-    TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG[REV]))    # gable tent: inner edges raised
-    TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG[REV]))    # typing tilt: back raised (negative = front raised)
+if _KB:                                                              # the keyboard's own: layouts/<name>/keyboard.py
+    TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG))    # gable tent: inner edges raised
+    TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG))    # typing tilt: back raised (negative = front raised)
 GAP_TOP = float(_os.environ.get("COMPOSE_GAP_TOP", 34.0))          # distance between the halves' inner edges at the back
 
 # ---------------------------------------------------------------- switch plate
@@ -76,27 +64,16 @@ SWITCH_CLIP_LIP = 1.5        # top skin the MX clips latch under
 CLIP_NOTCH_W = 5.5           # relief for the clips below the lip (N and S walls)
 CLIP_NOTCH_D = 0.8
 PLATE_HOLE_CHAMFER = 0.3     # bed-side chamfer on switch holes (elephant foot)
-PLATE_EDGE_CHAMFER = 0.5     # bed-side chamfer on the outer edge
 TRIM_LIP_T = 1.2             # trim lip under the plate edge, hides the case's
 TRIM_LIP_H = 2.2             #   stair-stepped top edge (prints upward)
 
 # ---------------------------------------------------------------- case
 FLOOR_T = 2.5
 WALL_T = 3.0
-WIRE_DEPTH = 7.0             # minimum space between plate underside and floor
 REVEAL_SIDE_GAP = 0.4        # trim lip -> case step, sideways
 REVEAL_SHADOW = 0.3          # gap under the trim lip (shadow line)
-SCREW_EDGE_INSET = 6.0       # sandwich screw centre -> outer edge
 SHELF_T = 3.0                # case material under the plate at each M3 boss
-BOSS_R = 4.0                 # M3 sandwich boss radius
 POST_R = 3.25                # M2 plate-support post radius
-POST_SHELF_T = 2.5           # material under the plate at each M2 post
-# middle supports: M2 screws from under the case through each post and the board into the plate
-FLOOR_RIB_T = 1.2            # hex rib lattice on the inside of the floor
-FLOOR_RIB_H = 3.0
-FLOOR_RIB_CELL = 16.0        # flat-to-flat
-POST_FLARE = 3.0             # 45-degree flare at the base of every post
-WIRE_KEEPOUT = 7.3           # floor details stay this far below the plate
 FOOT_D = 10.5                # rubber bumpon recesses
 FOOT_DEPTH = 1.0
 
@@ -109,36 +86,14 @@ KEY_OPENING_CORNER_R = 1.0
 
 # ---------------------------------------------------------------- centre section
 BRIDGE_LEN = float(_os.environ.get("COMPOSE_BRIDGE_LEN", 62.0))   # depth of the centre section (back face at y = 0)
-BRIDGE_WALL_T = _D(3.0, 2.5)   # back and front walls of the bay
-COVER_H = BEZEL_H            # cover top sits flush with the frames
-COVER_BEVEL = BEZEL_BEVEL
-COVER_SCREW_Y = (-22.0, -50.0)   # cover screw rows (y in the bridge frame)
-PILLAR_R = 4.5               # cover screw pillars
-CLAMP_TAB_OVERLAP = 1.0      # cover tab over the Pico's front edge
-CLAMP_GAP = 0.8              # Pico top -> cover underside (foam pad on the tab)
+BRIDGE_WALL_T = 2.5          # back and front walls of the bay
 WINDOW_EDGE_OVER_PCB = 0.5   # cover window stops this far over each long PCB edge
 WINDOW_FRONT_MARGIN = 1.5    # window ends this far past the Pico's front edge
 
 # ---------------------------------------------------------------- controller + socket
 PICO_W, PICO_L, PICO_T = 21.0, 51.0, 1.0
-PICO_PIN_PITCH = 2.54
-PICO_PINS_PER_SIDE = 20
-PICO_PIN_ROW_X = 8.89        # pin rows at +-x from the board centre
-PICO_PIN1_FROM_END = 1.61    # first pin centre from the USB end
-PICO_BACK_Y = -3.5           # y of the board's USB end (bridge back face is y = 0)
-USB_RECEPT_W, USB_RECEPT_L, USB_RECEPT_H = 7.6, 5.0, 2.6
-USB_RECEPT_OVERHANG = 1.3    # receptacle sticks out past the board edge
 USB_NOTCH_W = 13.0           # opening in the back wall for the cable's overmold
 USB_NOTCH_BELOW_PCB = 2.5    # opening starts this far below the board underside
-MALE_HEADER_SPACER = 2.54    # plastic spacer of the Pico's male headers
-FEMALE_HEADER_H = 8.5
-FEMALE_HEADER_W = 2.5
-HEADER_TAIL = 2.8            # female header pins below the perfboard
-PERF_T = 1.6
-PERF_PITCH = 2.54
-PERF_COLS, PERF_ROWS = 8, 20
-CARRIER_SCREW_GRID = (1.5, 7.5)  # carrier screw holes at (+-x, +-y) pitches from its centre
-CARRIER_POST_R = 2.75
 
 # ---------------------------------------------------------------- hardware
 M3_CLEAR = 3.4
@@ -150,33 +105,17 @@ M3_INSERT_L = 5.0            # hole depth for M3 x 5 x 4 inserts (insert length 
 M2_CLEAR = 2.4
 M2_HEAD_D = 3.5
 M2_HEAD_H = 1.3
-M2_CBORE_D = 4.2
 M2_INSERT_D = 3.2
-M2_INSERT_L = 4.0            # in the case
 M2_PLATE_INSERT_L = 3.5      # in the 5 mm plate
-STANDARD_SCREW_LENGTHS = (4, 5, 6, 8, 10, 12, 14, 16, 20, 25)
 
 # ---------------------------------------------------------------- fits
 FIT_GAP = 0.3                # between printed parts that meet (cover/frames, bridge/plate)
 
-# ---------------------------------------------------------------- printer
-BED_X, BED_Y = 350.0, 350.0
-BED_MARGIN = 5.0
-
-# ---------------------------------------------------------------- PCB build (vs handwired)
-MATRIX = "pcb"               # "pcb": reversible half PCBs + controller PCB; "handwire": copper wire matrix
+# ---------------------------------------------------------------- half boards
 PCB_T = 1.6
-PCB_EDGE_GAP = 0.5           # half board edge to the case cavity wall / interface plane
 PCB_UNDER_H = 2.4            # tallest part under a half board (Kailh socket 1.85, DO-35 body 1.9 + leads)
 PCB_UNDER_CLEAR = 1.0
-UNDER_PLATE = PCB_T if MATRIX == "pcb" else 0.0    # what's sandwiched between plate and case bosses
-if MATRIX == "pcb":
-    WIRE_DEPTH = PCB_T + PCB_UNDER_H + PCB_UNDER_CLEAR
-    WIRE_KEEPOUT = WIRE_DEPTH + 0.3
-    POST_SHELF_T = 2.4               # so the M2 post screw lands on a standard length with the board in the stack
-    COVER_SCREW_Y = (-21.0, -51.0)   # leaves room between the pillars for the controller's cable connectors
-# perimeter M3 points: the sandwich screw clamps case boss -> board -> plate -> frame insert solid
-# (rev 1 is a fully screwed sandwich mount)
+WIRE_DEPTH = PCB_T + PCB_UNDER_H + PCB_UNDER_CLEAR      # minimum space between plate underside and floor
 # switches: MX pins in footprint coords (KiCad, y down), mirrored copies make the board reversible
 MX_PIN1 = (2.54, -5.08)      # -> diode anode
 MX_PIN2 = (-3.81, -2.54)     # -> column
@@ -193,19 +132,13 @@ DIODE_PITCH = 7.62
 DIODE_BODY = (4.0, 2.0)                            # length, diameter (DO-35)
 JOINT_POCKET_R = 1.5         # plate-underside pockets over top-side solder joints
 JOINT_POCKET_D = 1.2
-HALF_CONN_PITCH, HALF_CONN_PINS = 1.25, 12        # Molex PicoBlade 53047 vertical (half) / 53048 right angle (controller)
-HALF_CONN_INSET = 6.0        # pin row distance in from the half's inner edge
-CONN_BODY_UNDER = 4.3        # vertical connector height under the half board
-CTRL_CONN_X = 14.0           # controller connector pin rows at +-x (P frame), courtyards clear of the Pico headers
-CTRL_MARGIN = 1.0            # controller board to pillars / interface plane
-RENDER_PCB_VARIANT = "hotswap"   # which half board the 3D model, renders and checks show ("hotswap" / "solder")
 TRACE_W, CLEARANCE = 0.25, 0.2
 VIA_D, VIA_DRILL = 0.6, 0.3
 
 # ---------------------------------------------------------------- board art / naming
 BOARD_NAME = _K("NAME")          # the keyboard's name: layouts/<name>/keyboard.py
 HANDLE = "edulpn"
-REVISION = f"rev {REV}"
+REVISION = "rev 2"               # the platform's generation, as the boards print it
 YEAR = 2026
 TAGLINE = {"F": "static func ∘ (lhs: Half, rhs: Half) -> Keyboard",     # Swift on one face...
            "B": "@Composable fun Keyboard(lhs: Half, rhs: Half)"}         # ...Kotlin Compose on the other
@@ -232,7 +165,7 @@ FLOAT_GAP = 0.6                  # plate edge to case wall / frame skirt (sidewa
 FLANGE_W = 6.0                   # flange width inward from the plate outline
 FLANGE_T = 2.0
 FLANGE_Z0 = PLATE_T - FLANGE_T   # flange underside (local z): flush with the plate's top face, so the plate prints
-                                 # switch side down (like rev 1) with the flange flat on the bed - no overhang
+                                 # switch side down with the flange flat on the bed - no overhang
 # pads = slices of off-the-shelf self-adhesive foam weatherstrip tape (closed-cell EPDM or neoprene sponge,
 # 1/8 in / 3 mm thick, 3/8 in / 10 mm wide), cut across into GK_PAD_W slices with scissors
 GK_T = 3.0                       # tape thickness, free (3.0-3.2 mm: 30-34 % squeeze, fine for EPDM sponge)
@@ -245,7 +178,7 @@ LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts 
 LEDGE_TOP = FLANGE_Z0 - GK_C     # pad seat (local z)
 FRAME_LIP_Z = FLANGE_Z0 + FLANGE_T + GK_C   # frame underside over the flange (local z)
 SEAM_Z = FLANGE_Z0               # case wall top = frame bottom (local z)
-FRAME_TOP_Z = PLATE_T + BEZEL_H  # frame top (local z), same as rev 1
+FRAME_TOP_Z = PLATE_T + BEZEL_H  # frame top (local z)
 FRAME_SCREWS = 6                 # per half, M3 from below into frame inserts
 FRAME_BOSS_R = 4.0
 FRAME_SCREW_IN = 0.5             # screw centre inside the plate outline (the plate is notched around it)
@@ -266,16 +199,16 @@ USB_VID, USB_PID, USB_PID_RGB = _K("USB_VID"), _K("USB_PID"), _K("USB_PID_RGB") 
 
 
 # ---------------------------------------------------------------- a run that builds no keyboard
-# What belongs to a keyboard (its layout and what the layout says of it, and what differs between rev 1 and
-# rev 2) has no value in a run that builds none: the controller rev 2's commands, or a module started without
-# python3 -m compose. Reading one stops the run and says so.
-_KEYBOARD = ("LAYOUT", "TENT_DEG", "TILT_DEG", "BRIDGE_WALL_T", "REVISION", "BOARD_NAME", "CREDIT", "USB_VID", "USB_PID", "USB_PID_RGB")
-if REV is None:
-    del LAYOUT, BRIDGE_WALL_T, REVISION, BOARD_NAME, CREDIT, USB_VID, USB_PID, USB_PID_RGB
+# What belongs to a keyboard (its layout and what the layout says of it) has no value in a run that builds
+# none: the controller rev 2's commands, or a module started without python3 -m compose. Reading one stops the
+# run and says so.
+_KEYBOARD = ("LAYOUT", "TENT_DEG", "TILT_DEG", "BOARD_NAME", "CREDIT", "USB_VID", "USB_PID", "USB_PID_RGB")
+if LAYOUT is None:
+    del LAYOUT, BOARD_NAME, CREDIT, USB_VID, USB_PID, USB_PID_RGB
 
 
 def __getattr__(name):
     if name in _KEYBOARD:
-        raise AttributeError(f"compose.params.{name} belongs to a keyboard (its layout, or its rev), and this run builds none. A "
+        raise AttributeError(f"compose.params.{name} belongs to a keyboard (its layout, or what the layout says of it), and this run builds none. A "
                              f"keyboard's command sets it (python3 -m compose --help); the controller rev 2's commands have none.")
     raise AttributeError(f"module 'compose.params' has no attribute {name!r}")

@@ -53,7 +53,7 @@ from compose.controller.rev2_std import (W2, Y_BACK, Y_FRONT, CORNER_R, PICO_X, 
                          VFFC_SLOT_X, VFFC_Y0, VFFC_SLOT_IN, VFFC_L, VFFC_D)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
-LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the rev 1 boards
+LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the half boards
 ROW_Y = 27.8                               # front connector row (header pins)
 
 PICO_GPIO = {1: 0, 2: 1, 4: 2, 5: 3, 6: 4, 7: 5, 9: 6, 10: 7, 11: 8, 12: 9, 14: 10, 15: 11, 16: 12, 17: 13,
@@ -135,7 +135,7 @@ def silk_rect(b, x0, y0, x1, y1, w=0.15):
 
 
 def label(b, msg, x, y, em=None, angle=0.0, font=None, anchor="c", records=None):
-    """Silkscreen text as outlines in the rev 1 art font (DejaVu Sans), centred (or left-anchored) at x, y."""
+    """Silkscreen text as outlines in the art font (DejaVu Sans), centred (or left-anchored) at x, y."""
     g = LT.text_shape(msg, font or PR.ART_TEXT_FONT, em or LABEL_EM)
     if angle:
         g = rotate(g, angle, origin=(0, 0))
@@ -407,7 +407,7 @@ TITLE_Y0, TITLE_Y1 = -18.9, -11.4         # title window up the left strip: betw
 def art(b):
     rec = []
     L = lambda *a, **k: label(b, *a, records=rec, **k)
-    # title: the composition ring + "Compose" (rev 1 style), standing up the left strip beside the Pico's
+    # title: the composition ring + "Compose", standing up the left strip beside the Pico's
     # back half (the back is narrowed there for the plates' inner seats), behind the cable connector
     x_mid = -(10.5 + CLIP_X) / 2
 
@@ -449,7 +449,7 @@ def art(b):
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
     # cable connectors: the side name along the contact row, centred on it; "1" right beside slot 1's contact
-    for sx, s in zip((-1, 1), PR.HALF_NAMES):                 # lhs / rhs, read from the outside, as on rev 1:
+    for sx, s in zip((-1, 1), PR.HALF_NAMES):                 # lhs / rhs, read from the outside:
         x_in = abs(vffc_x("R")) - VFFC_PAD_A[0] / 2 + VFFC_PAD_A[1]   # in the strip between the Pico's socket
         L(s, sx * (x_in - 1.5), VFFC_Y0, angle=90 * sx)              #   and the connector's contact-face pads
         L("1", sx * (x_in - 0.9), VFFC_Y0 - 9.5)

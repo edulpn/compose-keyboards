@@ -6,7 +6,7 @@ Rev 2 half boards (controller rev 2 standard):  python3 -m compose half-rev2 OUT
   --plan       the placement drawing only          --preroute   the layout's pre-routed copper laid, checked against
                                                                 the plan and drawn (neither needs KiCad)
 
-One reversible board serves both halves, as on rev 1: the left half has its switches on F and everything else
+One reversible board serves both halves: the left half has its switches on F and everything else
 on B; the right half is the same board flipped (switches on B, the rest on F). So every one-sided part has a
 copy on each face (hotswap sockets, LEDs, capacitors, the cable connector) and only the bottom face's copies
 are fitted. Through-hole parts (diodes, solder-in switches) serve both.
@@ -319,7 +319,7 @@ def _place():
     # diodes go after the connector, the connector only needs the column-edge strip
     s.ffc = ffc_place(keep, ol)
 
-    # diodes: one candidate spot for every key if one fits all of them, else per key. As on rev 1 the body
+    # diodes: one candidate spot for every key if one fits all of them, else per key. The body
     # keeps a 0.9 mm margin to socket bodies and other diodes; to SMD pads, LEDs and the connector it keeps
     # 0.25 mm from its real (2 mm) diameter
     inside = ol.buffer(-1.0)
@@ -371,7 +371,7 @@ def _place():
                                       ref=f"SW{i + 1}", dref=f"D{i + 1}", pocket=pk, dbody=body))
     s.pockets = unary_union([ks.pocket for ks in s.keys])
 
-    # M2 posts (board -> plate inserts): near rev 1's, clear of everything on either face, the insert in
+    # M2 posts (board -> plate inserts): near the layout's, clear of everything on either face, the insert in
     # solid plate (core, away from switch holes and the flange)
     # underside (screw head): real part outlines; plate side (insert): switch holes and solder-joint pockets
     allparts = unary_union([holes, socks, ledcut_u, ledpads_u, caps_u, s.ffc.body,
@@ -423,7 +423,7 @@ def _place():
     s.extra_keep = [s.ffc.body.buffer(1.0), ledcut_u.buffer(0.6), ledpads_u.buffer(0.4), caps_u.buffer(0.4),
                     Point(*pl).buffer(2.6)]
     s.extra_keep += [Point(ks.cathode).buffer(3.2) for ks in s.keys]           # the diodes' 'K' marks
-    # art.free_area compatibility (rev 1 plan fields)
+    # the fields art.free_area reads
     s.conn_body = s.ffc.body
     s.conn_pins = [s.ffc.pads[0], s.ffc.pads[-1]]
     s.holes_m3, s.holes_m2 = [], list(s.posts)
@@ -600,7 +600,7 @@ def build(name):
         for n in POWER_NETS:
             net(n).SetNetClass(pw)
     near = lambda a, c: math.dist(a, c) < 2e-3
-    # ---- switches + diodes (as rev 1)
+    # ---- switches + diodes
     from compose.pcb import switch_kicad as SK
     for ks in s.keys:
         k = ks.k

@@ -189,10 +189,10 @@ def middle_side_local(gap):
 
 
 def frame2_local():
-    """Full ring around the key field (rev 1's bevelled look): skirt + trim lip down to the case wall on the
+    """Full ring around the key field, bevelled: skirt + trim lip down to the case wall on the
     outer edges; along the bridge an inner rail that ends at the interface plane (the cover continues it)."""
     outer = ring(O_OUTER)
-    bevel = loft(outer, TH, G.miter_offset(outer, PR.BEZEL_BEVEL), PR.FRAME_TOP_Z)     # rev 1's bevel, from the plate top
+    bevel = loft(outer, TH, G.miter_offset(outer, PR.BEZEL_BEVEL), PR.FRAME_TOP_Z)     # the bevel, from the plate top
     env = bevel.fuse(prism(outer, PR.SEAM_Z - PR.TRIM_LIP_H - 1.0, TH))                # the frame's outside, nothing pokes out
     body = bevel
     # skirt and trim lip from the exact outer ring the bevel starts from (no simplification), so their outer
@@ -357,7 +357,7 @@ def case2_world():
 
 # ================================================================ cover
 def cover2_P():
-    """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like rev 1.
+    """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like the frames.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
     standoffs, four M3 screws."""
     z0 = CT.cover_under

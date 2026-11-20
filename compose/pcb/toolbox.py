@@ -4,7 +4,7 @@ outlines, polygons and keep-outs, then autoroute (Freerouting) -> DRC (KiCad) ->
 JLCPCB, SVG previews. Needs KiCad 7 (pcbnew) and java + tools/freerouting.jar. It knows no layout and no
 switch: the half boards' switch footprint is compose.pcb.switch_kicad.
 
-The boards themselves are built elsewhere: rev 1's in compose.pcb.kicad, the rev 2 half boards in
+The boards themselves are built elsewhere: the rev 2 half boards in
 compose.pcb.rev2_half, the jumper in compose.pcb.jumper, the controller rev 2 in compose.controller.rev2.
 A caller that writes somewhere else sets PCB_OUT here before it builds.
 """

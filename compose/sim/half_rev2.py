@@ -81,7 +81,7 @@ OX, OY = 40.0, 60.0
 L = G.LAYOUT
 F, B = pcbnew.F_Cu, pcbnew.B_Cu
 KAILH_TAB1, KAILH_TAB2 = (5.842, -5.08), (-7.085, -2.54)   # Kailh hotswap socket: its tab beside MX pin 1 / pin 2,
-                                                            #   footprint coords (the values compose/sim/matrix.py uses)
+                                                            #   footprint coords
 # SK6812 MINI-E, reverse-mounted, seen from the side its pads are on (x right, y down): which lead sits at which
 # corner. Taken from two published footprints, not from this repo's board plan (rev2_half.LED_PINS):
 #   ebastler/marbastlib  LED_6028R with its SK6812MINI-E symbol: VDD (2.725, -0.75), DOUT (2.725, 0.75),
@@ -205,8 +205,8 @@ class Half:
         for ks in self.s.keys:
             k = ks.k
             if self.variant == "hotswap":
-                # socket tabs on the bottom face, at the Kailh socket's nominal tab positions (as in the rev 1
-                # simulation), not at the pads' own centres: a pad moved off its tab fails. On the flipped board
+                # socket tabs on the bottom face, at the Kailh socket's nominal tab positions,
+                # not at the pads' own centres: a pad moved off its tab fails. On the flipped board
                 # they're the mirrored copies
                 c1, c2 = KAILH_TAB1, KAILH_TAB2
                 if self.side == "R":

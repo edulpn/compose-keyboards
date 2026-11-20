@@ -259,7 +259,7 @@ def parts_world(jumpers=True):
 
 
 def main():
-    # ---- the layout itself, before anything is built round it (rev 1's build stops on these; nothing of rev 2 did)
+    # ---- the layout itself, before anything is built round it
     issues = G.validate_layout()
     rec("L layout: keycaps >= 0.5 mm apart, inner edge straight along the centre section, hardware inside the outline",
         not issues, f"{len(G.LAYOUT.keys)} keys per half" + ("".join("; " + i for i in issues)))

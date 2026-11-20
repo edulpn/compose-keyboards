@@ -5,7 +5,7 @@ Board graphics, generated from the layout (pure Python + shapely):
   - silkscreen tagline / credit, per-face build labels (lhs / rhs)
   - a hex lattice in silkscreen over every free bit of board
 Text is rendered to outlines from real fonts (lettering.py: KiCad 7's API has no font engine).
-Geometry is in plate-local coords (half board) or P coords (controller), y up.
+Geometry is in plate-local coords, y up.
 B-face items are mirrored about their own box so they read correctly from behind.
 """
 import math
@@ -101,7 +101,7 @@ def plan_half_art(plan, variant="hotswap"):
 
     # 1. title: ring + name, exposed copper, top-left margin
     tb = None
-    for th in (6.0, 5.0, 4.5):                       # rev 1 fits 6 mm; rev 2's board edge is further in
+    for th in (6.0, 5.0, 4.5):                       # the tallest that fits: the board edge is well inside the plate's
         tb = widest_box(free, th, (8.0, 11.0), w_max=40.0, w_min=28.0)
         if tb is not None:
             break
@@ -142,7 +142,7 @@ def plan_half_art(plan, variant="hotswap"):
     lb = None
     for lh, anc in ((5.0, (38.0, -87.0)), (4.4, (38.0, -87.0)), (4.0, (38.0, -87.0)), (4.0, (5.0, -68.0))):
         lb = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), lh, anc, w_max=34.0, w_min=20.0)
-        if lb is not None:                           # rev 1 fits the first; rev 2's denser boards may not
+        if lb is not None:                           # the first that fits: the denser boards may not take the tallest
             break
     if lb is None:
         raise RuntimeError("board art: no free box for the lhs / rhs build labels")
@@ -172,32 +172,3 @@ def plan_half_art(plan, variant="hotswap"):
     a.lines = hex_lattice(region, PR.ART_HEX_CELL)
     return a
 
-
-def plan_ctrl_art(cplan, stack):
-    """Controller: name + ring on the back face, in the open area between the
-    header rows and clear of the carrier screw holes; lhs/rhs labels on both
-    faces next to their connectors."""
-    from types import SimpleNamespace
-    a = SimpleNamespace(silk={"F": [], "B": []})
-    hys = sorted({y for _, y in stack.carrier_holes})
-    y_lo, y_hi = hys[0] + PR.CARRIER_POST_R + 1.2, hys[-1] - PR.CARRIER_POST_R - 1.2
-    w = 2 * PR.PICO_PIN_ROW_X - 2 * (PR.FEMALE_HEADER_W / 2 + 1.0)
-    mid = (y_lo + y_hi) / 2
-    ring = ring_logo(0.0, mid + 6.5, 2.8)
-    name, _ = fit(text_shape(PR.BOARD_NAME, PR.ART_TITLE_FONT), -w / 2, mid - 0.2, w, 3.0)
-    sub, _ = fit(text_shape(f"controller · {PR.HANDLE}", PR.ART_TEXT_FONT), -w / 2, mid - 3.6, w, 1.7)
-    a.silk["B"].append(mirror_about(unary_union([ring, name, sub]), 0.0))
-    # connector labels: between each header row and its connector (front), beside the pins (back)
-    n, p = PR.HALF_CONN_PINS, PR.HALF_CONN_PITCH
-    for side, sx, nm in (("L", -1, PR.HALF_NAMES[0]), ("R", 1, PR.HALF_NAMES[1])):
-        cy = sum(y for _, y in cplan.conn[side]) / len(cplan.conn[side])
-        t = text_shape(nm, PR.ART_TEXT_FONT)
-        from shapely.affinity import rotate as srot
-        t = srot(t, 90 * sx, origin=(0, 0))
-        x_front = sx * (PR.PICO_PIN_ROW_X + PR.FEMALE_HEADER_W / 2 + 0.25 + (PR.CTRL_CONN_X - 1.55 - PR.PICO_PIN_ROW_X - PR.FEMALE_HEADER_W / 2 - 0.5) / 2)
-        g, _ = fit(t, x_front - 0.7, cy - 3.0, 1.4, 6.0)
-        a.silk["F"].append(g)
-        x_back = sx * (PR.CTRL_CONN_X + 2.3)
-        gb, _ = fit(t, x_back - 0.8, cy - 3.5, 1.6, 7.0)
-        a.silk["B"].append(mirror_about(gb, x_back))
-    return a
