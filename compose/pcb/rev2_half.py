@@ -33,10 +33,8 @@ from shapely.ops import unary_union
 from compose import outputs
 from compose import params as PR
 from compose import geom as G
-from compose import layout as layouts
 from compose.pcb import switch as SW
 from compose.pcb import preroute as PRE
-from compose.controller import rev2_std as CS
 
 L = G.LAYOUT
 BOARDS = {"half_rev2_hotswap": ("hotswap", False), "half_rev2_solder": ("solder", False),
@@ -66,7 +64,6 @@ CAP_AT = (5.6, 5.05)                 # footprint coords, upright (pads along y) 
 FFC_LIB, FFC_NAME = "Connector_FFC-FPC", "Molex_200528-0200_1x20-1MP_P1.00mm_Horizontal"
 FFC_BODY = (-12.65, 12.65, -0.5, 5.15)   # along the row (u) / toward the cable side (n), from the contact row
                                          #   (n from -0.5: the contacts' back ends)
-FFC_H = 2.0                          # body height under the board
 FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush)
 FFC_PROUD_MAX = 0.5                  # ... or up to this far proud of the edge, if that's what the gap below needs
 FFC_GAP = 0.6                        # the connector (body and contact pads) to any other part on its face: both are
@@ -882,7 +879,6 @@ def gnd_pour(b):
     finishing. KiCad's DRC then reports any GND pad the pour can't reach."""
     pcbnew, PK = _pc()
     from shapely.geometry import Point as P_, LineString as LS_, Polygon as Pg_
-    from shapely.ops import unary_union as uu
     from shapely.strtree import STRtree
     ToMM = pcbnew.ToMM
     gnd = b.GetNetsByName()["GND"]

@@ -9,7 +9,6 @@ Geometry is in plate-local coords, y up.
 B-face items are mirrored about their own box so they read correctly from behind.
 """
 import math
-import numpy as np
 from shapely.geometry import Point, LineString, box as sbox
 from shapely.affinity import scale as sscale, translate as strans
 from shapely.ops import unary_union
@@ -135,7 +134,6 @@ def plan_half_art(plan, variant="hotswap"):
         g = strans(g, x0 - gx0 + (x1 - x0 - (gx1 - gx0)) / 2, y0 + 2.4 - gy0 + (3.0 - (gy1 - gy0)) / 2)
         a.silk[f].append(g if f == "F" else mirror_about(g, (x0 + x1) / 2))
         a.silk[f].append(credit if f == "F" else mirror_about(credit, (x0 + x1) / 2))
-    a.text_em = (k1, k2)
     a.boxes.append(bb)
 
     # 3. build labels, per face (the same board is lhs from one face, rhs from the other)

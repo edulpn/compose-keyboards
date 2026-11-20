@@ -10,7 +10,8 @@ Independent of the net names the board was built with:
        74HCT125   DIP-14 pinout from pin 1 = the square pad, counter-clockwise seen from the side its body is on
        C2         + lead = square pad;  headers pin 1 = square pad;  Qwiic pins in a row from pin 1
   3. The netlist those parts make is compared with the spec below (written from docs/controller-rev2.md, not from
-     compose/controller/rev2.py), for the fully populated board and with the optional RGB parts left out.
+     compose/controller/rev2.py), for the fully populated board; what holds with the optional RGB parts left
+     out is read from the same copper (electrical_variants).
   4. Silkscreen labels are checked against what the copper under them does.
   5. Two model halves (42 keys each, diode per key, reversible board = right half mirrored) are joined by
      20-way jumpers (same physical slot order at both ends); the QMK COL2ROW scan runs with the rev 2 pin
@@ -49,8 +50,6 @@ PICO_PINOUT = {1: "GP0", 2: "GP1", 3: "GND", 4: "GP2", 5: "GP3", 6: "GP4", 7: "G
                20: "GP15", 21: "GP16", 22: "GP17", 23: "GND", 24: "GP18", 25: "GP19", 26: "GP20", 27: "GP21",
                28: "GND", 29: "GP22", 30: "RUN", 31: "GP26", 32: "GP27", 33: "AGND", 34: "GP28", 35: "ADC_VREF",
                36: "3V3", 37: "3V3_EN", 38: "GND", 39: "VSYS", 40: "VBUS"}            # Raspberry Pi Pico datasheet
-HCT125 = {1: "1OE", 2: "1A", 3: "1Y", 4: "2OE", 5: "2A", 6: "2Y", 7: "GND", 8: "3Y", 9: "3A", 10: "3OE", 11: "4Y",
-          12: "4A", 13: "4OE", 14: "VCC"}                                                 # 74HCT125 datasheet
 SLOTS = {1: "GND", 2: "5V_LED", 3: "RGB_TO_HALF", 4: "GND",
          5: "COL0", 6: "COL1", 7: "COL2", 8: "COL3", 9: "COL4", 10: "COL5", 11: "COL6",
          12: "ROW0", 13: "ROW1", 14: "ROW2", 15: "ROW3", 16: "ROW4", 17: "ROW5",
@@ -63,8 +62,8 @@ QMK_V2 = {"matrix_pins": {"rows": ROW_GPIO, "cols": COL_GPIO["L"] + COL_GPIO["R"
           "i2c": {"driver": "I2CD1", "sda": "GP14", "scl": "GP15"}}
 
 
-def spec_nets(rgb=True):
-    """Expected nets as sets of physical part pins; RGB parts absent when rgb=False."""
+def spec_nets():
+    """Expected nets as sets of physical part pins, for the fully populated board."""
     n = {}
 
     def add(net, *pins):
@@ -135,7 +134,7 @@ class Board:
 
 def place_parts(B):
     """Map every physical part pin to a copper group, from mechanical positions and datasheet pinouts."""
-    pins, notes = {}, []
+    pins = {}
     # the Molex 52610's terminals each have two tails (a pad either side of the body): the part joins them, so
     # join their copper first (before any node is looked up)
     cu = B.cu
@@ -249,7 +248,7 @@ def compare(pins, spec, label):
     shorts = {nd: nets for nd, nets in group_of.items() if len(nets) > 1}
     for nd, nets in shorts.items():
         bad.append(f"short between {sorted(nets)}")
-    ok(not bad, f"every spec net is one copper island, no shorts, unused pins isolated"
+    ok(not bad, "every spec net is one copper island, no shorts, unused pins isolated"
        + (": " + "; ".join(bad[:6]) if bad else f" ({len([n for n in spec if not n.startswith('NC_')])} nets)"))
     return not bad
 
@@ -505,7 +504,7 @@ def main():
     print(f"== controller rev 2 copper: {path}")
     B = Board(path)
     pins = place_parts(B)
-    compare(pins, spec_nets(rgb=True), "populated")
+    compare(pins, spec_nets(), "populated")
     electrical_variants(pins)
     silk_truth(B, pins)
     print("\n== QMK COL2ROW scan through two FFCs into model halves (rev 2 pin config)")

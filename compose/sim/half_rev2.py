@@ -140,15 +140,6 @@ class Half:
         face doesn't count: a part whose pads are only there can't be soldered where the builder fits it."""
         return self.cu.node_at(K(local_xy), layer if layer is not None else self.bottom)
 
-    def pad_nodes(self, ref, layer):
-        out = []
-        for p in self.fp[ref].Pads():
-            if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
-                continue
-            q = (ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
-            out.append((p, self.cu.node_at(q, layer)))
-        return out
-
     def slots(self):
         """Fitted connector (the bottom face's): slot -> group. Slot 1 = the back-most contact (smallest KiCad
         y on either face: flipping the board over mirrors x only)."""
@@ -549,7 +540,6 @@ class Jumper:
         f = J.flat(g, side)
         cl, length = f["centre"], f["length"]
         pts = np.array([c[0] for c in cl])
-        Z = np.array([0.0, 0.0, 1.0])
         # where a conductor at offset w (left of the centre line seen from the conductor side) lands, measured
         # along each connector's slot axis: the strip's own width direction at each end, carried through the
         # three bends by the solved path (conductor side up at the half, inboard at the controller)

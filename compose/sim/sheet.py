@@ -73,7 +73,7 @@ class Sheet:
                 rows.append(pf); cols.append(pb); vals.append(np.full(len(pf), 1 / (self.r_via * len(pf))))
                 self.vias += 1
         # tracks: the stretches outside rastered copper, each a resistor between what it leaves and what it enters
-        self.n_sheet, joint, self.pieces = n, {}, 0
+        joint, self.pieces = {}, 0
         tie = 1e4 * gs
         for a, b, w, f in tracks:
             length = math.dist(a, b)

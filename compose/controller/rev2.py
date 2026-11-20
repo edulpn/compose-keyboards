@@ -35,7 +35,7 @@ Everything is through-hole except the two FFC connectors and the Qwiic connector
 """
 import os
 import json
-from shapely.geometry import box as sbox, Point
+from shapely.geometry import Point
 from shapely.affinity import scale, translate, rotate
 from shapely.ops import unary_union
 import pcbnew
@@ -48,8 +48,8 @@ NAME = "controller_rev2"
 ROUTER = "2.5.0"                           # the Freerouting version this board is routed with: 2.5.0 gives the
 #                                            same board on every run (2.1.0 where it isn't installed)
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
-from compose.controller.rev2_std import (W2, Y_BACK, Y_FRONT, CORNER_R, PICO_X, PICO_Y, STANDOFF_HOLES,
-                         M_CLEAR, STANDOFF_KEEP, CLIP_X, CLIP_Y, POST_R,
+from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
+                         M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
                          VFFC_SLOT_X, VFFC_Y0, VFFC_SLOT_IN, VFFC_L, VFFC_D)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
@@ -121,17 +121,6 @@ def setnets(fp, table, net):
         n = table.get(p.GetNumber())
         if n:
             p.SetNet(net(n))
-
-
-def silk_rect(b, x0, y0, x1, y1, w=0.15):
-    for a, c in (((x0, y0), (x1, y0)), ((x1, y0), (x1, y1)), ((x1, y1), (x0, y1)), ((x0, y1), (x0, y0))):
-        s = pcbnew.PCB_SHAPE(b)
-        s.SetShape(pcbnew.SHAPE_T_SEGMENT)
-        s.SetStart(V(*C(*a)))
-        s.SetEnd(V(*C(*c)))
-        s.SetLayer(pcbnew.F_SilkS)
-        s.SetWidth(MM(w))
-        b.Add(s)
 
 
 def label(b, msg, x, y, em=None, angle=0.0, font=None, anchor="c", records=None):
@@ -344,7 +333,7 @@ def build():
     for ref in BOTTOM:
         to_bottom(fps[ref])
     labels = art(b)
-    b.kb2_layout = check_layout(fps)
+    check_layout(fps)
     json.dump(labels, open(os.path.join(PK.PCB_OUT, NAME + "_silk.json"), "w"), indent=1)
     return b
 

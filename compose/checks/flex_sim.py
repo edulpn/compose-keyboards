@@ -86,7 +86,7 @@ class Strip:
         n = len(z) // 3
         return z[:n], z[n:2 * n], z[2 * n:]
 
-    def fold(self, z, upto=None):
+    def fold(self, z):
         """Rigid maps of every piece: [(R, p)] for the piece before ruling 1, between 1 and 2, ..."""
         s, tau, th = self.unpack(z)
         R, p = self.R0.copy(), self.p0.copy()
@@ -146,11 +146,10 @@ class Strip:
         return z, ok, res
 
     # ---- geometry out
-    def rulings_3d(self, z, n_between=1):
+    def rulings_3d(self, z):
         """[(centre, along-ruling unit vector, normal, half length)] at every ruling and between them."""
         s, tau, _ = self.unpack(z)
         maps = self.fold(z)
-        x = self.xs(z)
         out = []
         # cross-lines: the clamped pieces' ends, the rulings, and lines between them (on their piece)
         lines = [(0, J.INS_HALF, 0.0), (0, self.a, 0.0)]      # piece 0: from the connector face (s = INS_HALF)
@@ -279,7 +278,6 @@ def run():
     VK = np.array([ws[k] + 0.25 * np.sign(ws[k]) for k in range(1, 21)])
     per_slot = {}
     data["travel"] = []
-    k_seat = st.curvature(z)
     travel_z = {}
     for d in (-1.0, -0.5, -TRAVEL_CYCLE, TRAVEL_CYCLE, 0.5):
         sv = Strip(g, half_move=d * nP)
@@ -331,7 +329,6 @@ def run():
     parts, case, _, _ = GK.parts_world(jumpers=False)
     names = ("case", "plate", "frame", "cover", "half pcb", "standoffs", "pico", "ctrl board")
     touching = ("half parts", "top parts")          # its own two connectors are among these: overlap, not distance
-    lim = {"plate": 1.0}
     shapes = [("seated", st, z, np.zeros(3))]
     shapes += [(f"travel {d:+.1f} mm", sv, zt, d * nP) for d, (sv, zt) in travel_z.items()]
     shapes += [(f"length {dl:+.1f} mm", *length_z[dl], np.zeros(3)) for dl in (-0.5, 0.5, 1.0) if length_z.get(dl)]

@@ -199,7 +199,7 @@ def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=LINE_W, seats=()):
     (print-frame polygons): the flat shoulders screw heads clamp on, inside their counterbores, which the tent
     tilts so that each layer exposes a thin crescent of them. Returns (worst patch or None, n bridges, n lips,
     n seat patches)."""
-    from shapely.geometry import Polygon, MultiPolygon
+    from shapely.geometry import Polygon
     from shapely.ops import unary_union as uu
     z0, z1 = m.bounds[0][2], m.bounds[1][2]
     zs = np.arange(z0 + layer / 2, z1, layer)
@@ -268,7 +268,7 @@ def main():
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
     plateL, frameL = C.plate2_local(), C.frame2_local()
-    plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
+    plate, frame = parts["plate"], parts["frame"]
     ctrl = {k: parts[k] for k in controller_solids()}
 
     # ---- A: interference (volume of overlap, mm3)

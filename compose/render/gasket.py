@@ -23,7 +23,7 @@ from compose import geom as G
 from compose.case import gasket as C
 from compose.controller import rev2_std as CS
 from compose.checks import gasket as K
-from compose.geom import prism, union, poly_prism
+from compose.geom import prism, union
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -247,7 +247,6 @@ def views():
                   ("hffc", 22), ("hact", 22), ("hmetal", 22), ("hhead", 22)):
         ex[nm] = [0, float(n[1] * d), float(n[2] * d)]
     ex["frame"] = [0, float(n[1] * 45), float(n[2] * 45)]
-    ymid = (CT.y_pc - 0)
     P = lambda x, y, z: list(G.apply(G.M_PW, (x, y, z)))
     jc = np.array(G.apply(G.M_PW, (-CS.VFFC_SLOT_X - 4.0, CT.y_pc - CS.VFFC_Y0, CT.board_top + 5.0)))  # left jumper
     from compose.pcb import rev2_half as H2
