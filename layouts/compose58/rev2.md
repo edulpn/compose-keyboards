@@ -50,7 +50,7 @@ How it works: [the gasket-mount case](../../docs/gasket-case.md).
 | M3 × 5 × 4 heat-set inserts (12 in the frames, 4 in the controller posts) | 16 |
 | M3 × 12 male–female hex standoffs, 5 or 5.5 mm across flats (controller) | 4 |
 | foam weatherstrip tape, closed-cell EPDM/neoprene, self-adhesive, 1/8″ × 3/8″ (3 × 10 mm), ~0.4 m | 1 roll |
-| rubber bumpons, 10 mm | as rev 1 |
+| rubber bumpons, 10 mm | 8 |
 
 ## The half boards
 
