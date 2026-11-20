@@ -17,6 +17,7 @@ What is checked
      than 45 degrees off the bed (short bridges over holes allowed). Every part's size on the bed is printed;
      the tub's has to be the one its layout's page quotes (layouts/<layout>/rev2.md)
 """
+import pathlib
 import os
 import sys
 import json
@@ -43,9 +44,11 @@ def rec(name, ok, val="", warn=False):
 
 
 def vol(a, b):
+    """The volume two solids share. Whatever the kernel fails with, the overlap was not measured: nan, which no
+    check passes on, so the build stops there instead of on the kernel's error."""
     try:
         return a.intersect(b).Volume()
-    except Exception:
+    except Exception:          # noqa: BLE001  (the kernel raises its own classes, and any of them means the same here)
         return float("nan")
 
 
@@ -199,14 +202,14 @@ def overhangs(m, layer=0.2, bridge_max=12.0, lip_max=LINE_W, seats=()):
     (print-frame polygons): the flat shoulders screw heads clamp on, inside their counterbores, which the tent
     tilts so that each layer exposes a thin crescent of them. Returns (worst patch or None, n bridges, n lips,
     n seat patches)."""
-    from shapely.geometry import Polygon, MultiPolygon
+    from shapely.geometry import Polygon
     from shapely.ops import unary_union as uu
     z0, z1 = m.bounds[0][2], m.bounds[1][2]
     zs = np.arange(z0 + layer / 2, z1, layer)
     secs = m.section_multiplane(plane_origin=[0, 0, 0], plane_normal=[0, 0, 1], heights=zs)
     prev, worst, n_br, n_thin, n_seat = None, None, 0, 0, 0
     seat_u = uu(list(seats)) if seats else Polygon()
-    for z, s in zip(zs, secs):
+    for z, s in zip(zs, secs, strict=True):
         cur = uu([p for p in s.polygons_full]) if s is not None else Polygon()
         cur = cur.buffer(0)
         if prev is not None and not cur.is_empty:
@@ -268,7 +271,7 @@ def main():
     jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
     plateL, frameL = C.plate2_local(), C.frame2_local()
-    plate, frame, cover = parts["plate"], parts["frame"], parts["cover"]
+    plate, frame = parts["plate"], parts["frame"]
     ctrl = {k: parts[k] for k in controller_solids()}
 
     # ---- A: interference (volume of overlap, mm3)
@@ -402,7 +405,7 @@ def main():
             size, page = f"{w:.0f} × {d:.0f} mm", f"layouts/{PR.LAYOUT}/rev2.md"
             path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), page)
             if os.path.isfile(path):
-                rec(f"F {f}: its size on the bed is the one {page} gives", size in open(path).read(),
+                rec(f"F {f}: its size on the bed is the one {page} gives", size in pathlib.Path(path).read_text(),
                     f"{size} ({w:.1f} × {d:.1f}, {h:.1f} tall)")
             else:
                 print(f"      F {f}: {size} on the bed ({w:.1f} × {d:.1f}, {h:.1f} tall); no {page} to hold to it", flush=True)
@@ -421,7 +424,7 @@ def main():
             f"{n_br} bridges, {n_thin} thin lips" + (f", {n_seat} patches on the {len(seats)} screw seats" if seats else "")
             + ("" if worst is None else f"; unsupported {worst}"))
 
-    json.dump(RES, open(os.path.join(OUT, "checks2.json"), "w"), indent=1)
+    pathlib.Path(os.path.join(OUT, "checks2.json")).write_text(json.dumps(RES, indent=1))
     n_f = sum(r["result"] == "FAIL" for r in RES)
     print(f"\n{len(RES)} checks, {n_f} FAIL, {sum(r['result'] == 'WARN' for r in RES)} WARN")
     return n_f

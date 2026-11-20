@@ -79,7 +79,7 @@ def half_rev2(f, s):
 
 
 def row4(f, s, slot):
-    L = lambda k, x, y: H.fp2local(k, x, y)
+    L = H.fp2local
     n = np.array(s.ffc.n)
     keys = [ks for ks in s.keys if ks.row == 4]
     inner = max(keys, key=lambda ks: ks.k.x)                       # the key beside the inner column
@@ -119,7 +119,7 @@ def dnets(f, s):
     router lays it on a board it finishes. The pad beside the diode goes straight to the anode on its own face,
     and on over the top of the switch, still on that face, to a via above the other pad. The front copper at
     the right-hand edge of every key stays clear for the column's trunk, which the router runs there."""
-    L = lambda k, x, y: H.fp2local(k, x, y)
+    L = H.fp2local
     px, py = PR.HS_PAD1[0]                                        # the B pad; the F pad is at -px
     for ks in s.keys:
         k, net = ks.k, f"D{ks.i + 1}"
@@ -145,7 +145,7 @@ def dnets(f, s):
 
 
 def rail(f, s, slot):
-    L = lambda k, x, y: H.fp2local(k, x, y)
+    L = H.fp2local
     n = np.array(s.ffc.n)
     px, py = H.LED_PAD_X, H.LED_AT[1] - H.LED_PAD_Y               # the LEDs' 5 V pads: +px on F, -px on B
     capx, capy = H.CAP_AT[0], H.CAP_AT[1] - 1.475                 # the capacitors' 5 V pads: +capx on B, -capx on F
@@ -173,7 +173,7 @@ def rail(f, s, slot):
     inner = rows[4].pop()                                         # the key beside the inner column
     thumbs = rows[4]
     for r in range(5):                                            # along each row, across the column gaps
-        for a, b in zip(rows[r][:-1], rows[r][1:]):
+        for a, b in zip(rows[r][:-1], rows[r][1:], strict=True):
             if GAP_FACE == "B":
                 via(end(a, 1))
                 via(end(b, -1))

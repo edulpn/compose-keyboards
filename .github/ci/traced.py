@@ -24,7 +24,7 @@ PACKAGES = ("compose", "layouts", "pointers")        # the repository's importab
 def _tracked_tops():
     """The repository's top-level names as git has them (None when git can't say: then every folder counts)."""
     try:
-        r = subprocess.run(["git", "-C", ROOT, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", ROOT, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True, check=False)
     except OSError:
         return None
     return (set(r.stdout.split("\n")) - {""}) if r.returncode == 0 and r.stdout.strip() else None

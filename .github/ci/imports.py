@@ -18,6 +18,7 @@ ngspice) and checks, wherever they are written, at the top of a file or inside a
 This is what breaks when code moves between modules, and it covers the commands no CI job runs (the renders).
 It does not check calls, arguments or names built at run time (importlib.import_module with a computed name).
 """
+import pathlib
 import ast
 import os
 import sys
@@ -116,7 +117,7 @@ class Repo:
     def __init__(self, root):
         self.root = root
         self.mods = modules(root)
-        self.trees = {m: ast.parse(open(p, encoding="utf-8").read(), p) for m, p in self.mods.items()}
+        self.trees = {m: ast.parse(pathlib.Path(p).read_text(encoding="utf-8"), p) for m, p in self.mods.items()}
         self.names, self.open = {}, set()
         for m in self.mods:
             self._names(m, ())

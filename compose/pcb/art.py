@@ -9,7 +9,6 @@ Geometry is in plate-local coords, y up.
 B-face items are mirrored about their own box so they read correctly from behind.
 """
 import math
-import numpy as np
 from shapely.geometry import Point, LineString, box as sbox
 from shapely.affinity import scale as sscale, translate as strans
 from shapely.ops import unary_union
@@ -76,7 +75,7 @@ def hex_lattice(region, cell, origin=(0.0, 0.0)):
             cx = origin[0] + i * 1.5 * R
             cy = origin[1] + j * cell + (cell / 2 if i % 2 else 0)
             pts = [(cx + R * math.cos(math.radians(60 * k)), cy + R * math.sin(math.radians(60 * k))) for k in range(7)]
-            for a, b in zip(pts[:-1], pts[1:]):
+            for a, b in zip(pts[:-1], pts[1:], strict=True):
                 key = tuple(sorted(((round(a[0], 3), round(a[1], 3)), (round(b[0], 3), round(b[1], 3)))))
                 if key in seen:
                     continue
@@ -135,7 +134,6 @@ def plan_half_art(plan, variant="hotswap"):
         g = strans(g, x0 - gx0 + (x1 - x0 - (gx1 - gx0)) / 2, y0 + 2.4 - gy0 + (3.0 - (gy1 - gy0)) / 2)
         a.silk[f].append(g if f == "F" else mirror_about(g, (x0 + x1) / 2))
         a.silk[f].append(credit if f == "F" else mirror_about(credit, (x0 + x1) / 2))
-    a.text_em = (k1, k2)
     a.boxes.append(bb)
 
     # 3. build labels, per face (the same board is lhs from one face, rhs from the other)

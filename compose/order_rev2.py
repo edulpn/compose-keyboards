@@ -12,6 +12,7 @@ from CTRL_OUT (default out/controller). It doesn't re-route anything; run the bu
 In the order folder the keyboard's own boards carry its layout's name (compose58_half_rev2_hotswap_JLCPCB.zip), so
 that two keyboards' orders can sit side by side; the controller's zip does not, being the same board under each.
 """
+import pathlib
 import os
 import shutil
 import sys
@@ -112,7 +113,7 @@ def main():
           "docs/controller-rev2.md.\n",
           "| zip | per keyboard | JLCPCB |", "|---|---|---|"]
     md += [f"| `{s}_JLCPCB.zip` | {q} | {n} |" for s, q, n in rows]
-    open(os.path.join(dst, "ORDER.md"), "w").write("\n".join(md) + "\n")
+    pathlib.Path(os.path.join(dst, "ORDER.md")).write_text("\n".join(md) + "\n")
     print(f"\n{dst}: {len(rows)} zips ({', '.join(r[0] for r in rows)}) + ORDER.md" + ("" if not bad else f"; {len(bad)} problem(s): " + "; ".join(bad)))
     return len(bad)
 

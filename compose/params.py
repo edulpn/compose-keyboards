@@ -32,7 +32,7 @@ if LAYOUT is not None:
         if _e.name != f"layouts.{LAYOUT}.keyboard":
             raise
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, and its "
-                         f"angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.")
+                         f"angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.") from None
     _missing = [_n for _n in _KB_NAMES if not hasattr(_KB, _n)]
     if _missing:
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/compose58/keyboard.py shows "
@@ -45,7 +45,6 @@ _K = (lambda name: getattr(_KB, name) if _KB else None)      # a value of the ke
 # ---------------------------------------------------------------- layout
 KEY_PITCH = 19.05            # 1u
 KEYCAP_SIZE = 18.0           # 1u cap footprint (used for spacing checks/renders)
-MX_STEM_TOP = 10.44          # MX stem top above the plate surface at rest (Cherry MX 3D model, kiswitch library)
 PLATE_MARGIN = 10.0          # key cell edge -> outer edge of plate/case
 OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
@@ -96,7 +95,6 @@ USB_NOTCH_BELOW_PCB = 2.5    # opening starts this far below the board underside
 
 # ---------------------------------------------------------------- hardware
 M3_CLEAR = 3.4
-M3_HEAD_D = 5.7              # button head
 M3_HEAD_H = 1.65
 M3_CBORE_D = 6.4             # counterbore for the head
 M3_INSERT_D = 4.6            # hole for M3 x 5 x 4 heat-set inserts
@@ -187,7 +185,6 @@ INNER_SEATS_P = ((-3.0, -13.0), (-48.5, -58.5))   # inner-edge pad pairs: P-fram
 INNER_SEAT_IN = 4.5              # inner seat width under the flange, from the plate edge
 PCB_INSET = LEDGE_W + 0.5        # half board outline inside the plate outline
 JUMPER_W = 21.0                  # rev 2 flex jumper width (20 x 1.0 mm pitch + 1 mm margins: both connectors' N+1)
-COVER_UPSTOP = 1.0               # cover over the plates' inner flange: clear of it by this (it doesn't clamp)
 # middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
 # standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
 # Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).

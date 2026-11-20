@@ -18,6 +18,7 @@ run's dependency record is the same as if it had routed. Prints the verdict and 
 reuse=true|false to $GITHUB_OUTPUT and a line to the job summary (quiet=1: only if it won't be reused); exits
 0 either way.
 """
+import pathlib
 import hashlib
 import json
 import os
@@ -43,13 +44,13 @@ def fingerprint(entry, root=ROOT):
         return "dir:" + hashlib.sha256("\n".join(names).encode()).hexdigest()[:16]
     if not os.path.isfile(p):
         return "absent"
-    return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
+    return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()[:16]
 
 
 def tracked_tops(root=ROOT):
     """The repository's top-level names (git's, else whatever is there but out*/ and the hidden folders)."""
     try:
-        r = subprocess.run(["git", "-C", root, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", root, "ls-tree", "--name-only", "HEAD"], capture_output=True, text=True, check=False)
         names = set(r.stdout.split("\n")) - {""} if r.returncode == 0 else set()
     except OSError:
         names = set()
@@ -101,10 +102,10 @@ def main():
     extra = dict(a.split("=", 1) for a in args if "=" in a)
     args = [a for a in args if "=" not in a]
     if cmd == "record":
-        deps = [l.strip() for l in open(args[0]) if l.strip()]
+        deps = [l.strip() for l in pathlib.Path(args[0]).read_text().split("\n") if l.strip()]
         m = {"inputs": inputs(deps), "extra": extra}
         os.makedirs(os.path.dirname(os.path.abspath(args[1])), exist_ok=True)
-        json.dump(m, open(args[1], "w"), indent=1, sort_keys=True)
+        pathlib.Path(args[1]).write_text(json.dumps(m, indent=1, sort_keys=True))
         same = {"inputs": m["inputs"], "extra": {k: v for k, v in extra.items() if k not in ("commit", "run")}}
         key = hashlib.sha256(json.dumps(same, sort_keys=True).encode()).hexdigest()[:20]
         with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as o:
@@ -113,19 +114,22 @@ def main():
     elif cmd == "verify":
         what, deps_out, quiet = extra.pop("board", "the board"), extra.pop("deps", None), extra.pop("quiet", None)
         if not os.path.exists(args[0]):
-            return _out(False, f"**{what}**: routed (no routed board in the cache)")
-        m = json.load(open(args[0]))
+            _out(False, f"**{what}**: routed (no routed board in the cache)")
+            return
+        m = json.loads(pathlib.Path(args[0]).read_text())
         why = compare(m, extra)
         src = m.get("extra", {}).get("commit", "?")[:9]
         if why:
-            return _out(False, f"**{what}**: routed (the cached board from {src} no longer matches: "
-                               + "; ".join(why[:6]) + (" ..." if len(why) > 6 else "") + ")")
+            _out(False, f"**{what}**: routed (the cached board from {src} no longer matches: "
+                        + "; ".join(why[:6]) + (" ..." if len(why) > 6 else "") + ")")
+            return
         if deps_out:
             os.makedirs(os.path.dirname(os.path.abspath(deps_out)), exist_ok=True)
             with open(deps_out, "a") as o:
                 o.write("".join(e + "\n" for e in sorted(m["inputs"]) if e not in TOOLCHAIN))
         if quiet:                                            # a later call, with the toolchain's versions, reports it
-            return _out(True, "")
+            _out(True, "")
+            return
         _out(True, f"**{what}**: reused the board routed at {src} (run {m.get('extra', {}).get('run', '?')}): "
                    f"none of its {len(m['inputs'])} inputs changed")
     else:

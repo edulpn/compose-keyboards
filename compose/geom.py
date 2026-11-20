@@ -20,7 +20,7 @@ needs a clearance notch.
 import math
 import numpy as np
 import cadquery as cq
-from shapely.geometry import box as sbox, Polygon
+from shapely.geometry import box as sbox
 from shapely.geometry.polygon import orient
 from shapely.affinity import rotate as srot, translate as strans
 from shapely.ops import unary_union
@@ -204,7 +204,6 @@ def _inverse(ops):
 def L2W(shape):  return _run(shape, OPS_LP + OPS_PW)          # left local -> world
 def P2W(shape):  return _run(shape, OPS_PW)                  # bridge frame -> world
 def P2L(shape):  return _run(shape, _inverse(OPS_LP))        # bridge frame -> left local
-def W2L(shape):  return _run(shape, _inverse(OPS_LP + OPS_PW))
 
 
 def plate_normal_world(side=-1):
@@ -242,17 +241,6 @@ def bridge_stretch_local():
     """Local y range of the inner edge that faces the bridge (back, front)."""
     ay = ANCHOR[1]
     return ay, ay - PR.BRIDGE_LEN / math.cos(math.radians(PR.SPLAY_DEG))
-
-
-def bridge_zone_P(z0=-200.0, z1=200.0, reach=None):
-    """P-frame block between the bridge's back and front faces, reaching
-    `reach` mm into each half past its interface plane (default: whole
-    bridge + a few mm). Used to stop the trim lip/reveal at the bridge faces."""
-    reach = PR.TRIM_LIP_T + 8.0 if reach is None else reach      # the back edge meets the bridge face at a shallow angle
-    yb, yf = 0.0, -PR.BRIDGE_LEN
-    w = lambda y: abs(interface_x(y, Z0)) + reach
-    pts = [(-w(yb), yb), (w(yb), yb), (w(yf), yf), (-w(yf), yf)]
-    return prism(pts, z0, z1)
 
 
 def bridge_zone_local(grow=0.0, reach=None, z0=-50.0, z1=50.0):

@@ -1,4 +1,5 @@
 """Checks the reuse decision in routed.py: python3 .github/ci/test_routed.py (exit 1 on a wrong decision)."""
+import pathlib
 import os
 import sys
 import tempfile
@@ -19,7 +20,7 @@ TOPS = {"compose", "layouts", "docs", ".github", "requirements.txt"}
 def write(root, path, text):
     p = os.path.join(root, path)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    open(p, "w").write(text)
+    pathlib.Path(p).write_text(text)
 
 
 # (what happens after the route, extra at verify, reused?)

@@ -15,7 +15,6 @@ Rev 2 electronics as 3D models for the renders, placed from the routed boards an
 Dimensions from the parts' datasheets (Molex 200528 / 52610 drawings, Kailh CPG151101S11, OPSCO SK6812MINI-E,
 DO-35, EIA 1206). Returns {material: [solids]}; the render colours each material.
 """
-import math
 import numpy as np
 import cadquery as cq
 from shapely.geometry import Polygon

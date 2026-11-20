@@ -17,6 +17,7 @@ Track lengths, widths and parallel runs come from the routed board (outdir/pcb/c
 parts are modelled from their datasheet limits (sources in the report). Jumper and half-board values are
 swept over generous ranges (the jumper up to 100 mm, so other layouts' jumpers are covered too).
 """
+import pathlib
 import os
 import sys
 import math
@@ -70,7 +71,7 @@ def spice_batch(name, jobs):
         os.remove(os.path.join(DECKS, f"{name}.{i}.cir"))
     if jobs:
         body, vecs, kw = jobs[-1]
-        open(os.path.join(DECKS, name + ".cir"), "w").write(
+        pathlib.Path(os.path.join(DECKS, name + ".cir")).write_text(
             _deck(name, body, vecs, kw.get("tran"), kw.get("op", False), os.path.join(DECKS, name + ".dat")))
     return out
 
@@ -80,14 +81,14 @@ def spice(name, body, vecs, tran=None, op=False):
     deck = os.path.join(DECKS, name + ".cir")
     data = os.path.join(DECKS, name + ".dat")
     txt = _deck(name, body, vecs, tran, op, data)
-    open(deck, "w").write(txt)
-    r = subprocess.run(["ngspice", "-b", deck], capture_output=True, text=True, timeout=60)
+    pathlib.Path(deck).write_text(txt)
+    r = subprocess.run(["ngspice", "-b", deck], capture_output=True, text=True, timeout=60, check=False)
     if not os.path.exists(data) or "error" in r.stdout.lower() and "no error" not in r.stdout.lower():
         if not os.path.exists(data):
             raise RuntimeError(f"ngspice failed on {name}:\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}")
     if op:
         vals = {}
-        for line in open(data):
+        for line in pathlib.Path(data).read_text().split("\n"):
             if "=" in line:
                 k, v = line.split("=")
                 vals[k.strip()] = float(v)
@@ -194,7 +195,7 @@ def power_paths():
         each = PRE.rail_resistance(segs.get(net, []), vias.get(net, []), [(shape, faces) for _, _, _, shape, faces in mine],
                                    feeds, [at for _, at in loads], 0.6, 0.3)[2]
         best = {}
-        for (key, _), r in zip(loads, each):
+        for (key, _), r in zip(loads, each, strict=False):
             best[key] = min(best.get(key, math.inf), r)
         return max(best.values())
     pico, conn, fuse = (lambda r: r.startswith("U1")), (lambda r: r in ("JL", "JR")), (lambda r: r == "F1")
@@ -306,7 +307,7 @@ def led_input(node, vdd_node, tag):
             f"RL{tag} {node} 0 10meg\n")
 
 
-def analyse_bits(t, v, vdd, bits, label):
+def analyse_bits(t, v, vdd, bits):
     """Receiver-side pulse widths at the WS2812 thresholds; returns (ok, details)."""
     vih, vil = WS["VIH_K"] * vdd, WS["VIL_K"] * vdd
     up = crossings(t, v, vih)
@@ -378,9 +379,9 @@ CJH hj 0 1.5p
     ress = spice_batch("A_rgb", [(deck(vc, vf, rg, rh, tpd, zp, zf, lf, lh), ["v(din)", "v(buf)", "v(u_in)"],
                                   dict(tran="0.5n 8.2u"))
                                  for (vc, vf), rg, (rh, tpd), zp, zf, lf, lh in corners])
-    for ((vc, vf), rg, (rh, tpd), zp, zf, lf, lh), res in zip(corners, ress):
+    for ((vc, vf), rg, (rh, tpd), zp, zf, lf, lh), res in zip(corners, ress, strict=True):
         n += 1
-        ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits, "A")
+        ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits)
         over = d["vmax"] - vf
         under = -d["vmin"]
         okc = ok and over < 0.5 and under < 0.5
@@ -409,7 +410,7 @@ CJH hj 0 1.5p
     nd, okd = 0, 0
     corners = list(itertools.product(rails, RP["R_DRV"], FFC["Z0"], FFC["LEN"]))
 
-    def deck_direct(vc, vf, rg, zf, lf):
+    def deck_direct(vf, rg, zf, lf):
         return MODELS + f"""
 VFAR vfar 0 {vf}
 VG g 0 {bit_pwl(bits, 3.3)}
@@ -420,11 +421,11 @@ R3 gp r3o 330
 {tline('hp', 'hj', 'din', 120, 0.08 * PCBZ['TD_PER_M'])}
 {led_input('din', 'vfar', 'led')}
 """
-    ress = spice_batch("A_direct", [(deck_direct(vc, vf, rg, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
+    ress = spice_batch("A_direct", [(deck_direct(vf, rg, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
                                     for (vc, vf), rg, zf, lf in corners])
-    for ((vc, vf), rg, zf, lf), res in zip(corners, ress):
+    for ((vc, vf), rg, zf, lf), res in zip(corners, ress, strict=True):
         nd += 1
-        ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits, "A2")
+        ok, d = analyse_bits(res["t"], res["v(din)"], vf, bits)
         okd += ok
     rep(f"- (comparison only) without the buffer, 3.3 V data meets the LED's 0.7 x VDD threshold in just {okd}/{nd} "
         f"corners - the ones where the LED rail has sagged to 4.3 V. The 74HCT125 is what makes the RGB option in spec.")
@@ -488,7 +489,7 @@ R7 hbuf r7o 330
     ress = spice_batch("B_hop", [(deck(v, rd, lr, zf, lf, rh, tpd), ["v(din)", "v(hin)", "v(c2)", "v(dout)"],
                                   dict(tran="0.5n 8.2u"))
                                  for v, rd, lr, zf, lf, (rh, tpd) in corners])
-    for (v, rd, lr, zf, lf, (rh, tpd)), res in zip(corners, ress):
+    for (v, rd, lr, zf, lf, (rh, tpd)), res in zip(corners, ress, strict=True):
         n += 1
         t = res["t"]
         hin = res["v(hin)"]
@@ -496,7 +497,7 @@ R7 hbuf r7o 330
         c_hi, c_lo = crossings(t, hin, HCT["VIH"]), crossings(t, hin, HCT["VIL"])
         ok_in = len(c_hi) == 2 * len(bits) and len(c_lo) == 2 * len(bits)
         i_clamp = float(np.max(np.abs(res["v(c2)"] - hin)) / 220.0)          # upper bound on clamp current
-        ok, d = analyse_bits(t, res["v(din)"], v, bits, "B")
+        ok, d = analyse_bits(t, res["v(din)"], v, bits)
         over, under = d["vmax"] - v, -d["vmin"]
         ok_out = ok and over < 0.5 and under < 0.5
         n_in += ok_in
@@ -539,9 +540,9 @@ RD g dout {rd}
 """
     ress = spice_batch("B_direct", [(deck_direct(v, rd, lr, zf, lf), ["v(din)"], dict(tran="0.5n 8.2u"))
                                     for v, rd, lr, zf, lf in corners])
-    for (v, rd, lr, zf, lf), res in zip(corners, ress):
+    for (v, rd, lr, zf, lf), res in zip(corners, ress, strict=True):
         nd += 1
-        ok, d = analyse_bits(res["t"], res["v(din)"], v, bits, "B2")
+        ok, d = analyse_bits(res["t"], res["v(din)"], v, bits)
         o = max(d["vmax"] - v, -d["vmin"])
         okd += ok and o < 0.5
         worst_d = max(worst_d, o)
@@ -568,7 +569,7 @@ VCTL ctl 0 PULSE(1 0 1u 1n 1n 20u 40u)
 .model SWMOD SW(RON=60 ROFF=1e9 VT=0.5 VH=0.1)
 """
     ress = spice_batch("C_i2c", [(deck(rpar_(rx), cb), ["v(sda)"], dict(tran="2n 6u")) for rx, cb in corners])
-    for (rx, cb), res in zip(corners, ress):
+    for (rx, cb), res in zip(corners, ress, strict=True):
         rpar = rpar_(rx)
         t, v = res["t"], res["v(sda)"]
         c30 = [c[0] for c in crossings(t, v, 0.3 * 3.3) if c[1] > 0]
@@ -661,7 +662,7 @@ LCAB cl vbus 2u
 DPICO vbus vsys DSCH
 CPICO vsys 0 10u
 RPICO vsys 0 {5.0 / 0.03:.1f}
-""" if c2 != "ref" else MODELS + f"""
+""" if c2 != "ref" else MODELS + """
 VH hsrc 0 5.0
 RHS hsrc hs1 0.1
 LHS hs1 hport 5u
@@ -796,7 +797,7 @@ CC col 0 {c_col}
     ress = spice_batch("F1_scan", [(deck(rdrv, rpu, *caps(lf, lhr, lhc, cpm, cpp)), ["v(col)", "v(row)"],
                                     dict(tran="2n 40u"))
                                    for rdrv, rpu, lf, (lhr, lhc), cpm, cpp in sweep])
-    for (rdrv, rpu, lf, (lhr, lhc), cpm, cpp), r in zip(sweep, ress):
+    for (rdrv, rpu, lf, (lhr, lhc), cpm, cpp), r in zip(sweep, ress, strict=True):
         corners += 1
         c_row, c_col = caps(lf, lhr, lhc, cpm, cpp)
         t, vc = r["t"], r["v(col)"]
@@ -884,7 +885,7 @@ DCG 0 vic DCLAMP
 """ + MODELS
     ress = spice_batch("F2_xtalk", [(deck(kind, cm, c_vic), ["v(vic)"], dict(tran="0.5n 4u"))
                                     for name, kind, vk, cm, c_vic in cases])
-    for (name, kind, vk, cm, c_vic), r in zip(cases, ress):
+    for (name, kind, vk, cm, c_vic), r in zip(cases, ress, strict=True):
         t, v = r["t"], r["v(vic)"]
         vmin = float(v[(t > 0.9e-6) & (t < 3e-6)].min())
         vs = float(np.interp(1e-6 + QMK["SELECT"], t, v))
@@ -945,8 +946,8 @@ def main():
         rep(f"- FAIL: {f}")
     for w in WARNS:
         rep(f"- WARN: {w}")
-    open(os.path.join(SIM, "report.md"), "w").write("\n".join(REPORT) + "\n")
-    json.dump(dict(fails=FAILS, warns=WARNS, brightness_cap=cap), open(os.path.join(SIM, "summary.json"), "w"), indent=1)
+    pathlib.Path(os.path.join(SIM, "report.md")).write_text("\n".join(REPORT) + "\n")
+    pathlib.Path(os.path.join(SIM, "summary.json")).write_text(json.dumps(dict(fails=FAILS, warns=WARNS, brightness_cap=cap), indent=1))
     return len(FAILS)
 
 

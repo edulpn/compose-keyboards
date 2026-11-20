@@ -102,7 +102,7 @@ class Field:
     def track(self, net, face, pts, w):
         """Straight segments through pts on one face."""
         pts = [(float(x), float(y)) for x, y in pts]
-        for a, b in zip(pts[:-1], pts[1:]):
+        for a, b in zip(pts[:-1], pts[1:], strict=True):
             if math.dist(a, b) > 1e-9:
                 self.tracks.append((net, face, a, b, float(w)))
         return pts[-1]
@@ -156,7 +156,7 @@ class Field:
 
     def through(self, net, face, pts, w, **kw):
         """route() through a list of points, in order."""
-        for a, b in zip(pts[:-1], pts[1:]):
+        for a, b in zip(pts[:-1], pts[1:], strict=True):
             self.route(net, face, a, b, w, **kw)
         return pts[-1]
 
@@ -177,7 +177,7 @@ class Field:
                 if cut:
                     again = True
                     cut.sort(key=lambda p: math.dist(a, p))
-                    for p, q in zip([a] + cut, cut + [b]):
+                    for p, q in zip([a] + cut, cut + [b], strict=True):
                         out.append((n, f, p, q, w))
                 else:
                     out.append((n, f, a, b, w))
@@ -346,7 +346,7 @@ def _astar(free, a, b, step, bounds):
     nodes.reverse()
     # corners only: a point stays where the direction after it changes
     corners = [xy(nodes[0][0], nodes[0][1])]
-    for m, n in zip(nodes[1:], nodes[2:] + [None]):
+    for m, n in zip(nodes[1:], nodes[2:] + [None], strict=True):
         if n is None or n[2] != m[2]:
             corners.append(xy(m[0], m[1]))
     while len(corners) >= 2 and free.covers(LineString([corners[-2], b])):     # the last leg straight onto b
@@ -429,7 +429,7 @@ def rail_resistance(segs, vias, pads, feeds, loads, via_d, via_drill, copper_t=3
         L = math.dist(a, b)
         ww = w if width is None else width
         pp = sorted(pts_on[k])
-        for (u1, n1), (u2, n2) in zip(pp[:-1], pp[1:]):
+        for (u1, n1), (u2, n2) in zip(pp[:-1], pp[1:], strict=True):
             if u2 - u1 < 1e-9:
                 tie(n1, n2)
             else:
@@ -503,7 +503,7 @@ def place(board, field, K):
         try:
             nets[n]
         except (KeyError, IndexError):
-            raise RuntimeError(f"pre-route: the board has no net {n}")
+            raise RuntimeError(f"pre-route: the board has no net {n}") from None
     for n, f, a, b, w in field.segments():
         t = pcbnew.PCB_TRACK(board)
         t.SetStart(PK.V(*K(a)))
@@ -626,8 +626,9 @@ def dsn_fix(t, nets, tracks, vias):
         for m in re.finditer(r"\s*\(wire ", wiring):
             if m.start() < pos:
                 continue
-            depth, e = 0, m.end() - len("(wire ")
-            for e in range(e, len(wiring)):
+            depth, start = 0, m.end() - len("(wire ")
+            e = start
+            for e in range(start, len(wiring)):
                 depth += (wiring[e] == "(") - (wiring[e] == ")")
                 if depth == 0:
                     break

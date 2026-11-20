@@ -12,11 +12,11 @@ Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle
 
 Gasket stack (local z): pad seat LEDGE_TOP | pad | flange FLANGE_Z0..+FLANGE_T | pad | frame FRAME_LIP_Z.
 """
+from compose import must
 import math
 import numpy as np
 import cadquery as cq
 from shapely.geometry import Point, LineString, Polygon, box as sbox
-from shapely.ops import unary_union
 from shapely.geometry.polygon import orient as _orient
 from compose import params as PR
 from compose import geom as G
@@ -99,7 +99,6 @@ def gasket_layout():
         if ok:
             chosen.append(min(ok, key=lambda q: abs(q[0] - d0)))
     s.tabs = [q[1:] for q in sorted(chosen)]
-    s.tab_d = [q[0] for q in sorted(chosen)]
     # inner edge (along the bridge): no screws; a pad pair at each end of the stretch, on seats that stand
     # straight up from the floor (P-vertical, so they don't lean into the controller), the frame's inner
     # rail holds the upper pad. Pads are given by local (x, y) centre with the long side along local y.
@@ -137,7 +136,6 @@ def inner_seat_P(c):
     cap = _run_LP(poly_prism(fp, PR.LEDGE_TOP - PR.LEDGE_T, PR.LEDGE_TOP))
     pts_b = [G.apply(G.M_LP, (x, y, PR.LEDGE_TOP - PR.LEDGE_T)) for x, y in fp.exterior.coords[:-1]]
     pts_t = [G.apply(G.M_LP, (x, y, PR.LEDGE_TOP)) for x, y in fp.exterior.coords[:-1]]
-    hull = unary_union([Point(p[0], p[1]) for p in pts_b + pts_t]).convex_hull
     inner = Polygon([(p[0], p[1]) for p in pts_b]).intersection(Polygon([(p[0], p[1]) for p in pts_t]))
     ztop = min(p[2] for p in pts_t) - 0.3
     col = poly_prism(inner.buffer(-0.35, join_style="mitre"), DEEP, ztop)   # a little inside the cap: clear of the half board
@@ -350,7 +348,7 @@ def case2_world():
     sol = body.Solids()
     if len(sol) > 1:
         big = max(sol, key=lambda s_: s_.Volume())
-        assert all(s_.Volume() < 2.0 for s_ in sol if s_ is not big), "case splits into real pieces"
+        must(all(s_.Volume() < 2.0 for s_ in sol if s_ is not big), "case splits into real pieces")
         body = big
     return body
 

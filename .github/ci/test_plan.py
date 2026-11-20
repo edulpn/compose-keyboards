@@ -4,6 +4,7 @@ The repository is built the way a pull request reaches the plan job: main with a
 gained after the record, a branch from there, and HEAD on the merge of the two (what Actions checks out). It holds
 two layouts: compose58 (its half boards on a router that routes the same way every run) and other40 (the default
 router). Each case names the suites that have to run, all others skipped."""
+import pathlib
 import ast
 import json
 import os
@@ -46,7 +47,7 @@ ALL = C58 | O40 | {"controller"}
 
 def git(repo, *args):
     r = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", *args],
-                       cwd=repo, capture_output=True, text=True)
+                       cwd=repo, capture_output=True, text=True, check=False)
     if r.returncode:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr}")
     return r.stdout.strip()
@@ -56,7 +57,7 @@ def commit(repo, files, msg):
     for path, text in files.items():
         full = os.path.join(repo, path)
         os.makedirs(os.path.dirname(full), exist_ok=True)
-        open(full, "w").write(text)
+        pathlib.Path(full).write_text(text)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", msg)
     return git(repo, "rev-parse", "HEAD")
@@ -65,13 +66,13 @@ def commit(repo, files, msg):
 def plan(repo, deps_dir, record, event="pull_request", base_ref="main"):
     """What plan.py hands the workflow: (the suites that run, the half-board jobs as {layout: jobs per board}).
     Stops when the true|false switches and the lists disagree."""
-    open(os.path.join(deps_dir, "SHA"), "w").write(record + "\n")
+    pathlib.Path(os.path.join(deps_dir, "SHA")).write_text(record + "\n")
     out = os.path.join(deps_dir, "out.txt")
     open(out, "w").close()
     env = dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_BASE_REF=base_ref, GITHUB_OUTPUT=out, GITHUB_STEP_SUMMARY=os.devnull)
     r = subprocess.run([sys.executable, PLAN, deps_dir], cwd=repo, env=env, capture_output=True, text=True, check=True)
     plan.said = r.stdout
-    got = dict(l.strip().split("=", 1) for l in open(out) if l.strip())
+    got = dict(l.strip().split("=", 1) for l in pathlib.Path(out).read_text().split("\n") if l.strip())
     runs = set()
     for k in ("rev2", "boards"):
         names = json.loads(got[k])
@@ -92,10 +93,10 @@ def plan(repo, deps_dir, record, event="pull_request", base_ref="main"):
 
 def same_every_run():
     """The routers compose/pcb/toolbox.py says route the same job the same way every time (seeds=True)."""
-    tree = ast.parse(open(os.path.join(ROOT, "compose", "pcb", "toolbox.py")).read())
+    tree = ast.parse(pathlib.Path(os.path.join(ROOT, "compose", "pcb", "toolbox.py")).read_text())
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "ROUTERS" for t in node.targets):
-            return {k.value for k, v in zip(node.value.keys, node.value.values)
+            return {k.value for k, v in zip(node.value.keys, node.value.values, strict=True)
                     if any(kw.arg == "seeds" and kw.value.value is True for kw in v.keywords)}
     return None
 
@@ -117,7 +118,7 @@ def main():
         repo, deps = os.path.join(tmp, "repo"), os.path.join(tmp, "deps")
         os.makedirs(repo); os.makedirs(deps)
         for s, files in DEPS.items():
-            open(os.path.join(deps, s + ".txt"), "w").write("\n".join(files) + "\n")
+            pathlib.Path(os.path.join(deps, s + ".txt")).write_text("\n".join(files) + "\n")
         git(repo, "init", "-q", "-b", "main")
         recorded = commit(repo, FILES, "recorded")
         moved = commit(repo, {"compose/firmware_rev2.py": "2\n"}, "main gains a rev 2 change after the record")
@@ -174,12 +175,12 @@ def main():
         # names (here an older one, as GitHub's can be); the event's only where there is no merge and no branch
         pull_request(doc)
         env = dict(os.environ, GITHUB_BASE_REF="main", BASE_SHA=recorded)
-        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True).stdout.strip()
+        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True, check=False).stdout.strip()
         bad += got != moved
         print(("ok    " if got == moved else "WRONG ") + "the base of a merge is its first parent, whatever the event says")
         git(repo, "checkout", "-q", "--detach", "pr")
         env = dict(os.environ, GITHUB_BASE_REF="", BASE_SHA=recorded)
-        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True).stdout.strip()
+        got = subprocess.run([sys.executable, BASE], cwd=repo, env=env, capture_output=True, text=True, check=False).stdout.strip()
         bad += got != recorded
         print(("ok    " if got == recorded else "WRONG ") + "no merge and no base branch: the event's base")
         # not on a merge and no base branch to find: everything since the record counts, as it did before

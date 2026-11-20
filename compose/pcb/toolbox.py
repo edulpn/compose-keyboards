@@ -8,6 +8,8 @@ The boards themselves are built elsewhere: the rev 2 half boards in
 compose.pcb.rev2_half, the jumper in compose.pcb.jumper, the controller rev 2 in compose.controller.rev2.
 A caller that writes somewhere else sets PCB_OUT here before it builds.
 """
+from compose import must
+import pathlib
 import os
 import random
 import re
@@ -88,7 +90,7 @@ def outline(board, poly, ox, oy):
     """Edge.Cuts from a shapely polygon (its holes become board cutouts); returns the segments."""
     segs = []
     rings = [list(poly.exterior.coords)] + [list(r.coords) for r in poly.interiors]
-    for a, c in ((a, c) for pts in rings for a, c in zip(pts[:-1], pts[1:])):
+    for a, c in ((a, c) for pts in rings for a, c in zip(pts[:-1], pts[1:], strict=True)):
         s = pcbnew.PCB_SHAPE(board)
         s.SetShape(pcbnew.SHAPE_T_SEGMENT)
         s.SetStart(V(*K(a, ox, oy)))
@@ -151,7 +153,7 @@ def add_pad(fp, num, kind, shape, pos, size, drill=None, layers=None, angle=0.0,
 
 def silk_poly(fp, pts, layer, w=0.12):
     """Closed polyline of footprint graphics (footprint at origin, orientation 0)."""
-    for a, c in zip(pts, pts[1:] + pts[:1]):
+    for a, c in zip(pts, pts[1:] + pts[:1], strict=True):
         s = pcbnew.FP_SHAPE(fp, pcbnew.SHAPE_T_SEGMENT)
         s.SetStart0(V(*a))
         s.SetEnd0(V(*c))
@@ -191,7 +193,7 @@ def place_by_pads(fp, na, pa, nb, pb):
     qa = pad_pos(fp, na)
     fp.Move(V(pa[0] - qa[0], pa[1] - qa[1]))
     qa, qb = pad_pos(fp, na), pad_pos(fp, nb)
-    assert math.dist(qa, pa) < 1e-3 and abs(math.atan2(qb[1] - qa[1], qb[0] - qa[0]) - want) < 1e-4, "placement"
+    must(math.dist(qa, pa) < 1e-3 and abs(math.atan2(qb[1] - qa[1], qb[0] - qa[0]) - want) < 1e-4, "placement")
 
 
 def hole_fp(board, ref, pos, d):
@@ -261,7 +263,7 @@ def add_art_half(b, art, ox, oy):
             add_poly(b, g, silk, ox, oy)
         for ln in art.lines:
             pts = list(ln.coords)
-            for a_, c_ in zip(pts[:-1], pts[1:]):
+            for a_, c_ in zip(pts[:-1], pts[1:], strict=True):
                 s = pcbnew.PCB_SHAPE(b)
                 s.SetShape(pcbnew.SHAPE_T_SEGMENT)
                 s.SetStart(V(*K(a_, ox, oy)))
@@ -295,7 +297,7 @@ def _find(node, key):
 def _router_stats(log):
     """The statistics Freerouting prints for the board it finished with (last JSON block of its log)."""
     try:
-        t = open(log).read()
+        t = pathlib.Path(log).read_text()
         i = t.rfind("\n{\n")
         return json.loads(t[i + 1:t.index("\n}\n", i) + 2]) if i >= 0 else None
     except (OSError, ValueError):
@@ -308,7 +310,7 @@ _ROUTER = {}
 def _java_major(exe):
     """(major version, first line of its banner) of a `java` executable; (0, why) if it can't be run."""
     try:
-        r = subprocess.run([exe, "-version"], capture_output=True, text=True)
+        r = subprocess.run([exe, "-version"], capture_output=True, text=True, check=False)
     except OSError:
         return 0, f"`{exe}` can't be run"
     out = (r.stderr + r.stdout).strip()
@@ -358,14 +360,14 @@ _ROUTED = {}                   # board name -> (version, seed) of its last route
 
 def _reorder_nets(dsn, seed):
     """List the nets of a Specctra file in another order (the same nets, the same pins)."""
-    t = open(dsn).read()
+    t = pathlib.Path(dsn).read_text()
     i = t.index("(network")
     j = t.index("(class", i)
     pat = r"\(net \S+\s*\(pins[^)]*\)\s*\)"
     blocks = re.findall(pat, t[i:j])
     random.Random(seed).shuffle(blocks)
     it = iter(blocks)
-    open(dsn, "w").write(t[:i] + re.sub(pat, lambda m: next(it), t[i:j]) + t[j:])
+    pathlib.Path(dsn).write_text(t[:i] + re.sub(pat, lambda m: next(it), t[i:j]) + t[j:])
 
 
 def route(board, name, passes=40, attempt=1):
@@ -403,7 +405,7 @@ def route(board, name, passes=40, attempt=1):
                 p.SetSize(pcbnew.VECTOR2I(sz.x + MM(g), sz.y + MM(g)))
     view = getattr(board, "kb2_route_view", None)      # the board's own changes for the router's eyes; returns the undo
     undo = view(board) if view else None
-    assert pcbnew.ExportSpecctraDSN(board, dsn), "DSN export failed"
+    must(pcbnew.ExportSpecctraDSN(board, dsn), "DSN export failed")
     if seed:
         _reorder_nets(dsn, seed)
     for p, sz in saved:
@@ -413,7 +415,7 @@ def route(board, name, passes=40, attempt=1):
     set_outline(board, poly, ox, oy)
     if os.path.exists(ses):
         os.remove(ses)
-    fixed = len(re.findall(r"\(via [^\n]*\(type fix\)", open(dsn).read()))     # pre-placed, not in the .ses
+    fixed = len(re.findall(r"\(via [^\n]*\(type fix\)", pathlib.Path(dsn).read_text()))     # pre-placed, not in the .ses
     base = os.path.splitext(ses)[0]
     jobs = []
     for i in range(n_jobs):             # independent router runs side by side; the first good one wins
@@ -427,7 +429,7 @@ def route(board, name, passes=40, attempt=1):
                "--router.automatic_neckdown=false",       # no tracks below the 0.2 mm minimum
                f"--router.job_timeout={JOB_TIMEOUT_MIN // 60:02d}:{JOB_TIMEOUT_MIN % 60:02d}:00",
                "--usage_and_diagnostic_data.disable_analytics=true"] + extra
-        log = open(logf, "w")
+        log = open(logf, "w")          # the router writes to it while it runs: closed when its job is taken in
         # how the router is called, at the head of its log: the same .dsn put to it another way is another job
         # (.github/ci/sameboard.py reads it)
         log.write(f"compose: Freerouting {version} " + " ".join(cmd[cmd.index("-mp"):]) + "\n")
@@ -440,7 +442,7 @@ def route(board, name, passes=40, attempt=1):
         if not os.path.exists(j.ses):
             return False, None
         stats = _router_stats(j.logf)
-        nv = open(j.ses).read().count("(via ")
+        nv = pathlib.Path(j.ses).read_text().count("(via ")
         if stats is None:                                # no statistics block (other Freerouting versions)
             return True, None
         if stats["items"]["via_count"] - fixed != nv:
@@ -467,7 +469,7 @@ def route(board, name, passes=40, attempt=1):
                 j.proc.kill()
                 continue
             seen = [(int(p_), int(u)) for p_, u in
-                    re.findall(r"Auto-rout(?:er|ing) pass #(\d+) .*?\((\d+) unrouted", open(j.logf).read())]
+                    re.findall(r"Auto-rout(?:er|ing) pass #(\d+) .*?\((\d+) unrouted", pathlib.Path(j.logf).read_text())]
             if seen:
                 p_, u = min(seen, key=lambda pu: (pu[1], pu[0]))
                 if j.best is None or u < j.best:
@@ -489,7 +491,7 @@ def route(board, name, passes=40, attempt=1):
     if winner.ses != ses:
         shutil.copy(winner.ses, ses)
         shutil.copy(winner.logf, base + "_freerouting.log")
-    txt = open(ses).read()
+    txt = pathlib.Path(ses).read_text()
     tree = _sexp(txt)
     routes = next(_find(tree, "routes"))
     res = next(_find(routes, "resolution"))
@@ -507,7 +509,7 @@ def route(board, name, passes=40, attempt=1):
                 lay, width = layer[pth[1]], float(pth[2]) * unit
                 xy = [float(v) * unit for v in pth[3:]]
                 pts = [(xy[i], -xy[i + 1]) for i in range(0, len(xy), 2)]
-                for a, c in zip(pts[:-1], pts[1:]):
+                for a, c in zip(pts[:-1], pts[1:], strict=True):
                     t = pcbnew.PCB_TRACK(board)
                     t.SetStart(V(*a))
                     t.SetEnd(V(*c))
@@ -594,7 +596,7 @@ def remove_dangling(board):
 # ---------------------------------------------------------------- DRC + exports
 def drc_counts(rep):
     """(errors, warnings, unconnected) in a DRC report that drc() wrote."""
-    txt = open(rep).read()
+    txt = pathlib.Path(rep).read_text()
     errors = len(re.findall(r"Severity: error", txt))
     # library-path notes only exist because the boards are generated outside a KiCad project
     warnings = len(re.findall(r"Severity: warning", txt)) - len(re.findall(r"\[lib_footprint_issues\]", txt))
@@ -605,7 +607,7 @@ def drc_counts(rep):
 def drc_placed(rep):
     """How many of a DRC report's errors no other route can clear: a pad, not a track, too near a board edge or an
     unplated hole."""
-    blocks = re.split(r"\n(?=\[)", open(rep).read())
+    blocks = re.split(r"\n(?=\[)", pathlib.Path(rep).read_text())
     return sum(1 for b in blocks if b.startswith("[copper_edge_clearance]") and re.search(r"\): [^\n]*\b[Pp]ad\b", b)
                and not re.search(r"\): (Track|Via|Zone)\b", b))
 
@@ -692,7 +694,7 @@ def _make_once(name, board, passes, attempt=1):
     board = pcbnew.LoadBoard(path)
     err, warn, unc, rep = drc(board, name)
     for _ in range(3):                          # strip stubs KiCad itself reports as dangling
-        txt = open(rep).read()
+        txt = pathlib.Path(rep).read_text()
         stubs = [(float(x), float(y), lay, float(ln)) for x, y, lay, ln in re.findall(
             r"\[track_dangling\][^\n]*\n[^\n]*\n\s+@\(([\d.]+) mm, ([\d.]+) mm\): Track \[[^\]]*\] on ([FB])\.Cu, length ([\d.]+) mm", txt)]
         if not stubs:

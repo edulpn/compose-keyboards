@@ -8,6 +8,8 @@ keycaps, and, for the assembly views, the half boards and the controller wearing
 build (hotswap + RGB) and both flex jumpers in the shape flex-sim settles them into.
 Needs the routed boards (half-rev2 in OUTDIR, controller in CTRL_OUT, default out/controller).
 """
+from compose import must
+import pathlib
 import os
 import sys
 import json
@@ -23,7 +25,7 @@ from compose import geom as G
 from compose.case import gasket as C
 from compose.controller import rev2_std as CS
 from compose.checks import gasket as K
-from compose.geom import prism, union, poly_prism
+from compose.geom import prism, union
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -93,9 +95,8 @@ def _svg_map(svg_path):
     KiCad's Gerbers are its board coordinates with y flipped. Top view: svg = (x, -y_g - Ty); bottom view, mirrored
     as seen from below: svg = (Tx - x, -y_g - Ty)."""
     import re
-    t = open(svg_path).read(4000)
-    vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', t).group(1).split()]
-    full = open(svg_path).read()
+    full = pathlib.Path(svg_path).read_text()
+    vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', full[:4000]).group(1).split()]
     ty = float(re.search(r'translate\(0,(-?[\d.]+)\) scale\(1,-1\)', full).group(1))
     m = re.search(r'translate\((-?[\d.]+),0\) scale\(-1,1\)', full)
     tx = float(m.group(1)) if m else None
@@ -197,7 +198,7 @@ def build():
     from compose.pcb import jumper as J
     st = F.Strip(J.solve())
     zj, ok, _ = st.solve(F.initial(st))
-    assert ok, "flex-sim: the jumper doesn't settle"
+    must(ok, "flex-sim: the jumper doesn't settle")
     jl = G.P2W(st.solid(zj))
     add("jumper", stl(cq.Compound.makeCompound([jl, jl.mirror("YZ")]), "jumper", tol=0.02), smooth=True)
     from compose.pcb import toolbox as PK
@@ -219,7 +220,7 @@ def build():
     for nm, face, z in (("ctex_top", "top", CT.board_top + e), ("ctex_bot", "bottom", CT.board_bot - e)):
         d = board_decal(cg, cb, face, "ctrl", ctrl, z, ppm=20.0)
         man.append(dict(d, name=nm, rough=0.5))
-    json.dump(man, open(os.path.join(RD, "manifest.json"), "w"))
+    pathlib.Path(os.path.join(RD, "manifest.json")).write_text(json.dumps(man))
     for f in ("view.html", "three.module.js", "STLLoader.js", "BufferGeometryUtils.js"):
         shutil.copy(os.path.join(HERE, "web", f), RD)
 
@@ -247,7 +248,6 @@ def views():
                   ("hffc", 22), ("hact", 22), ("hmetal", 22), ("hhead", 22)):
         ex[nm] = [0, float(n[1] * d), float(n[2] * d)]
     ex["frame"] = [0, float(n[1] * 45), float(n[2] * 45)]
-    ymid = (CT.y_pc - 0)
     P = lambda x, y, z: list(G.apply(G.M_PW, (x, y, z)))
     jc = np.array(G.apply(G.M_PW, (-CS.VFFC_SLOT_X - 4.0, CT.y_pc - CS.VFFC_Y0, CT.board_top + 5.0)))  # left jumper
     from compose.pcb import rev2_half as H2

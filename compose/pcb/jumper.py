@@ -14,6 +14,8 @@ The bends' angles and skews and the straights are solved so the path meets both 
 
 Frames: everything here is in the bridge frame P (compose.geom), left jumper; the right one is its mirror.
 """
+from compose import must
+import pathlib
 import math
 from types import SimpleNamespace
 import numpy as np
@@ -87,12 +89,12 @@ def _walk3(p0, F0, bends, Ls, r, n=12):
     return p + Ls[3] * F[:, 0], F, samples
 
 
-def _frames(r=BEND_R, s_out=STIFF_OUT):
+def _frames(s_out=STIFF_OUT):
     half, ctrl = ends()
     t0 = -half.ins
     w0 = _unit(half.axis - (half.axis @ t0) * t0)
     F0 = np.column_stack([t0, w0, np.cross(t0, w0)])         # conductor side up (n has +z)
-    assert F0[2, 2] > 0
+    must(F0[2, 2] > 0)
     p0 = half.face - half.ins * s_out                        # end of the half's stiffener
     e_top = ctrl.top + Z * s_out                             # top of the controller's stiffener
     return half, ctrl, F0, p0, e_top
@@ -108,7 +110,7 @@ def solve(rise_deg=None, r=BEND_R, s_out=STIFF_OUT, drop_min=DROP_MIN, free_shif
     half connector along its row (to find where a layout should put it); the shift is returned.
     ValueError if there's no path."""
     from scipy.optimize import minimize
-    half, ctrl, F0, p0, e_top = _frames(r, s_out)
+    half, ctrl, F0, p0, e_top = _frames(s_out)
     key = (rise_deg, r, s_out, drop_min, free_shift, tuple(np.round(p0, 9)), tuple(np.round(e_top, 9)), tuple(np.round(F0, 9).ravel()))
     if key in _SOLVED:
         return _SOLVED[key]
@@ -211,7 +213,7 @@ CHAMFER_CTRL = 0.3                # 52610 end: 2 x C0.3
 STIFF_HALF, STIFF_CTRL = INS_HALF + STIFF_OUT, INS_CTRL + STIFF_OUT
 
 
-def flat_segments(g, side="L"):
+def flat_segments(g):
     """The flat pattern's centre line as turtle steps from the half end's tip: one straight (the strip is straight
     and the same for both sides)."""
     return [("S", g.length)]
@@ -259,7 +261,7 @@ def flat(g=None, side="L"):
     from shapely.affinity import rotate, translate
     g = g or solve()
     W = PR.JUMPER_W
-    cl = _walk(flat_segments(g, side))
+    cl = _walk(flat_segments(g))
     L = cl[-1][2]
     off = lambda w: [p + w * np.array([-h[1], h[0]]) for p, h, _ in cl]
     left, right = off(W / 2), off(-W / 2)
@@ -327,8 +329,8 @@ def build_board(g=None):
     b.Add(fp)
     for k, pts in f["cond"].items():
         s = f["s"]
-        sel = [q for q, sv in zip(pts, s) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
-        for a, c in zip(sel[:-1], sel[1:]):
+        sel = [q for q, sv in zip(pts, s, strict=False) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+        for a, c in zip(sel[:-1], sel[1:], strict=True):
             t = pcbnew.PCB_TRACK(b)
             t.SetStart(PK.V(*PK.K((float(a[0]), float(a[1])), ox, oy)))   # pcbnew.FromMM rejects numpy floats
             t.SetEnd(PK.V(*PK.K((float(c[0]), float(c[1])), ox, oy)))
@@ -354,8 +356,8 @@ def plot_flat(path, g=None):
     for poly in f["stiff"]:
         ax.add_patch(MP(list(poly.exterior.coords), fc="none", ec="#555", lw=0.8, ls="--", hatch="///"))
     for k, pts in f["cond"].items():
-        sel = [q for q, sv in zip(pts, f["s"]) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
-        xs, ys = zip(*[(q[0], q[1]) for q in sel])
+        sel = [q for q, sv in zip(pts, f["s"], strict=False) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+        xs, ys = zip(*[(q[0], q[1]) for q in sel], strict=True)
         ax.plot(xs, ys, color="#b5651d", lw=1.4, solid_capstyle="butt")
     for k, (a, b) in f["fingers"].items():
         for poly in (a, b):
@@ -398,7 +400,7 @@ def drc_counts(rep):
     import re
     from compose.pcb import toolbox as PK
     err, warn, unc = PK.drc_counts(rep)
-    bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
+    bridges = len(re.findall(r"\[solder_mask_bridge\]", pathlib.Path(rep).read_text()))
     return err - bridges, warn, unc, bridges
 
 

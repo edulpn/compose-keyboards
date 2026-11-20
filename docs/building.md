@@ -214,6 +214,7 @@ A pull request runs only the suites its changes can reach. Each full run on `mai
 ## Notes for working on the code
 
 - Freerouting 2.1 is randomized; the board builders retry until DRC is clean. It logs `NullPointerException` / `ArrayIndexOutOfBounds` in `maze_search_algo` on every board, including ones that route clean: that's noise. Its "MB memory" figure is cumulative allocation, not resident memory. If the unrouted count stays flat over passes, the board is congested: more time won't help, reduce the load.
+- A check that is part of a build is written `must(condition, why)` (`from compose import must`), not `assert`: an assert statement is dropped under `python3 -O`, and with it the check, or whatever the asserted expression did.
 - SWIG pad objects don't compare equal (`p in list` is always false): compare by number, shape or position.
 - `pcbnew.FromMM` rejects numpy floats: convert to `float` first.
 - KiCad's `Flip(pos, True)` mirrors left-right **and** rotates 180°: rotate relative to that afterwards.

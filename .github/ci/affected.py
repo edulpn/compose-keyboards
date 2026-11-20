@@ -14,6 +14,7 @@ A pull request is judged by what it changes itself (decide_pr): the record may b
 request starts from, and what main gained in between is main's own run to check.
 Prints "run" or "skip" on the first line, then the reasons; exits 0 either way.
 """
+import pathlib
 import sys
 
 ALWAYS = ("requirements.txt", "Dockerfile", ".github/")
@@ -75,8 +76,8 @@ def decide_pr(deps, own, since):
 
 
 def main():
-    deps = [l.strip() for l in open(sys.argv[1]) if l.strip()]
-    changed = [l.strip() for l in open(sys.argv[2]) if l.strip()]
+    deps = [l.strip() for l in pathlib.Path(sys.argv[1]).read_text().split("\n") if l.strip()]
+    changed = [l.strip() for l in pathlib.Path(sys.argv[2]).read_text().split("\n") if l.strip()]
     if not deps:
         print("run\nno dependency record: running")
         return

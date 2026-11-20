@@ -73,7 +73,7 @@ class Sheet:
                 rows.append(pf); cols.append(pb); vals.append(np.full(len(pf), 1 / (self.r_via * len(pf))))
                 self.vias += 1
         # tracks: the stretches outside rastered copper, each a resistor between what it leaves and what it enters
-        self.n_sheet, joint, self.pieces = n, {}, 0
+        joint, self.pieces = {}, 0
         tie = 1e4 * gs
         for a, b, w, f in tracks:
             length = math.dist(a, b)
@@ -157,7 +157,7 @@ class Sheet:
                 if not m.any():
                     continue
                 xc = np.sort(p[m, 0] + (yc - p[m, 1]) * (q[m, 0] - p[m, 0]) / (q[m, 1] - p[m, 1]))
-                for a, c in zip(xc[0::2], xc[1::2]):
+                for a, c in zip(xc[0::2], xc[1::2], strict=False):
                     i0, i1 = int(math.ceil((a - x0) / h - 0.5)), int(math.floor((c - x0) / h - 0.5))
                     if i1 >= i0:
                         grid[j, max(0, i0):i1 + 1] = True
