@@ -20,6 +20,7 @@ Independent of the net names the board was built with:
   6. Negative controls: a swapped firmware pin, a reversed right connector, reversed diodes, an injected
      short and a cut track must all be caught.
 """
+import pathlib
 import os
 import sys
 import json
@@ -196,7 +197,7 @@ def place_parts(B):
                        ("R6", (1, 2)), ("R7", ("a", "b")), ("C1", ("+", "-")),
                        ("F1", ("in", "out"))):
         ps = sorted(B.fp[ref].Pads(), key=lambda p: p.GetNumber())
-        for nm, p in zip(names, ps):
+        for nm, p in zip(names, ps, strict=False):
             pins[(ref, nm)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
     c2 = list(B.fp["C2"].Pads())
     plus = [p for p in c2 if p.GetShape() in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT)]
@@ -216,7 +217,7 @@ def place_parts(B):
     ps = [p for p in B.fp["J5"].Pads() if p.GetNumber() != "MP"]
     by = {p.GetNumber(): p for p in ps}
     xs = [by[str(i)].GetPosition().x for i in range(1, 5)]
-    ok(all(a < b for a, b in zip(xs, xs[1:])) or all(a > b for a, b in zip(xs, xs[1:])), "J5: contacts in order 1-4")
+    ok(all(a < b for a, b in zip(xs, xs[1:], strict=False)) or all(a > b for a, b in zip(xs, xs[1:], strict=False)), "J5: contacts in order 1-4")
     for i in range(1, 5):
         p = by[str(i)]
         pins[("J5", i)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
@@ -285,7 +286,7 @@ def silk_truth(B, pins):
     print("\n== silkscreen vs copper")
     # labels are font outlines (polygons); the builder records what it printed where, and every record must
     # sit on actual silkscreen ink so the record can't drift from the artwork
-    recs = json.load(open(os.path.join(OUT, "pcb", "controller_rev2_silk.json")))
+    recs = json.loads(pathlib.Path(os.path.join(OUT, "pcb", "controller_rev2_silk.json")).read_text())
     ink = []
     for d in B.b.GetDrawings():
         if d.GetLayer() == pcbnew.F_SilkS and d.GetClass() == "PCB_SHAPE" and d.GetShape() == pcbnew.SHAPE_T_POLY:
@@ -511,7 +512,7 @@ def main():
     run_scan(pins)
     flipped_cable_safety(pins)
     negative_controls(pins)
-    json.dump(QMK_V2, open(os.path.join(OUT, "pcb", "controller_rev2_qmk.json"), "w"), indent=1)
+    pathlib.Path(os.path.join(OUT, "pcb", "controller_rev2_qmk.json")).write_text(json.dumps(QMK_V2, indent=1))
     print("\n" + ("SIMULATION PASSED" if not FAIL else f"{len(FAIL)} SIMULATION CHECK(S) FAILED"))
     return len(FAIL)
 

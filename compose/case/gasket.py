@@ -12,6 +12,7 @@ Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle
 
 Gasket stack (local z): pad seat LEDGE_TOP | pad | flange FLANGE_Z0..+FLANGE_T | pad | frame FRAME_LIP_Z.
 """
+from compose import must
 import math
 import numpy as np
 import cadquery as cq
@@ -347,7 +348,7 @@ def case2_world():
     sol = body.Solids()
     if len(sol) > 1:
         big = max(sol, key=lambda s_: s_.Volume())
-        assert all(s_.Volume() < 2.0 for s_ in sol if s_ is not big), "case splits into real pieces"
+        must(all(s_.Volume() < 2.0 for s_ in sol if s_ is not big), "case splits into real pieces")
         body = big
     return body
 

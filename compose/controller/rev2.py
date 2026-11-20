@@ -33,6 +33,8 @@ Interface (the standard; see docs/controller-rev2.md):
     passive and the RGB buffer (through-hole, soldered from the top), I2C pull-ups.
 Everything is through-hole except the two FFC connectors and the Qwiic connector.
 """
+from compose import must
+import pathlib
 import os
 import json
 from shapely.geometry import Point
@@ -334,7 +336,7 @@ def build():
         to_bottom(fps[ref])
     labels = art(b)
     check_layout(fps)
-    json.dump(labels, open(os.path.join(PK.PCB_OUT, NAME + "_silk.json"), "w"), indent=1)
+    pathlib.Path(os.path.join(PK.PCB_OUT, NAME + "_silk.json")).write_text(json.dumps(labels, indent=1))
     return b
 
 
@@ -346,16 +348,16 @@ def check_layout(fps):
     ol = outline_poly()
     boxes = {ref: box(*crt(fp)) for ref, fp in fps.items()}
     bottom = {r for r, fp in fps.items() if fp.IsFlipped()}
-    assert bottom == set(BOTTOM), bottom
+    must(bottom == set(BOTTOM), bottom)
     for ref, g in boxes.items():
-        assert ol.buffer(1e-3).contains(g), f"{ref} courtyard leaves the board {g.bounds}"
+        must(ol.buffer(1e-3).contains(g), f"{ref} courtyard leaves the board {g.bounds}")
     refs = sorted(boxes)
     for i, a in enumerate(refs):
         for c in refs[i + 1:]:
             if (a in bottom) != (c in bottom):
                 continue
             ov = boxes[a].intersection(boxes[c]).area
-            assert ov < 1e-6, f"courtyards {a} / {c} overlap ({ov:.2f} mm2)"
+            must(ov < 1e-6, f"courtyards {a} / {c} overlap ({ov:.2f} mm2)")
 
     def pth(fp, r=False):
         return [((pcbnew.ToMM(p.GetPosition().x) - CX, pcbnew.ToMM(p.GetPosition().y) - CY),
@@ -367,25 +369,25 @@ def check_layout(fps):
             if (a in bottom) == (c in bottom):
                 continue
             for q, r in pth(fps[c], r=True):
-                assert not boxes[a].intersects(Point(q).buffer(r - 1e-3)), f"{a} courtyard over {c}'s joint at {q}"
+                must(not boxes[a].intersects(Point(q).buffer(r - 1e-3)), f"{a} courtyard over {c}'s joint at {q}")
     pico = box(-10.5, -25.5, 10.5, 25.5)
     for ref in ("J4", "J5", "J6", "JL", "JR"):
-        assert boxes[ref].intersection(pico).area < 1e-6, f"{ref} is under the Pico"
+        must(boxes[ref].intersection(pico).area < 1e-6, f"{ref} is under the Pico")
     for x, y in COVER_HOLES:
         keep = Point(x, y).buffer(STANDOFF_KEEP)              # standoff hex on top
         post = Point(x, y).buffer(POST_R + 0.3)                # case post under the board
-        assert ol.contains(Point(x, y).buffer(M_CLEAR / 2 + 1.2)), f"standoff hole at {x, y} too near the edge"
+        must(ol.contains(Point(x, y).buffer(M_CLEAR / 2 + 1.2)), f"standoff hole at {x, y} too near the edge")
         for ref, g in boxes.items():
             if ref.startswith("U1"):                           # Pico sockets: their bodies (courtyard less its 0.5 mm
                 g = g.buffer(-0.5, join_style=2)               #   margin); the keep circle carries its own margin
-            assert not (keep if ref not in bottom else post).intersects(g), f"standoff/post at {x, y} hits {ref}"
+            must(not (keep if ref not in bottom else post).intersects(g), f"standoff/post at {x, y} hits {ref}")
         for ref, fp in fps.items():                            # top parts' lead tails clear the post
             if ref in bottom:
                 continue
             for q in pth(fp):
-                assert Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}"
+                must(Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}")
         if abs(x) > VFFC_SLOT_X - 1.0:                         # the jumpers come over the edge strip, 21 mm wide
-            assert abs(y - VFFC_Y0) - STANDOFF_KEEP > 10.5 + 1.0, "standoff in the jumper's path"
+            must(abs(y - VFFC_Y0) - STANDOFF_KEEP > 10.5 + 1.0, "standoff in the jumper's path")
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
 
 
@@ -426,7 +428,7 @@ def art(b):
     # J4 (OLED / I2C): pin names standing on the header's outline, the group name centred right over them
     em = LABEL_EM
     j4_x = [-18.7 + i * 2.54 for i in range(4)]
-    for x, t in zip(j4_x, ("GND", "VCC", "SCL", "SDA")):     # upright: four 3-letter names don't fit 2.54 mm side by side
+    for x, t in zip(j4_x, ("GND", "VCC", "SCL", "SDA"), strict=False):     # upright: four 3-letter names don't fit 2.54 mm side by side
         L(t, x, 26.3, angle=90, anchor="b")
     top = 26.3 - max(LT.text_shape(t, PR.ART_TEXT_FONT, em).bounds[2] - LT.text_shape(t, PR.ART_TEXT_FONT, em).bounds[0]
                      for t in ("GND", "VCC", "SCL", "SDA"))
@@ -438,7 +440,7 @@ def art(b):
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
     # cable connectors: the side name along the contact row, centred on it; "1" right beside slot 1's contact
-    for sx, s in zip((-1, 1), PR.HALF_NAMES):                 # lhs / rhs, read from the outside:
+    for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside:
         x_in = abs(vffc_x("R")) - VFFC_PAD_A[0] / 2 + VFFC_PAD_A[1]   # in the strip between the Pico's socket
         L(s, sx * (x_in - 1.5), VFFC_Y0, angle=90 * sx)              #   and the connector's contact-face pads
         L("1", sx * (x_in - 0.9), VFFC_Y0 - 9.5)
@@ -474,13 +476,13 @@ def _export_dsn_power(board, path):
     DSN puts every net in the default class: move the power nets into the Power class for the router."""
     okx = _export_dsn(board, path)
     import re
-    t = open(path).read()
+    t = pathlib.Path(path).read_text()
     m = re.search(r"\(class kicad_default ([^(]*)", t)
     names = m.group(1).split()
     keep = [n for n in names if n.strip('"') not in POWER_NETS]
     t = t[:m.start(1)] + " ".join(keep) + "\n      " + t[m.end(1):]
     t = t.replace("(class Power\n", "(class Power " + " ".join(POWER_NETS) + "\n", 1)
-    open(path, "w").write(t)
+    pathlib.Path(path).write_text(t)
     return okx
 
 
@@ -492,7 +494,7 @@ def resilk():
         if d.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS):
             b.Remove(d)
     labels = art(b)
-    json.dump(labels, open(os.path.join(PK.PCB_OUT, NAME + "_silk.json"), "w"), indent=1)
+    pathlib.Path(os.path.join(PK.PCB_OUT, NAME + "_silk.json")).write_text(json.dumps(labels, indent=1))
     pcbnew.SaveBoard(path, b)
     b = pcbnew.LoadBoard(path)
     err, warn, unc, rep = PK.drc(b, NAME)

@@ -32,7 +32,7 @@ if LAYOUT is not None:
         if _e.name != f"layouts.{LAYOUT}.keyboard":
             raise
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py is missing: a layout says there what its keyboard is called, and its "
-                         f"angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.")
+                         f"angles and USB ids. layouts/compose58/keyboard.py shows what goes in it.") from None
     _missing = [_n for _n in _KB_NAMES if not hasattr(_KB, _n)]
     if _missing:
         raise SystemExit(f"layouts/{LAYOUT}/keyboard.py does not say {', '.join(_missing)}. layouts/compose58/keyboard.py shows "

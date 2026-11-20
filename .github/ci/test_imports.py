@@ -1,4 +1,5 @@
 """Checks imports.py on throwaway trees: python3 .github/ci/test_imports.py (exit 1 on a wrong verdict)."""
+import pathlib
 import os
 import sys
 import tempfile
@@ -64,7 +65,7 @@ def run(extra, known):
         for path, text in {**BASE, **extra}.items():
             p = os.path.join(d, path)
             os.makedirs(os.path.dirname(p), exist_ok=True)
-            open(p, "w").write(text)
+            pathlib.Path(p).write_text(text)
         return imports.Repo(os.path.realpath(d)).problems(known)[0]
 
 

@@ -28,6 +28,7 @@ The record can be older than the pull request's base: a full run on main takes a
 meanwhile is planned against the record before it. What main gained in between is not the pull request's to
 check, so the changes are split in two: base to head (the pull request's own) and record to base.
 """
+import pathlib
 import ast
 import json
 import os
@@ -48,7 +49,7 @@ def constant(path, name, default=None):
     file or the name is missing). Stops when the value is not a plain constant: the plan can't run the module."""
     if not os.path.isfile(path):
         return default
-    for node in ast.parse(open(path).read()).body:
+    for node in ast.parse(pathlib.Path(path).read_text()).body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
             try:
                 return ast.literal_eval(node.value)
@@ -98,7 +99,7 @@ def outputs(run, lay):
 
 
 def git(*args):
-    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    r = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
@@ -124,7 +125,7 @@ def main():
     d = sys.argv[1]
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     sha_f = os.path.join(d, "SHA")
-    traced = open(sha_f).read().strip() if os.path.exists(sha_f) else None
+    traced = pathlib.Path(sha_f).read_text().strip() if os.path.exists(sha_f) else None
     lines, run = [], {}
     lay = layouts()
     SUITES = suites(lay)
@@ -154,7 +155,7 @@ def main():
             found = {}
             for s in SUITES:
                 f = os.path.join(d, s + ".txt")
-                deps = [l.strip() for l in open(f) if l.strip()] if os.path.exists(f) else []
+                deps = [l.strip() for l in pathlib.Path(f).read_text().split("\n") if l.strip()] if os.path.exists(f) else []
                 found[s] = (decide_pr(deps, own, since) if deps else ["no dependency record for this suite"]), deps
             for s in SUITES:
                 if s.startswith("boards-") and found["controller"][0] and not found[s][0]:

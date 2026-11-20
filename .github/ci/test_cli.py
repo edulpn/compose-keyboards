@@ -4,6 +4,7 @@ the toolchain: python3 .github/ci/test_cli.py (exit 1 on a wrong outcome).
 Every case here stops before a command's module runs, or only reads compose/params.py, which imports nothing but
 the layout's keyboard.py (plain constants; the layouts made up for the test are written to a temporary folder).
 """
+import pathlib
 import ast
 import os
 import re
@@ -74,14 +75,14 @@ def named():
         files = [path] if os.path.isfile(path) else [os.path.join(d, f) for d, _, fs in os.walk(path) for f in fs
                                                       if f.endswith((".py", ".md", ".yml"))]
         for f in files:
-            for name in re.findall(r"\b(?:COMPOSE|C58)_[A-Za-z0-9_\\]*", open(f, encoding="utf-8").read()):
+            for name in re.findall(r"\b(?:COMPOSE|C58)_[A-Za-z0-9_\\]*", pathlib.Path(f).read_text(encoding="utf-8")):
                 out.setdefault(name, os.path.relpath(f, ROOT))
     return out
 
 
 def keyboard_files():
     """Every layout's keyboard.py against what compose/params.py asks of one: [(layout, what is wrong with it)]."""
-    src = open(os.path.join(ROOT, "compose", "params.py"), encoding="utf-8").read()
+    src = pathlib.Path(os.path.join(ROOT, "compose", "params.py")).read_text(encoding="utf-8")
     want = ast.literal_eval(re.search(r"^_KB_NAMES = (\(.*\))$", src, re.M).group(1))
     out = []
     for name in sorted(os.listdir(os.path.join(ROOT, "layouts"))):
@@ -92,7 +93,7 @@ def keyboard_files():
             out.append((name, "no keyboard.py"))
             continue
         has = set()
-        for node in ast.parse(open(path, encoding="utf-8").read()).body:
+        for node in ast.parse(pathlib.Path(path).read_text(encoding="utf-8")).body:
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue                                                  # the docstring
             try:
@@ -120,7 +121,7 @@ def main():
           + ("" if not stray else f": {stray}"))
     base = {k: v for k, v in os.environ.items() if not k.startswith(("C58_", "COMPOSE_")) and k not in ("CTRL_OUT", "ORDER_OUT")}
     for name, args, env, code, word in CASES:
-        r = subprocess.run([sys.executable] + args, cwd=ROOT, env={**base, **env}, capture_output=True, text=True)
+        r = subprocess.run([sys.executable] + args, cwd=ROOT, env={**base, **env}, capture_output=True, text=True, check=False)
         out = r.stdout + r.stderr
         ok = r.returncode == code and word in out
         bad += not ok
@@ -135,7 +136,7 @@ def main():
                 with open(os.path.join(d, "keyboard.py"), "w") as fh:
                     fh.write(text)
             r = subprocess.run([sys.executable, "-c", SAY_KB], cwd=os.path.join(tmp, str(i)), capture_output=True, text=True,
-                               env={**base, "PYTHONPATH": ROOT, "COMPOSE_LAYOUT": "made_up"})
+                               env={**base, "PYTHONPATH": ROOT, "COMPOSE_LAYOUT": "made_up"}, check=False)
             out = r.stdout + r.stderr
             ok = r.returncode == code and word in out
             bad += not ok

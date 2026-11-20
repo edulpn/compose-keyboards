@@ -21,6 +21,7 @@ Scenarios, each checked against the case model (the parts gasket-checks builds):
 Curvature is judged where the copper is (V_CU): the bare polyimide edge takes far tighter bends.
 Writes OUT/flex_sim/report.md and a JSON of every number.
 """
+import pathlib
 import json
 import math
 import os
@@ -69,14 +70,14 @@ class Strip:
     Flat coordinates: s along the strip from the half end's tip, v across (+ = left seen from the conductor
     side), z = the conductor side's normal. A clamp is a rigid map flat -> 3D (R, p)."""
 
-    def __init__(self, g, L=None, half_move=np.zeros(3), ctrl_lift=0.0):
+    def __init__(self, g, L=None, half_move=None, ctrl_lift=0.0):
         self.g = g
         self.L = L if L is not None else g.length
         self.a = J.STIFF_HALF                                   # free part: between the two stiffeners
         self.b = self.L - J.STIFF_CTRL
         t0, w0 = g.F0[:, 0], g.F0[:, 1]
         self.R0 = np.column_stack([t0, w0, np.cross(t0, w0)])
-        self.p0 = g.half.face + half_move - J.INS_HALF * t0     # flat s = INS_HALF lands on the connector face
+        self.p0 = g.half.face + (np.zeros(3) if half_move is None else half_move) - J.INS_HALF * t0     # flat s = INS_HALF lands on the connector face
         self.Rt = np.column_stack([-Z, [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
         tip = g.ctrl.top - J.INS_CTRL * Z + ctrl_lift * Z        # the controller-end tip
         self.pt = tip - self.Rt @ np.array([self.L, 0.0, 0.0])
@@ -174,7 +175,7 @@ class Strip:
         # consecutive duplicate lines (a ruling seen from both pieces) are the same wire: keep one
         keep = [wires[0]]
         pts = [w.Center() for w in wires]
-        for w, c, cp in zip(wires[1:], pts[1:], pts[:-1]):
+        for w, c, cp in zip(wires[1:], pts[1:], pts[:-1], strict=True):
             if (c - cp).Length > 1e-6:
                 keep.append(w)
         return cq.Solid.makeLoft(keep, True)
@@ -200,7 +201,7 @@ def initial(strip, n=N_RUL):
     g = strip.g
     pos = [J.STIFF_HALF + g.Ls[0]]
     marks = []
-    for i, ((phi, beta), arc) in enumerate(zip(g.bends, g.arcs)):
+    for i, ((phi, beta), arc) in enumerate(zip(g.bends, g.arcs, strict=False)):
         k = n // 3
         sg = J.SIGNS[i]
         for j in range(k):
@@ -405,8 +406,8 @@ def run():
     verdict(ov < 1e-3, f"no overlap with the connectors or anything else on the boards ({ov:.3f} mm3)")
     line(f"\n{len(fails)} failure(s). {time.time() - t_start:.0f} s.")
     data["fails"] = fails
-    open(os.path.join(out, "report.md"), "w").write("\n".join(rep) + "\n")
-    json.dump(data, open(os.path.join(out, "flex_sim.json"), "w"), indent=1, default=float)
+    pathlib.Path(os.path.join(out, "report.md")).write_text("\n".join(rep) + "\n")
+    pathlib.Path(os.path.join(out, "flex_sim.json")).write_text(json.dumps(data, indent=1, default=float))
     return len(fails)
 
 

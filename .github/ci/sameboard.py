@@ -26,6 +26,7 @@ Prints the verdict and what differs. Writes same=true|false and verdict=same|rou
 and a line to the job summary. Exits 0 either way: whether a difference is a mistake depends on the change (a
 design change moves copper on purpose; a reorganisation must not), so the caller decides.
 """
+import pathlib
 import collections
 import math
 import os
@@ -71,7 +72,7 @@ def canon(node):
 
 def items(path):
     """The board's top-level items, canonical, as a multiset."""
-    tree = parse(open(path, encoding="utf-8").read())
+    tree = parse(pathlib.Path(path).read_text(encoding="utf-8"))
     if not tree or tree[0] != "kicad_pcb":
         raise ValueError(f"{path}: not a KiCad board")
     return collections.Counter(canon(c) for c in tree[1:])
@@ -122,7 +123,7 @@ def router_log(path):
     """What a Freerouting 2.5 log says was done: how the router was called (the line toolbox.py writes first), the
     board after every routing pass, the board the optimizer started from and the board after each of its passes.
     Boards are the router's own fingerprints of them."""
-    t = open(path, encoding="utf-8", errors="replace").read()
+    t = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
     call = re.search(r"^compose: (.*)$", t, re.M)
     start = re.search(r"Optimization stage started on board '(\w+)'", t)
     return dict(
@@ -147,7 +148,7 @@ def routed_nets(path):
             return
         for c in node[1:]:
             walk(c)
-    walk(parse(open(path, encoding="utf-8").read()))
+    walk(parse(pathlib.Path(path).read_text(encoding="utf-8")))
     return out
 
 
@@ -184,7 +185,7 @@ def job(a, b):
     same way."""
     (dsn_a, _, log_a), (dsn_b, _, log_b) = beside(a), beside(b)
     ca, cb = router_log(log_a)["call"], router_log(log_b)["call"]
-    if open(dsn_a, "rb").read() != open(dsn_b, "rb").read():
+    if pathlib.Path(dsn_a).read_bytes() != pathlib.Path(dsn_b).read_bytes():
         return False, "the router's job (.dsn) is not the same"
     if ca is None or cb is None:
         return None, "the job (.dsn) is the same, but one of the two logs does not say how the router was called"
@@ -201,7 +202,7 @@ def trace(a, b, ia, ib):
     if not la["routing"] or la["start"] is None or lb["start"] is None:
         return False, ["the router's log does not show its passes, so the difference cannot be traced"]
     if la["routing"] != lb["routing"] or la["start"] != lb["start"]:
-        n = next((x[0] for x, y in zip(la["routing"], lb["routing"]) if x != y), "the last")
+        n = next((x[0] for x, y in zip(la["routing"], lb["routing"], strict=False) if x != y), "the last")
         return False, [f"the router routed the same job another way, from auto-routing pass {n} on"]
     if la["optimizer"] == lb["optimizer"]:
         return False, ["the router ended on the same board both times: the difference was made after it"]
@@ -215,7 +216,7 @@ def trace(a, b, ia, ib):
     stray = sorted((set(ta) | set(tb)) - moved)
     if stray:
         return False, ["tracks differ on " + ", ".join(stray) + ", where the router's two results are the same"]
-    k = next((i for i, (x, y) in enumerate(zip(la["optimizer"], lb["optimizer"])) if x != y), min(len(la["optimizer"]), len(lb["optimizer"])))
+    k = next((i for i, (x, y) in enumerate(zip(la["optimizer"], lb["optimizer"], strict=False)) if x != y), min(len(la["optimizer"]), len(lb["optimizer"])))
     x = la["optimizer"][k] if k < len(la["optimizer"]) else None
     y = lb["optimizer"][k] if k < len(lb["optimizer"]) else None
     before = {0: "", 1: ", and so is optimizer pass 1"}.get(k, f", and so are optimizer passes 1 to {k}")

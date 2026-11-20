@@ -157,7 +157,7 @@ class Sheet:
                 if not m.any():
                     continue
                 xc = np.sort(p[m, 0] + (yc - p[m, 1]) * (q[m, 0] - p[m, 0]) / (q[m, 1] - p[m, 1]))
-                for a, c in zip(xc[0::2], xc[1::2]):
+                for a, c in zip(xc[0::2], xc[1::2], strict=False):
                     i0, i1 = int(math.ceil((a - x0) / h - 0.5)), int(math.floor((c - x0) / h - 0.5))
                     if i1 >= i0:
                         grid[j, max(0, i0):i1 + 1] = True

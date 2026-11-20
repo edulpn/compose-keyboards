@@ -1,4 +1,5 @@
 """Checks sameboard.py on small boards: python3 .github/ci/test_sameboard.py (exit 1 on a wrong verdict)."""
+import pathlib
 import os
 import sys
 import tempfile
@@ -82,7 +83,7 @@ RUNS = [
 def write(folder, pcb, dsn, ses, log):
     os.makedirs(folder, exist_ok=True)
     for ext, text in ((".kicad_pcb", pcb), (".dsn", dsn), (".ses", ses), ("_freerouting.log", log)):
-        open(os.path.join(folder, "b" + ext), "w").write(text)
+        pathlib.Path(os.path.join(folder, "b" + ext)).write_text(text)
     return os.path.join(folder, "b.kicad_pcb")
 
 
@@ -90,10 +91,10 @@ def main():
     bad = 0
     with tempfile.TemporaryDirectory() as d:
         a = os.path.join(d, "a.kicad_pcb")
-        open(a, "w").write(BASE)
+        pathlib.Path(a).write_text(BASE)
         for name, text, want in CASES:
             b = os.path.join(d, "b.kicad_pcb")
-            open(b, "w").write(text)
+            pathlib.Path(b).write_text(text)
             got, lines = sameboard.compare(a, b)
             ok = got == want and (got or lines)
             bad += not ok

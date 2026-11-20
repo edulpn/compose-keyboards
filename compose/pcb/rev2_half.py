@@ -22,6 +22,8 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
+from compose import must
+import pathlib
 import os
 import sys
 import math
@@ -51,7 +53,7 @@ LED_PAD_IN = 0.075                   # ... so its copper is centred this much ne
 #                                        pad's length, the 2 x 0.075 mm next to the cutout is ground no track can use
 #                                        (route_view)
 LED_PAD_EDGE = 0.25                  # the copper-to-edge rule for these pads alone; the board's is 0.4 mm
-assert LED_PAD_X - LED_PAD_IN - LED_PAD[0] / 2 - LED_CUT[0] / 2 >= LED_PAD_EDGE + 0.05 - 1e-9
+must(LED_PAD_X - LED_PAD_IN - LED_PAD[0] / 2 - LED_CUT[0] / 2 >= LED_PAD_EDGE + 0.05 - 1e-9)
 # ... as a KiCad rule: kicad.make() writes it beside the board file, where the DRC reads it
 LED_RULES = f"""(rule "LED pads to their own cutout"
   (condition "A.Type == 'Pad' && (A.intersectsCourtyard('LB*') || A.intersectsCourtyard('LF*'))")
@@ -171,10 +173,10 @@ def jumper_row_y():
     # params.py as it resolved, not only as written: COMPOSE_TENT, COMPOSE_SPLAY, COMPOSE_GAP_TOP and the other environment
     # overrides move the row as much as an edit does
     vals = repr(sorted((k, v) for k, v in vars(PR).items() if k.isupper() and isinstance(v, (int, float, tuple))))
-    key = hashlib.sha1(b"".join(open(f, "rb").read() for f in src) + vals.encode()).hexdigest()
+    key = hashlib.sha1(b"".join(pathlib.Path(f).read_bytes() for f in src) + vals.encode()).hexdigest()
     cache = os.path.join(outputs.cache(PR.LAYOUT), "jumper_row_y.json")
     try:
-        got = json.load(open(cache))
+        got = json.loads(pathlib.Path(cache).read_text())
         if got.get("key") == key:
             _ROW["v"] = got["row_y"]
             return _ROW["v"]
@@ -194,7 +196,7 @@ def jumper_row_y():
     _PLACEMENT.clear()
     J._SOLVED.clear()
     os.makedirs(os.path.dirname(cache), exist_ok=True)
-    json.dump({"key": key, "row_y": y}, open(cache, "w"))
+    pathlib.Path(cache).write_text(json.dumps({"key": key, "row_y": y}))
     return y
 
 
@@ -644,8 +646,8 @@ def build(name):
                 for pin, poly in want.items():
                     got = [p for p in fp.Pads() if p.GetNumber() == pin]
                     xy = lambda q: (pcbnew.ToMM(q.x), pcbnew.ToMM(q.y))
-                    assert len(got) == 1 and near(xy(got[0].GetPosition()), K(land[pin])) \
-                        and near(xy(got[0].ShapePos()), K(poly.centroid.coords[0])), f"LED {face} pad {pin} misplaced"
+                    must(len(got) == 1 and near(xy(got[0].GetPosition()), K(land[pin])) \
+                        and near(xy(got[0].ShapePos()), K(poly.centroid.coords[0])), f"LED {face} pad {pin} misplaced")
                 din = "RGB_IN" if j == 0 else f"{tag}_{j}"
                 dout = "RGB_OUT" if j == n_led - 1 else f"{tag}_{j + 1}"
                 nets = {"1": "+5V", "2": dout, "3": "GND", "4": din}
@@ -685,7 +687,7 @@ def build(name):
                 continue
             xy = (pcbnew.ToMM(p.GetPosition().x) - PK.OX, PK.OY - pcbnew.ToMM(p.GetPosition().y))
             k_ = [q for q in slot if math.dist(q, xy) < 1e-3]
-            assert k_, f"FFC pad {p.GetNumber()} off the planned row"
+            must(k_, f"FFC pad {p.GetNumber()} off the planned row")
             nm = slot_net(slot[k_[0]], rgb)
             if nm:
                 p.SetNet(net(nm))
@@ -951,7 +953,7 @@ def gnd_pour(b):
     dead = []
     zs = [z for z in b.Zones() if not z.GetIsRuleArea()]
     for t in b.GetTracks():
-        if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd.GetNetCode() and not t.GetNetname() == "":
+        if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd.GetNetCode() and t.GetNetname() != "":
             q = t.GetPosition()
             hit = sum(1 for z in zs if z.GetFilledPolysList(z.GetLayer()).Contains(q))
             if hit < 2 and not any(tr.GetNetCode() == gnd.GetNetCode() and tr.GetClass() != "PCB_VIA" and
@@ -971,7 +973,7 @@ def _export_dsn_power(board, path):
     which generated boards don't have)."""
     import re
     okx = _export_dsn(board, path)
-    t = open(path).read()
+    t = pathlib.Path(path).read_text()
     if getattr(board, "kb2_gnd_pour", False):            # GND is poured after routing: not the router's job
         t = re.sub(r"\(net GND\s*\(pins[^)]*\)\s*\)", "(net GNDFIX)", t, count=1)
         i, j = t.index("(network"), t.find("(wiring")
@@ -1001,11 +1003,11 @@ def _export_dsn_power(board, path):
         st = t.index("(structure")                          # after the layers and the boundary
         k = min(x for x in (t.find("\n    (keepout", st), t.find("\n    (via ", st)) if x > 0) + 1
         t = t[:k] + "".join(keep) + t[k:]
-        open(path, "w").write(t)
+        pathlib.Path(path).write_text(t)
     pre = getattr(board, "kb2_prerouted", ())                # nets the layout laid itself: not the router's job either
     if pre:
         t = PRE.dsn_fix(t, pre, *PRE.board_copper(board))
-        open(path, "w").write(t)
+        pathlib.Path(path).write_text(t)
     m = re.search(r"\(class kicad_default ([^(]*)", t)
     if m and "(class Power" in t:
         names = m.group(1).split()
@@ -1013,7 +1015,7 @@ def _export_dsn_power(board, path):
         moved = [n for n in names if n.strip('"') in POWER_NETS]
         t = t[:m.start(1)] + " ".join(keep) + "\n      " + t[m.end(1):]
         t = t.replace("(class Power\n", "(class Power " + " ".join(moved) + "\n", 1)
-        open(path, "w").write(t)
+        pathlib.Path(path).write_text(t)
     return okx
 
 

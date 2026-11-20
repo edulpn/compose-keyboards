@@ -75,7 +75,7 @@ def hex_lattice(region, cell, origin=(0.0, 0.0)):
             cx = origin[0] + i * 1.5 * R
             cy = origin[1] + j * cell + (cell / 2 if i % 2 else 0)
             pts = [(cx + R * math.cos(math.radians(60 * k)), cy + R * math.sin(math.radians(60 * k))) for k in range(7)]
-            for a, b in zip(pts[:-1], pts[1:]):
+            for a, b in zip(pts[:-1], pts[1:], strict=True):
                 key = tuple(sorted(((round(a[0], 3), round(a[1], 3)), (round(b[0], 3), round(b[1], 3)))))
                 if key in seen:
                     continue

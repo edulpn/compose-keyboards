@@ -14,6 +14,8 @@ The bends' angles and skews and the straights are solved so the path meets both 
 
 Frames: everything here is in the bridge frame P (compose.geom), left jumper; the right one is its mirror.
 """
+from compose import must
+import pathlib
 import math
 from types import SimpleNamespace
 import numpy as np
@@ -92,7 +94,7 @@ def _frames(s_out=STIFF_OUT):
     t0 = -half.ins
     w0 = _unit(half.axis - (half.axis @ t0) * t0)
     F0 = np.column_stack([t0, w0, np.cross(t0, w0)])         # conductor side up (n has +z)
-    assert F0[2, 2] > 0
+    must(F0[2, 2] > 0)
     p0 = half.face - half.ins * s_out                        # end of the half's stiffener
     e_top = ctrl.top + Z * s_out                             # top of the controller's stiffener
     return half, ctrl, F0, p0, e_top
@@ -327,8 +329,8 @@ def build_board(g=None):
     b.Add(fp)
     for k, pts in f["cond"].items():
         s = f["s"]
-        sel = [q for q, sv in zip(pts, s) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
-        for a, c in zip(sel[:-1], sel[1:]):
+        sel = [q for q, sv in zip(pts, s, strict=False) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+        for a, c in zip(sel[:-1], sel[1:], strict=True):
             t = pcbnew.PCB_TRACK(b)
             t.SetStart(PK.V(*PK.K((float(a[0]), float(a[1])), ox, oy)))   # pcbnew.FromMM rejects numpy floats
             t.SetEnd(PK.V(*PK.K((float(c[0]), float(c[1])), ox, oy)))
@@ -354,8 +356,8 @@ def plot_flat(path, g=None):
     for poly in f["stiff"]:
         ax.add_patch(MP(list(poly.exterior.coords), fc="none", ec="#555", lw=0.8, ls="--", hatch="///"))
     for k, pts in f["cond"].items():
-        sel = [q for q, sv in zip(pts, f["s"]) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
-        xs, ys = zip(*[(q[0], q[1]) for q in sel])
+        sel = [q for q, sv in zip(pts, f["s"], strict=False) if FINGER_L - 0.3 <= sv <= f["length"] - FINGER_L + 0.3]
+        xs, ys = zip(*[(q[0], q[1]) for q in sel], strict=True)
         ax.plot(xs, ys, color="#b5651d", lw=1.4, solid_capstyle="butt")
     for k, (a, b) in f["fingers"].items():
         for poly in (a, b):
@@ -398,7 +400,7 @@ def drc_counts(rep):
     import re
     from compose.pcb import toolbox as PK
     err, warn, unc = PK.drc_counts(rep)
-    bridges = len(re.findall(r"\[solder_mask_bridge\]", open(rep).read()))
+    bridges = len(re.findall(r"\[solder_mask_bridge\]", pathlib.Path(rep).read_text()))
     return err - bridges, warn, unc, bridges
 
 

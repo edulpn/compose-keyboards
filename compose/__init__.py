@@ -7,3 +7,10 @@ Run things with `python3 -m compose <command> [outdir] ...` (see `python3 -m com
 import os
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def must(ok, why=""):
+    """A check that is part of a build: stops it when the condition does not hold. Unlike an assert statement it
+    still runs under `python3 -O`."""
+    if not ok:
+        raise AssertionError(why)

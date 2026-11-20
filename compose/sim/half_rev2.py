@@ -52,6 +52,7 @@ Independent of the net names the boards were built with:
      a bridge from a joint to a socket's column pad holds a key down). Negative control: a joint put on a
      connector pad is found.
 """
+from compose import must
 import os
 import sys
 import random
@@ -256,11 +257,11 @@ class Half:
             out = {}
             for t in self.b.GetTracks():
                 if t.GetClass() == "PCB_VIA":
-                    assert items[k][2] == "via"
+                    must(items[k][2] == "via")
                     out.setdefault(self.cu.find(k), ([], []))[1].append((ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)))
                     k += 2
                 else:
-                    assert items[k][2] == "track"
+                    must(items[k][2] == "track")
                     a, c = t.GetStart(), t.GetEnd()
                     out.setdefault(self.cu.find(k), ([], []))[0].append(
                         ((ToMM(a.x), ToMM(a.y)), (ToMM(c.x), ToMM(c.y)), ToMM(t.GetWidth()), name[t.GetLayer()]))
