@@ -178,7 +178,9 @@ class Strip:
         for w, c, cp in zip(wires[1:], pts[1:], pts[:-1], strict=True):
             if (c - cp).Length > 1e-6:
                 keep.append(w)
-        return cq.Solid.makeLoft(keep, True)
+        # one short loft per pair of neighbouring lines, as a compound: a single loft through them all can cross
+        # itself where a tight bend's rulings turn against each other, and then measures nothing right
+        return cq.Compound.makeCompound([cq.Solid.makeLoft([a, b], True) for a, b in zip(keep[:-1], keep[1:], strict=True)])
 
     def centre_line(self, z, n=6):
         """Densely sampled 3D centre line (v = 0) from the half connector's face to the controller's slot."""

@@ -152,6 +152,8 @@ ART_COPPER_KEEPOUT = 0.6         # traces kept this far from the exposed-copper 
 # ---------------------------------------------------------------- rev 2 controller (rev 2 board on standoffs)
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
+COVER_JUMPER_POCKET = 1.0        # the cover's underside is this much deeper over each jumper's top bend (the strip
+#                                   settles up to ~2 mm above its designed path there: flex-sim)
 CTRL_FLOOR_CLEAR = 3.0           # the controller's tallest underside part -> the floor, at least (sets the case's height
 #                                   when the angles would leave less: geom.solve_z0)
 
