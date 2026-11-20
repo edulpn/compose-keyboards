@@ -10,7 +10,7 @@ B-face items are mirrored about their own box so they read correctly from behind
 """
 import math
 from shapely.geometry import Point, LineString, box as sbox
-from shapely.affinity import scale as sscale, translate as strans
+from shapely.affinity import scale as sscale, translate as strans, rotate as srot
 from shapely.ops import unary_union
 from compose import params as PR
 from compose import geom as G
@@ -61,6 +61,34 @@ def widest_box(free, h, anchor, w_max=80.0, w_min=10.0):
     return None
 
 
+def turned(g, rot):
+    """g turned by rot degrees about the origin: art laid along an edge (rot 90) is placed and lettered in a frame
+    turned by -rot, then turned back."""
+    return srot(g, rot, origin=(0, 0)) if rot else g
+
+
+def art_box(free, tries, w_max, w_min):
+    """The box for one piece of art. `tries` lists (height, anchor, rot) in order of preference; the first that fits
+    near its anchor wins. Returns (box, height, rot) with the box in the frame turned by -rot, or (None, None, 0)."""
+    for h, anc, rot in tries:
+        f = turned(free, -rot)
+        a = turned(Point(anc), -rot).coords[0] if rot else anc
+        b = widest_box(f, h, a, w_max=w_max, w_min=w_min)
+        if b is not None:
+            return b, h, rot
+    return None, None, 0
+
+
+def art_spots(name):
+    """Where the layout puts one piece of art: [(anchor, rot)], from its Layout.art (layouts/<name>/layout.py)."""
+    spots = (L.art or {}).get(name)
+    if spots is None:
+        raise RuntimeError(f"board art: layouts/{PR.LAYOUT}/layout.py gives no place for the {name} (Layout.art, "
+                           f"see layouts/compose58/layout.py)")
+    spots = [spots] if isinstance(spots[0], (int, float)) else list(spots)
+    return [((s[0], s[1]), s[2] if len(s) > 2 else 0) for s in spots]
+
+
 # ---------------------------------------------------------------- hex lattice
 def hex_lattice(region, cell, origin=(0.0, 0.0)):
     """Hex cell outlines (flat-to-flat = cell) clipped to region, as LineStrings."""
@@ -98,72 +126,84 @@ def plan_half_art(plan, variant="hotswap"):
     a = SimpleNamespace(copper={"F": [], "B": []}, silk={"F": [], "B": []}, lines=[], boxes=[])
     lhs, rhs = PR.HALF_NAMES
 
-    # 1. title: ring + name, exposed copper, top-left margin
-    tb = None
-    for th in (6.0, 5.0, 4.5):                       # the tallest that fits: the board edge is well inside the plate's
-        tb = widest_box(free, th, (8.0, 11.0), w_max=40.0, w_min=28.0)
-        if tb is not None:
-            break
+    # Each piece goes where the layout puts it (Layout.art: an anchor, or several in order of preference, each
+    # optionally turned 90 degrees to run along an edge). It is lettered in a frame turned with it, then turned back;
+    # the B face's copy is mirrored about its own box so it reads correctly from behind.
+    def place(g_frame, rot, box):
+        return turned(g_frame, rot), (box.bounds[0] + box.bounds[2]) / 2
+
+    # 1. title: ring + name, exposed copper
+    tb, _, rot = art_box(free, [(th, anc, r_) for anc, r_ in art_spots("title") for th in (6.0, 5.0, 4.5)],
+                         w_max=40.0, w_min=28.0)       # the tallest that fits: the board edge is well inside the plate's
     if tb is None:
-        raise RuntimeError("board art: no free box for the title near the top-left margin (art.widest_box anchors)")
+        raise RuntimeError(f"board art: no free box for the title at layouts/{PR.LAYOUT}/layout.py's place for it")
     x0, y0, x1, y1 = tb.bounds
     h = y1 - y0
     r = h * 0.42
     ring = ring_logo(x0 + r + 0.3, (y0 + y1) / 2, r)
     name, _ = fit(text_shape(PR.BOARD_NAME, PR.ART_TITLE_FONT), x0 + 2 * r + 1.6, y0 + 0.4, x1 - x0 - 2 * r - 1.9, h - 0.8, "left")
-    title = unary_union([ring, name])
-    cx = (x0 + x1) / 2
+    tb = turned(tb, rot)
+    title, cx = place(unary_union([ring, name]), rot, tb)
     a.copper["F"].append(title)
     a.copper["B"].append(mirror_about(title, cx))
     a.keepout = tb.buffer(PR.ART_COPPER_KEEPOUT, join_style="mitre")
     a.boxes.append(tb)
 
-    # 2. tagline + credit, silkscreen, the band between the last key row and the thumbs
-    bb = widest_box(free, 5.4, (58.0, -65.5), w_max=58.0, w_min=30.0)
+    # 2. tagline + credit, silkscreen
+    bb, bh, rot = art_box(free.difference(tb.buffer(1.0)),
+                          [(h_, anc, r_) for anc, r_ in art_spots("tagline") for h_ in (5.4, 4.8, 4.2)], w_max=58.0, w_min=30.0)
     if bb is None:
-        raise RuntimeError("board art: no free box for the tagline between the last key row and the thumbs")
+        raise RuntimeError(f"board art: no free box for the tagline at layouts/{PR.LAYOUT}/layout.py's place for it")
     x0, y0, x1, y1 = bb.bounds
+    s_ = bh / 5.4                                    # the two lines shrink with a lower box: 2.0 and 3.0 mm in 5.4
     credit_txt = f"{PR.HANDLE} · {PR.REVISION} · {PR.YEAR} · {PR.CREDIT}"
-    credit, k2 = fit(text_shape(credit_txt, PR.ART_TEXT_FONT), x0, y0, x1 - x0, 2.0)
+    credit, k2 = fit(text_shape(credit_txt, PR.ART_TEXT_FONT), x0, y0, x1 - x0, 2.0 * s_)
     # one shared size for both faces' code lines: the longer one sets it
     raw = {f: text_shape(PR.TAGLINE[f], PR.ART_CODE_FONT) for f in ("F", "B")}
-    k1 = min(fit(raw[f], x0, y0, x1 - x0, 3.0)[1] for f in ("F", "B"))
+    k1 = min(fit(raw[f], x0, y0, x1 - x0, 3.0 * s_)[1] for f in ("F", "B"))
+    bb = turned(bb, rot)
     for f in ("F", "B"):
         g = sscale(raw[f], k1, k1, origin=(0, 0))
         gx0, gy0, gx1, gy1 = g.bounds
-        g = strans(g, x0 - gx0 + (x1 - x0 - (gx1 - gx0)) / 2, y0 + 2.4 - gy0 + (3.0 - (gy1 - gy0)) / 2)
-        a.silk[f].append(g if f == "F" else mirror_about(g, (x0 + x1) / 2))
-        a.silk[f].append(credit if f == "F" else mirror_about(credit, (x0 + x1) / 2))
+        g = strans(g, x0 - gx0 + (x1 - x0 - (gx1 - gx0)) / 2, y0 + 2.4 * s_ - gy0 + (3.0 * s_ - (gy1 - gy0)) / 2)
+        g, cx = place(g, rot, bb)
+        c, _ = place(credit, rot, bb)
+        a.silk[f].append(g if f == "F" else mirror_about(g, cx))
+        a.silk[f].append(c if f == "F" else mirror_about(c, cx))
     a.boxes.append(bb)
 
-    # 3. build labels, per face (the same board is lhs from one face, rhs from the other)
-    lb = None
-    for lh, anc in ((5.0, (38.0, -87.0)), (4.4, (38.0, -87.0)), (4.0, (38.0, -87.0)), (4.0, (5.0, -68.0))):
-        lb = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), lh, anc, w_max=34.0, w_min=20.0)
-        if lb is not None:                           # the first that fits: the denser boards may not take the tallest
-            break
+    # 3. build labels, per face (the same board is lhs from one face, rhs from the other). The first spot takes the
+    #    tallest that fits there, the others 4 mm: the denser boards may not take the tallest
+    spots = art_spots("labels")
+    tries = [(lh, spots[0][0], spots[0][1]) for lh in (5.0, 4.4, 4.0)] + [(4.0, anc, r_) for anc, r_ in spots[1:]]
+    lb, _, rot = art_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes])), tries, w_max=34.0, w_min=20.0)
     if lb is None:
-        raise RuntimeError("board art: no free box for the lhs / rhs build labels")
+        raise RuntimeError(f"board art: no free box for the lhs / rhs build labels at layouts/{PR.LAYOUT}/layout.py's places "
+                           f"for them")
     x0, y0, x1, y1 = lb.bounds
+    lb_board = turned(lb, rot)
     for face, sw, parts in (("F", lhs, rhs), ("B", rhs, lhs)):
         t1 = text_shape(f"{sw} → switches on this side", PR.ART_TEXT_FONT)
         t2 = text_shape(f"{parts} → sockets & diodes on this side", PR.ART_TEXT_FONT)
         k = min(fit(t, x0, y0, x1 - x0, 2.2 * (y1 - y0) / 5.0)[1] for t in (t1, t2))   # same size for both lines
         l1 = strans(sscale(t1, k, k, origin=(0, 0)), x0, y0 + 2.9 * (y1 - y0) / 5.0)
         l2 = strans(sscale(t2, k, k, origin=(0, 0)), x0, y0 + 0.5)
-        g = unary_union([l1, l2])
-        a.silk[face].append(g if face == "F" else mirror_about(g, (x0 + x1) / 2))
-    a.boxes.append(lb)
+        g, cx = place(unary_union([l1, l2]), rot, lb_board)
+        a.silk[face].append(g if face == "F" else mirror_about(g, cx))
+    a.boxes.append(lb_board)
 
-    # 4. board id, small, in the top margin (both faces)
-    ib = widest_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes] + [a.keepout.buffer(0.8)])),
-                    2.0, (65.0, 18.5), w_max=40.0, w_min=16.0)
-    if ib is not None:
-        x0, y0, x1, y1 = ib.bounds
-        t, _ = fit(text_shape(f"{PR.BOARD_NAME} · half · {variant} · {PR.REVISION}", PR.ART_TEXT_FONT), x0, y0, x1 - x0, y1 - y0)
-        a.silk["F"].append(t)
-        a.silk["B"].append(mirror_about(t, (x0 + x1) / 2))
-        a.boxes.append(ib)
+    # 4. board id, small (both faces), where the layout puts one
+    if (L.art or {}).get("board_id") is not None:
+        ib, _, rot = art_box(free.difference(unary_union([b.buffer(1.0) for b in a.boxes] + [a.keepout.buffer(0.8)])),
+                             [(2.0, anc, r_) for anc, r_ in art_spots("board_id")], w_max=40.0, w_min=16.0)
+        if ib is not None:
+            x0, y0, x1, y1 = ib.bounds
+            t, _ = fit(text_shape(f"{PR.BOARD_NAME} · half · {variant} · {PR.REVISION}", PR.ART_TEXT_FONT), x0, y0, x1 - x0, y1 - y0)
+            ib = turned(ib, rot)
+            t, cx = place(t, rot, ib)
+            a.silk["F"].append(t)
+            a.silk["B"].append(mirror_about(t, cx))
+            a.boxes.append(ib)
 
     # 5. hex lattice everywhere else
     region = free.difference(unary_union([b.buffer(1.0) for b in a.boxes] + [a.keepout.buffer(0.6)]))
