@@ -49,13 +49,23 @@ def anchor():
     return (c * P + P / 2 + PR.PLATE_MARGIN, LAYOUT.inner_col_stagger * P + P / 2 + PR.PLATE_MARGIN)
 
 
+def bridge_side_local(extra=1.0):
+    """What lies past the half's interface plane along the bridge (local frame), and `extra` mm beyond its front: the
+    outline is cut back to the plane there, so a thumb key's margin that reaches past the inner edge (more splay
+    makes the bridge reach further down the edge) can't cross the bridge. Never a key: validate_layout checks."""
+    ax, ay = anchor()
+    yf = ay - PR.BRIDGE_LEN / math.cos(math.radians(PR.SPLAY_DEG))
+    return sbox(ax, yf - extra, ax + 500.0, ay + 500.0)
+
+
 def outline():
-    """Half outline: key cells + margin, rounded, inner-back corner square."""
+    """Half outline: key cells + margin, rounded, inner-back corner square, straight along the bridge."""
     u = unary_union([key_poly(k) for k in LAYOUT.keys])
     o = u.buffer(PR.PLATE_MARGIN, join_style="mitre", mitre_limit=2.0)
     o = o.buffer(PR.OUTLINE_CONCAVE_R, join_style="round").buffer(-PR.OUTLINE_CONCAVE_R, join_style="round")
     o = o.buffer(-PR.OUTLINE_CONVEX_R, join_style="round").buffer(PR.OUTLINE_CONVEX_R, join_style="round")
     ax, ay = anchor()
+    o = o.difference(bridge_side_local())        # straight along the bridge: no margin past its line
     r = PR.OUTLINE_CONVEX_R + 2.0
     o = o.union(sbox(ax - r, ay - r, ax, ay))     # square where it meets the bridge
     return orient(o.simplify(0.02), 1.0)
@@ -168,11 +178,17 @@ def _ops_matrix(ops):
 
 
 def solve_z0():
-    """Lowest inner-edge height that keeps WIRE_DEPTH under the whole plate."""
+    """Lowest inner-edge height that keeps WIRE_DEPTH under the whole plate and leaves the controller its room
+    underneath: it hangs from the cover, which sits on the halves' inner edges, so a low tent can leave it short."""
+    from compose.controller import rev2_std as CS
     M = _R("x", PR.TILT_DEG) @ _ops_matrix(_ops_local_to_P(0.0))
     lo = 0.0
     for x, y in OUTLINE.exterior.coords:
         lo = max(lo, PR.FLOOR_T - apply(M, (x, y, -PR.WIRE_DEPTH))[2])
+    # controller board underside (cover underside - bosses - standoffs - board) at least the tallest underside part
+    # and CTRL_FLOOR_CLEAR above the floor
+    lo = max(lo, PR.FLOOR_T + CS.BOTTOM_PARTS_H + PR.CTRL_FLOOR_CLEAR + CS.PCB_T + CS.STANDOFF_L + CS.COVER_BOSS_H
+             - PR.FRAME_LIP_Z)
     return math.ceil(lo * 2) / 2
 
 
@@ -273,6 +289,11 @@ def validate_layout():
         for j in range(i + 1, len(caps)):
             if caps[i].distance(caps[j]) < 0.5:
                 issues.append(f"keycaps {LAYOUT.keys[i].label_l}/{LAYOUT.keys[j].label_l} closer than 0.5 mm")
+    # no key may reach past the inner edge along the bridge (the outline is cut back to it there)
+    side = bridge_side_local()
+    for k in LAYOUT.keys:
+        if key_poly(k, PR.KEYCAP_SIZE).buffer(0.5).intersects(side):
+            issues.append(f"key {k.label_l} reaches past the inner edge along the bridge")
     # inner edge must be straight along the bridge
     yb, yf = bridge_stretch_local()
     ax = ANCHOR[0]

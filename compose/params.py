@@ -152,6 +152,8 @@ ART_COPPER_KEEPOUT = 0.6         # traces kept this far from the exposed-copper 
 # ---------------------------------------------------------------- rev 2 controller (rev 2 board on standoffs)
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
+CTRL_FLOOR_CLEAR = 3.0           # the controller's tallest underside part -> the floor, at least (sets the case's height
+#                                   when the angles would leave less: geom.solve_z0)
 
 # ---------------------------------------------------------------- rev 2: gasket mount (compose/case/gasket.py)
 # Local half frame: z = 0 plate underside, PLATE_T plate top. The plate's outer FLANGE_W is a thin flange
