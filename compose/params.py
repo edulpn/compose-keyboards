@@ -50,7 +50,7 @@ OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
-SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
+SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 14.0))           # each half rotated toward the centre (top view)
 if _KB:                                                              # the keyboard's own: layouts/<name>/keyboard.py
     TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG))    # gable tent: inner edges raised
     TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG))    # typing tilt: back raised (negative = front raised)
@@ -171,7 +171,7 @@ GK_C = GK_T * (1 - GK_SQUEEZE)   # installed thickness
 GK_PAD_L, GK_PAD_W = 10.0, 4.0   # pad: tape width along the edge (9.5-10) x slice length inward
 LEDGE_W = 4.5                    # case ledge under the flange, inward from the outline
 LEDGE_T = 1.0                    # flat part of the ledge; under it a smooth 60-degree chamfer back to the wall
-LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by up to 12 deg: 48 deg worst, printable)
+LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by its angle: 48 deg at a 12 deg tent, still printable)
 LEDGE_TOP = FLANGE_Z0 - GK_C     # pad seat (local z)
 FRAME_LIP_Z = FLANGE_Z0 + FLANGE_T + GK_C   # frame underside over the flange (local z)
 SEAM_Z = FLANGE_Z0               # case wall top = frame bottom (local z)

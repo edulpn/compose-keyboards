@@ -10,7 +10,7 @@
 | **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, a 20-pin vertical connector per half) |
 | **Half boards** | one reversible board for both halves, in four variants: hotswap or solder, with or without per-key RGB |
 | **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.6 mm, shipped flat; it takes its bends by itself once both ends are plugged in |
-| **Angles** | splay 10°, tent 12°, tilt 0° (provisional) |
+| **Angles** | splay 14°, tent 6°, tilt 0° |
 | **Hardware** | M3 screws and heat-set inserts; M2 for board to plate |
 
 
@@ -24,7 +24,7 @@ How it works: [the gasket-mount case](../../docs/gasket-case.md).
 
 | | |
 |---|---|
-| tub | one print, 332 × 161 mm |
+| tub | one print, 346 × 167 mm |
 | pads | 20 pairs per half: 18 found along the plate edge, 2 at the ends of the inner (bridge) edge |
 | frame screws | six M3 per frame |
 

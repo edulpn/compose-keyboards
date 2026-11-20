@@ -7,7 +7,7 @@ NAME = "Compose58"                       # on the boards, in the firmware and in
 CREDIT = "layout: Lily58 by kata0510"    # printed on the half boards (see NOTICE.md)
 
 # angles (degrees; COMPOSE_TENT and COMPOSE_TILT override them for one run)
-TENT_DEG = 12.0                          # gable tent: inner edges raised
+TENT_DEG = 6.0                           # gable tent: inner edges raised
 TILT_DEG = 0.0                           # typing tilt: back raised (negative = front raised)
 
 # USB ids in the QMK keyboard definition
