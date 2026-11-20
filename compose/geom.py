@@ -49,23 +49,13 @@ def anchor():
     return (c * P + P / 2 + PR.PLATE_MARGIN, LAYOUT.inner_col_stagger * P + P / 2 + PR.PLATE_MARGIN)
 
 
-def bridge_side_local(extra=1.0):
-    """What lies past the half's interface plane along the bridge (local frame), and `extra` mm beyond its front: the
-    outline is cut back to the plane there, so a thumb key's margin that reaches past the inner edge (more splay
-    makes the bridge reach further down the edge) can't cross the bridge. Never a key: validate_layout checks."""
-    ax, ay = anchor()
-    yf = ay - PR.BRIDGE_LEN / math.cos(math.radians(PR.SPLAY_DEG))
-    return sbox(ax, yf - extra, ax + 500.0, ay + 500.0)
-
-
 def outline():
-    """Half outline: key cells + margin, rounded, inner-back corner square, straight along the bridge."""
+    """Half outline: key cells + margin, rounded, inner-back corner square."""
     u = unary_union([key_poly(k) for k in LAYOUT.keys])
     o = u.buffer(PR.PLATE_MARGIN, join_style="mitre", mitre_limit=2.0)
     o = o.buffer(PR.OUTLINE_CONCAVE_R, join_style="round").buffer(-PR.OUTLINE_CONCAVE_R, join_style="round")
     o = o.buffer(-PR.OUTLINE_CONVEX_R, join_style="round").buffer(PR.OUTLINE_CONVEX_R, join_style="round")
     ax, ay = anchor()
-    o = o.difference(bridge_side_local())        # straight along the bridge: no margin past its line
     r = PR.OUTLINE_CONVEX_R + 2.0
     o = o.union(sbox(ax - r, ay - r, ax, ay))     # square where it meets the bridge
     return orient(o.simplify(0.02), 1.0)
@@ -289,11 +279,6 @@ def validate_layout():
         for j in range(i + 1, len(caps)):
             if caps[i].distance(caps[j]) < 0.5:
                 issues.append(f"keycaps {LAYOUT.keys[i].label_l}/{LAYOUT.keys[j].label_l} closer than 0.5 mm")
-    # no key may reach past the inner edge along the bridge (the outline is cut back to it there)
-    side = bridge_side_local()
-    for k in LAYOUT.keys:
-        if key_poly(k, PR.KEYCAP_SIZE).buffer(0.5).intersects(side):
-            issues.append(f"key {k.label_l} reaches past the inner edge along the bridge")
     # inner edge must be straight along the bridge
     yb, yf = bridge_stretch_local()
     ax = ANCHOR[0]
