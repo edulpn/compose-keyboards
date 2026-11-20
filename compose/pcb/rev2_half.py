@@ -953,9 +953,7 @@ def gnd_pour(b):
     dead = []
     zs = [z for z in b.Zones() if not z.GetIsRuleArea()]
     for t in b.GetTracks():
-        # `not ... == ""` on purpose: on the string KiCad 7 returns here, `!= ""` does not give the same answer
-        # (written that way, the RGB boards kept 534 stitching vias instead of 520 and routed differently)
-        if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd.GetNetCode() and not t.GetNetname() == "":  # noqa: SIM201
+        if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd.GetNetCode() and not t.GetNetname() == "":
             q = t.GetPosition()
             hit = sum(1 for z in zs if z.GetFilledPolysList(z.GetLayer()).Contains(q))
             if hit < 2 and not any(tr.GetNetCode() == gnd.GetNetCode() and tr.GetClass() != "PCB_VIA" and

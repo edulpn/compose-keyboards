@@ -626,9 +626,9 @@ def dsn_fix(t, nets, tracks, vias):
         for m in re.finditer(r"\s*\(wire ", wiring):
             if m.start() < pos:
                 continue
-            depth, first = 0, m.end() - len("(wire ")
-            e = first
-            for e in range(first, len(wiring)):
+            depth, start = 0, m.end() - len("(wire ")
+            e = start
+            for e in range(start, len(wiring)):
                 depth += (wiring[e] == "(") - (wiring[e] == ")")
                 if depth == 0:
                     break
