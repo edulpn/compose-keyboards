@@ -50,7 +50,7 @@ OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
-SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
+SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 14.0))           # each half rotated toward the centre (top view)
 if _KB:                                                              # the keyboard's own: layouts/<name>/keyboard.py
     TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG))    # gable tent: inner edges raised
     TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG))    # typing tilt: back raised (negative = front raised)
@@ -152,6 +152,10 @@ ART_COPPER_KEEPOUT = 0.6         # traces kept this far from the exposed-copper 
 # ---------------------------------------------------------------- rev 2 controller (rev 2 board on standoffs)
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
+COVER_JUMPER_POCKET = 1.0        # the cover's underside is this much deeper over each jumper's top bend (the strip
+#                                   settles up to ~2 mm above its designed path there: flex-sim)
+CTRL_FLOOR_CLEAR = 3.0           # the controller's tallest underside part -> the floor, at least (sets the case's height
+#                                   when the angles would leave less: geom.solve_z0)
 
 # ---------------------------------------------------------------- rev 2: gasket mount (compose/case/gasket.py)
 # Local half frame: z = 0 plate underside, PLATE_T plate top. The plate's outer FLANGE_W is a thin flange
@@ -171,7 +175,7 @@ GK_C = GK_T * (1 - GK_SQUEEZE)   # installed thickness
 GK_PAD_L, GK_PAD_W = 10.0, 4.0   # pad: tape width along the edge (9.5-10) x slice length inward
 LEDGE_W = 4.5                    # case ledge under the flange, inward from the outline
 LEDGE_T = 1.0                    # flat part of the ledge; under it a smooth 60-degree chamfer back to the wall
-LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by up to 12 deg: 48 deg worst, printable)
+LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by its angle: 48 deg at a 12 deg tent, still printable)
 LEDGE_TOP = FLANGE_Z0 - GK_C     # pad seat (local z)
 FRAME_LIP_Z = FLANGE_Z0 + FLANGE_T + GK_C   # frame underside over the flange (local z)
 SEAM_Z = FLANGE_Z0               # case wall top = frame bottom (local z)

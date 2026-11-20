@@ -20,10 +20,10 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 ## At a glance
 
 - **Keys:** 58. Per half: 6 × 4 column-staggered, a 4-key thumb arc with one 1.5u key, and one extra inner key.
-- **Shape:** one piece. The halves are splayed 10° and tented 12°, with the controller in a bridge between them.
+- **Shape:** one piece. The halves are splayed 14° and tented 6°, with the controller in a bridge between them.
 - **Boards:** one reversible half board for both halves, in hotswap or solder-in versions, with or without per-key RGB, plus the controller.
 - **Firmware:** QMK on the RP2040. `keyboard.json` is generated with the boards.
-- **Printer:** the case is a single print of about 330 × 160 mm.
+- **Printer:** the case is a single print of about 346 × 167 mm.
 
 ## Pages
 

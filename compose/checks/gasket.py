@@ -387,7 +387,7 @@ def main():
             if nm in parts and (GK_vol := vol(ins, parts[nm])) >= 1e-3}
     rec("E jumper's controller end slides 4.1 mm straight down into its slot (cover off)", not hits,
         ", ".join(f"{k} {v:.2f} mm3" for k, v in hits.items()) or "clear")
-    rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= 3.0, f"{fl:.1f} mm to the floor")
+    rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= PR.CTRL_FLOOR_CLEAR, f"{fl:.1f} mm to the floor")
 
     # ---- F: printability of the exported parts in their print orientation
     import trimesh

@@ -33,7 +33,7 @@ CASES = [
     ("the controller takes no layout", ["-m", "compose", "--layout", "compose58", "controller", "out"], {}, 2, "takes no --layout"),
     ("its simulation neither", ["-m", "compose", "--layout=compose58", "spice-controller", "out"], {}, 2, "takes no --layout"),
     ("params with no keyboard", ["-c", SAY], {}, 0, "None None"),
-    ("params for a keyboard", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58"}, 0, "compose58 12.0"),
+    ("params for a keyboard", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58"}, 0, "compose58 6.0"),
     ("a setting by its new name", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58", "COMPOSE_TENT": "9"}, 0, "compose58 9.0"),
     ("the old name of the rev", ["-c", SAY], {"C58_REV": "2"}, 1, "one rev, and nothing to set"),
     ("the old name of a setting", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58", "C58_TENT": "9"}, 1, "COMPOSE_TENT now"),
@@ -47,7 +47,7 @@ CASES = [
      "| c o out_cache/a"),
     ("the keyboard's name read with none", ["-c", "import compose.params as P; P.BOARD_NAME"], {}, 1, "this run builds none"),
     ("what the layout says of its keyboard", ["-c", SAY_KB], {"COMPOSE_LAYOUT": "compose58"}, 0,
-     "Compose58 | layout: Lily58 by kata0510 | rev 2 | 12.0 0.0 | 0xFEED 0x4C58 0x4C59"),
+     "Compose58 | layout: Lily58 by kata0510 | rev 2 | 6.0 0.0 | 0xFEED 0x4C58 0x4C59"),
 ]
 
 # layouts made up for the test, each a keyboard.py: (what is tried, the file or None for no file, the exit code,

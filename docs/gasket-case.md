@@ -15,12 +15,12 @@ The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames
 
 | | value | set in | for one run |
 |---|---|---|---|
-| splay | 10° | the platform (`compose/params.py`) | `COMPOSE_SPLAY` |
-| tent | 12° on Compose58 | the layout's `keyboard.py` | `COMPOSE_TENT` |
+| splay | 14° | the platform (`compose/params.py`) | `COMPOSE_SPLAY` |
+| tent | 6° on Compose58 | the layout's `keyboard.py` | `COMPOSE_TENT` |
 | tilt | 0° on Compose58 | the layout's `keyboard.py` | `COMPOSE_TILT` |
 | bridge | 62 mm deep, 2.5 mm end walls | the platform | `COMPOSE_BRIDGE_LEN` (the depth) |
 
-The angles come from an ergonomics research pass and stay provisional until the angle test prints are tried.
+The angles come from test prints: a rev 1 case reprinted at other angles. 14° of splay was more comfortable than rev 1's 10°, rev 1's 6° tent more comfortable than 12°, and no front-to-back tilt better than rev 1's 5°. More splay widens the gap between the halves toward the front (on Compose58, 34 mm at the back to 65 mm at the bridge's front); the back, the narrowest point, stays at `COMPOSE_GAP_TOP`.
 
 ## Parts
 

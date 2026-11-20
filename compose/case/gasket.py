@@ -282,6 +282,9 @@ def case2_world():
     cavL, cavR = _both(cav)
     # ---- middle (P): back/front walls up to the cover underside, open between the plates' inner edges
     bridge = G.P2W(_bridge_block_P(yb, yf, DEEP, CT.cover_under, -PR.FLOAT_GAP))
+    # and FLOAT_GAP clear of the plate's outline wherever that reaches past the inner edge: at its front end the
+    # bridge can meet where the margin starts to round out to the thumbs (more splay takes it further down the edge)
+    bridge = bridge.cut(union(_both(prism(ring(O_WALL_IN), -60.0, 60.0))))
     interior = G.P2W(_bridge_block_P(yb - BW, yf + BW, DEEP, CT.cover_under + 1, W + PR.FLOAT_GAP + 1.0))
     top = big_box(-500, 500, -500, 500, 0, 500)
     body = union([tubL, tubR, bridge]).intersect(top)
@@ -354,6 +357,17 @@ def case2_world():
 
 
 # ================================================================ cover
+def cover_jumper_pockets_P(z0, gap):
+    """Pockets in the cover's underside over the jumpers' top bends: the box round where the designed left jumper
+    comes within 3 mm of the cover, grown 2 mm, COVER_JUMPER_POCKET deep, kept 1 mm inside the cover's side; and its
+    mirror for the right jumper."""
+    from compose.pcb import jumper as J
+    near = J.solid_P(J.solve()).intersect(big_box(-200, 200, -200, 200, z0 - 3.0, z0 + 20.0)).BoundingBox()
+    box_ = big_box(near.xmin - 2.0, near.xmax + 2.0, near.ymin - 2.0, near.ymax + 2.0, z0 - 1.0, z0 + PR.COVER_JUMPER_POCKET)
+    left = box_.cut(G.half_space_P(-1, gap + 1.0))
+    return left.fuse(left.mirror("YZ"))
+
+
 def cover2_P():
     """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like the frames.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
@@ -369,6 +383,7 @@ def cover2_P():
     body = body.cut(G.half_space_P(-1, gap)).cut(G.half_space_P(1, gap))
     hw = PR.PICO_W / 2 - PR.WINDOW_EDGE_OVER_PCB
     body = body.cut(big_box(-hw, hw, CT.y_pc - PR.PICO_L / 2 - PR.WINDOW_FRONT_MARGIN, 20.0, z0 - 1, CT.cover_top + 1))
+    body = body.cut(cover_jumper_pockets_P(z0, gap))
     from compose.controller import rev2_std as CS
     bosses = union([cyl(x, y, CS.COVER_BOSS_R, z0 - CS.COVER_BOSS_H, z0 + 0.01) for x, y in cover_screws_P()])   # sits on the hex top
     body = body.fuse(bosses)

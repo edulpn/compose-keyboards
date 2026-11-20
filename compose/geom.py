@@ -168,11 +168,17 @@ def _ops_matrix(ops):
 
 
 def solve_z0():
-    """Lowest inner-edge height that keeps WIRE_DEPTH under the whole plate."""
+    """Lowest inner-edge height that keeps WIRE_DEPTH under the whole plate and leaves the controller its room
+    underneath: it hangs from the cover, which sits on the halves' inner edges, so a low tent can leave it short."""
+    from compose.controller import rev2_std as CS
     M = _R("x", PR.TILT_DEG) @ _ops_matrix(_ops_local_to_P(0.0))
     lo = 0.0
     for x, y in OUTLINE.exterior.coords:
         lo = max(lo, PR.FLOOR_T - apply(M, (x, y, -PR.WIRE_DEPTH))[2])
+    # controller board underside (cover underside - bosses - standoffs - board) at least the tallest underside part
+    # and CTRL_FLOOR_CLEAR above the floor
+    lo = max(lo, PR.FLOOR_T + CS.BOTTOM_PARTS_H + PR.CTRL_FLOOR_CLEAR + CS.PCB_T + CS.STANDOFF_L + CS.COVER_BOSS_H
+             - PR.FRAME_LIP_Z)
     return math.ceil(lo * 2) / 2
 
 
