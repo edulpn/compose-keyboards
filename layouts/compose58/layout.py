@@ -31,7 +31,7 @@ def layout():
 
     kk = {k.label_l: k for k in keys}
     # plate supports: on column boundaries c1|c2 and c3|c4, 3 mm above the
-    # centres of rows 1 and 3 (clear of the row wires 12.5 mm above each key)
+    # centres of rows 1 and 3
     posts = []
     for c in (1, 3):
         for r in (1, 3):

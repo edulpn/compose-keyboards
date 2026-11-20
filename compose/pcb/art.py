@@ -26,7 +26,7 @@ def free_area(plan):
     keep = [SW.switch_cutout(k, grow=0.8) for k in L.keys]
     keep += [SW.bottom_keepout(k).buffer(0.5) for k in L.keys]
     keep += [LineString([ks.cathode, ks.anode]).buffer(2.4) for ks in plan.keys]        # incl. the 'K' marks
-    keep += [Point(p).buffer(3.0) for p in plan.holes_m3 + plan.holes_m2]
+    keep += [Point(p).buffer(3.0) for p in plan.holes_m2]
     keep.append(plan.conn_body.buffer(1.2))
     keep += [Point(p).buffer(1.2) for p in plan.conn_pins]
     for p in (plan.conn_pins[0], plan.conn_pins[-1]):                              # "lhs/rhs: pin 1" labels

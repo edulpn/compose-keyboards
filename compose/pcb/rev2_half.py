@@ -426,7 +426,7 @@ def _place():
     # the fields art.free_area reads
     s.conn_body = s.ffc.body
     s.conn_pins = [s.ffc.pads[0], s.ffc.pads[-1]]
-    s.holes_m3, s.holes_m2 = [], list(s.posts)
+    s.holes_m2 = list(s.posts)
     return s
 
 

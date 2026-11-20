@@ -73,7 +73,6 @@ WALL_T = 3.0
 REVEAL_SIDE_GAP = 0.4        # trim lip -> case step, sideways
 REVEAL_SHADOW = 0.3          # gap under the trim lip (shadow line)
 SHELF_T = 3.0                # case material under the plate at each M3 boss
-POST_R = 3.25                # M2 plate-support post radius
 FOOT_D = 10.5                # rubber bumpon recesses
 FOOT_DEPTH = 1.0
 
