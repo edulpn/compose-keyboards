@@ -42,6 +42,10 @@ class Layout:
     inner_col_stagger: float        # its stagger (units), sets the splay pivot
     posts: list = field(default_factory=list)     # M2 plate supports (x, y)
     feet: list = field(default_factory=list)      # rubber feet (x, y)
+    art: dict = None                # where the half boards' art goes (compose/pcb/art.py): for "title" (the logo and
+    #                                 name in bare copper), "tagline" (silkscreen), "labels" (the lhs / rhs build labels)
+    #                                 and, optionally, "board_id": an anchor (x, y), or several in order of preference.
+    #                                 An anchor (x, y, 90) runs that piece up the board, along an edge
 
 
 def key_point(k, dx, dy):

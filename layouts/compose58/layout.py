@@ -39,4 +39,7 @@ def layout():
     xo = -P / 2 - M + 12
     feet = [(xo, P / 2 + M - 12), (xo, -3.5 * P - M + 12),
             key_point(kk["Lower"], 0.0, -(0.5 * P + M - 12))]
-    return Layout("lily58", keys, inner, stagger[inner], posts, feet)
+    # half-board art: the title in the top-left margin, the tagline between the last key row and the thumbs, the build
+    # labels under the thumbs (or beside the outer column's last key), the board id in the top margin
+    art = dict(title=(8.0, 11.0), tagline=(58.0, -65.5), labels=((38.0, -87.0), (5.0, -68.0)), board_id=(65.0, 18.5))
+    return Layout("lily58", keys, inner, stagger[inner], posts, feet, art)
