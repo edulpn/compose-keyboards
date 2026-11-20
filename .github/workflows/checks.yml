@@ -2,21 +2,21 @@
 #
 # A pull request runs only the suites its changes can affect: every full run on main records which repository
 # files each suite read (.github/ci/traced.py), and the plan job compares that list with the files the pull
-# request changes (.github/ci/plan.py). A docs-only change runs nothing; a rev 2 change skips rev 1.
-# The suites are per layout: rev1-<layout>, rev2-<layout> and boards-<layout> for every folder of layouts/ with a
-# layout.py, in the revs its keyboard.py says it is built in. The plan job hands each job below its list of layouts, so a new
-# layout needs nothing here, and a change to one layout runs that layout's suites only.
+# request changes (.github/ci/plan.py). A docs-only change runs nothing.
+# The suites are per layout: rev2-<layout> (case and firmware) and boards-<layout> for every folder of layouts/
+# with a layout.py. The plan job hands each job below its list of layouts, so a new layout needs nothing here,
+# and a change to one layout runs that layout's suites only.
 # The controller is a suite of its own (it has no keyboard): when it runs the boards run with it, since the half
 # boards are simulated against its board; a change to the boards alone builds that board and skips its SPICE job.
 # Only the pull request's own changes count: what main gained between that full run and the pull request's base is
 # main's own run to check.
 # Pushes to main and manual runs always run everything.
 #
-# Rev 1 is released: a pull request that changes any of its outputs fails. Rev 2 is live, so its outputs are
-# compared with the base's and the result reported (case STLs, keyboard.json, the jumper, the controller, and each
-# half board that routes against the board routed before): a change meant to leave them alone has to read "identical".
+# A design change moves the outputs on purpose, so they are compared with the base's and the result reported,
+# failing nothing (case STLs, keyboard.json, the jumper, the controller, and each half board that routes against
+# the board routed before): a change meant to leave them alone has to read "identical".
 #
-# A rev 2 half board is routed only when something its routing reads has changed since it was last routed
+# A half board is routed only when something its routing reads has changed since it was last routed
 # clean (.github/ci/routed.py); otherwise that board is taken from the cache and goes through DRC, the copper
 # simulation and the order check like a fresh one.
 name: checks
@@ -37,22 +37,17 @@ env:
   PYTHONUNBUFFERED: "1"
   T: python3 .github/ci/traced.py
   BASE_SHA: ${{ github.event.pull_request.base.sha }}    # .github/ci/base.py falls back on it
-  BEFORE_SHA: ${{ github.event.before }}                 # a push: the commit the branch was at (.github/ci/plan.py)
 
 jobs:
   plan:
     runs-on: ubuntu-24.04
     outputs:
-      run_rev1: ${{ steps.plan.outputs.run_rev1 }}
       run_rev2: ${{ steps.plan.outputs.run_rev2 }}
       run_boards: ${{ steps.plan.outputs.run_boards }}
       run_controller: ${{ steps.plan.outputs.run_controller }}
-      rev1: ${{ steps.plan.outputs.rev1 }}          # the layouts each kind of suite runs for, as JSON lists
-      rev2: ${{ steps.plan.outputs.rev2 }}
+      rev2: ${{ steps.plan.outputs.rev2 }}          # the layouts each kind of suite runs for, as JSON lists
       boards: ${{ steps.plan.outputs.boards }}
       half: ${{ steps.plan.outputs.half }}          # the half-board jobs: {layout, board, shard, shards}
-      run_rev1_boards: ${{ steps.plan.outputs.run_rev1_boards }}
-      rev1_boards: ${{ steps.plan.outputs.rev1_boards }}
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -69,87 +64,7 @@ jobs:
       - id: plan
         run: python3 .github/ci/plan.py deps
 
-  # ---------------------------------------------------------------- rev 1, per layout (released: must not change)
-  rev1:
-    needs: plan
-    if: needs.plan.outputs.run_rev1 == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        layout: ${{ fromJSON(needs.plan.outputs.rev1) }}
-    name: rev1 (${{ matrix.layout }})
-    env: { LAYOUT: "${{ matrix.layout }}" }
-    steps:
-      - uses: actions/checkout@v7
-        with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-      - name: build the base for comparison (in the background)
-        if: github.event_name == 'pull_request'
-        run: |
-          git worktree add -q --detach "$RUNNER_TEMP/base" $(python3 .github/ci/base.py)
-          (cd "$RUNNER_TEMP/base" && python3 -m compose --layout $LAYOUT build "$RUNNER_TEMP/b1" \
-              && python3 -m compose --layout $LAYOUT firmware "$RUNNER_TEMP/b1") \
-              > "$RUNNER_TEMP/base.log" 2>&1 &
-      - name: build, firmware, model
-        run: |
-          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT build o1
-          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT firmware o1
-          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT model o1
-      - name: checks
-        run: $T deps/rev1-$LAYOUT.txt --layout $LAYOUT checks o1
-      - name: build outputs byte-identical to the base (STLs, BOM, keyboard.json)
-        if: github.event_name == 'pull_request'
-        run: |
-          while [ ! -f "$RUNNER_TEMP/b1/firmware/keyboard.json" ] && pgrep -f "compose --layout $LAYOUT (build|firmware) $RUNNER_TEMP/b1" >/dev/null; do sleep 5; done
-          tail -3 "$RUNNER_TEMP/base.log"
-          diff <(ls o1/print) <(ls "$RUNNER_TEMP/b1/print")
-          for f in o1/print/*.stl; do cmp "$f" "$RUNNER_TEMP/b1/print/$(basename "$f")"; done
-          cmp o1/bom.txt "$RUNNER_TEMP/b1/bom.txt"
-          cmp o1/firmware/keyboard.json "$RUNNER_TEMP/b1/firmware/keyboard.json"
-          echo "$LAYOUT: rev 1 outputs identical to $(python3 .github/ci/base.py)"
-      # the prints nobody needs for a build: nothing compares them, they have to come out (after the comparison
-      # above: the risers go into print/ too)
-      - name: coupons, tilt risers
-        run: |
-          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT coupons o1
-          $T deps/rev1-$LAYOUT.txt --layout $LAYOUT tilt-risers o1
-      - uses: actions/upload-artifact@v7
-        with: { name: "deps-rev1-${{ matrix.layout }}", path: deps, retention-days: 7 }
-
-  # Rev 1's boards are released: what was ordered is in the release, and nothing here replaces it. This shows that
-  # the code still builds them (placed, routed, DRC clean) and that what it builds passes the matrix simulation.
-  # It runs only when a change touches rev 1's own code (.github/ci/plan.py), or a run is started by hand: the
-  # router is the random one, which took one attempt on one run and nine of its ten on the next. So no two runs
-  # give the same copper, nothing is compared with the base, and a job that fails on routing alone is run again.
-  rev1-boards:
-    needs: plan
-    if: needs.plan.outputs.run_rev1_boards == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        layout: ${{ fromJSON(needs.plan.outputs.rev1_boards) }}
-    name: rev1-boards (${{ matrix.layout }})
-    env: { LAYOUT: "${{ matrix.layout }}" }
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - run: python3 -m compose --layout $LAYOUT pcb o1
-      # Rev 1's bar is 0 errors and 0 unconnected, which pcb holds itself. Its warnings are listed by kind, so that
-      # a change in them can be seen from one run to the next (the library-path notes left out, as pcb leaves them).
-      - name: the boards' DRC warnings, by kind
-        run: |
-          for r in o1/pcb/*_drc.txt; do
-            echo "$(basename "$r" _drc.txt): $(awk '/^\[/ {k = $1} /Severity: warning/ && k != "[lib_footprint_issues]:" {c[k]++}
-                 END {for (k in c) print c[k], k}' "$r" | sort -k2 | tr '\n' ' ')"
-          done
-      - run: python3 -m compose --layout $LAYOUT firmware o1
-      - run: python3 -m compose --layout $LAYOUT sim o1
-
-  # ---------------------------------------------------------------- rev 2, per layout: case, fit checks, firmware
+  # ---------------------------------------------------------------- per layout: case, fit checks, firmware
   rev2:
     needs: plan
     if: needs.plan.outputs.run_rev2 == 'true'
@@ -180,7 +95,7 @@ jobs:
           fi
           pip3 install -q --user --break-system-packages hjson "jsonschema>=4,<5"
           python3 .github/ci/qmk_schema.py qmk/data/schemas o2/firmware/keyboard.json o2/firmware/rgb/keyboard.json
-      # Rev 2 is the live revision: a design change moves its outputs on purpose, so this reports and does not fail.
+      # A design change moves the outputs on purpose, so this reports and does not fail.
       # A change that is meant to leave them alone (a reorganisation, a new check) has to read "identical" here.
       - name: the same outputs as the base? (case STLs, both keyboard.json; reported)
         if: github.event_name == 'pull_request'
@@ -446,7 +361,7 @@ jobs:
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
   checks-passed:
-    needs: [plan, rev1, rev1-boards, rev2, controller, spice, half, jumper, boards-sim]
+    needs: [plan, rev2, controller, spice, half, jumper, boards-sim]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -458,8 +373,8 @@ jobs:
           print('failed:', bad) if bad else print('all suites that ran passed')
           sys.exit(1 if bad else 0)"
 
-  # always(): without a status function a job is skipped when any job behind it was, however far back, and on main
-  # rev 1's boards usually are. The record was not saved on the first run after that job came in.
+  # always(): without a status function a job is skipped when any job behind it was, however far back. A job that
+  # is skipped on main must not cost the record.
   record-deps:
     needs: checks-passed
     if: always() && needs.checks-passed.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
