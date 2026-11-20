@@ -3,7 +3,7 @@ Compose controller rev 2: the shared controller board for all Compose split layo
 
     python3 -m compose controller [outdir]      -> outdir/pcb/controller_rev2.*  (KiCad board, DRC, Gerbers, previews)
 
-Interface (the standard; see README "Controller rev 2"):
+Interface (the standard; see docs/controller-rev2.md):
   - Raspberry Pi Pico footprint (socketed on 2x 1x20 female headers, 8.5 mm), USB end = back (-y here).
   - Two 20-position 1.0 mm FFC/FPC connectors (Molex 52610-2072, vertical, slider latch), top face, square to
     the side edges at fixed positions (rev2_std: VFFC_*), contact face toward the Pico, so the board doesn't

@@ -6,9 +6,9 @@ Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle
   frame2_local()   left frame, local frame: bevelled ring over the flange, skirt down to the case wall,
                    trim lip over the case's reveal, M3 inserts; stops at the bridge (the cover takes over)
   case2_world()    the tub: walls + pad ledge per half, open middle, bridge back/front walls, inner pad seats,
-                   front cover posts, controller bosses, USB opening, feet
-  cover2_P()       middle cover (P frame), flush with the frames, overlapping the plates' inner bands
-                   without touching them; hooked under the back wall, two screws at the front
+                   controller posts, USB opening, feet
+  cover2_P()       middle cover (P frame), flush with the frames; drops straight onto the controller's four
+                   standoffs and takes four M3 screws
 
 Gasket stack (local z): pad seat LEDGE_TOP | pad | flange FLANGE_Z0..+FLANGE_T | pad | frame FRAME_LIP_Z.
 """

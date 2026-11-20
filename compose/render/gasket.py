@@ -1,5 +1,5 @@
 """
-Rev 2 renders:  python3 -m compose gasket-render OUTDIR    (needs node + playwright, like `render`)
+Rev 2 renders:  python3 -m compose gasket-render OUTDIR    (needs node + playwright)
 
 Exports the rev 2 assembly as STLs + a manifest for compose/render/web/view.html, then shoots the standard views
 into OUTDIR/png/: case, plates, frames, cover, gasket pads, the controller with its parts, placeholder switches and
