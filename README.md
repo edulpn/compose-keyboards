@@ -4,7 +4,7 @@
 
 Unibody, tented and splayed split keyboards, generated entirely from Python, by [edulpn](https://github.com/edulpn).
 
-Compose is a platform: one case generator, one controller board standard and one set of checks, shared by every layout. A layout is just a key list; everything else is generated around it.
+Compose is a platform: one case generator, one controller board standard and one set of checks, shared by every layout. A layout is a small folder: its keys, where a few pieces of hardware go, and what its keyboard is called. Everything else is generated around it.
 
 ![Compose58 rev 2](layouts/compose58/images/rev2_hero.png)
 
@@ -55,7 +55,7 @@ Each layout's page links its releases. You don't need any of the toolchain to bu
 
 ## Licensing
 
-Compose is free to build for yourself: print the parts, order your own PCBs, handwire it, fork it, remix it. Selling kits, boards or printed parts made from it needs my permission.
+Compose is free to build for yourself: print the parts, order your own PCBs, fork it, remix it. Selling kits, boards or printed parts made from it needs my permission.
 
 - **The keyboard designs are [CC BY-NC-SA 4.0](LICENSE-CC-BY-NC-SA-4.0).** That covers the generator code and its parameters and layouts, everything it produces (STLs, STEPs, KiCad boards, Gerbers, firmware definitions, renders), and the docs and images.
 - **Generic helpers are [MIT](LICENSE).** That covers the render/preview scripts in `compose/render/web/`, which contain no keyboard design.

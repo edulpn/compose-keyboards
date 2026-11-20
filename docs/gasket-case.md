@@ -11,14 +11,14 @@ The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames
 | `gasket-sections` | cross-section drawings |
 | `gasket-render` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the jumpers as `flex-sim` settles them |
 
-## Defaults
+## Angles and bridge
 
-| | default | override |
-|---|---|---|
-| splay | 10° | `COMPOSE_SPLAY` |
-| tent | 12° | `COMPOSE_TENT` |
-| tilt | 0° | `COMPOSE_TILT` |
-| bridge | 62 mm, 2.5 mm end walls | |
+| | value | set in | for one run |
+|---|---|---|---|
+| splay | 10° | the platform (`compose/params.py`) | `COMPOSE_SPLAY` |
+| tent | 12° on Compose58 | the layout's `keyboard.py` | `COMPOSE_TENT` |
+| tilt | 0° on Compose58 | the layout's `keyboard.py` | `COMPOSE_TILT` |
+| bridge | 62 mm deep, 2.5 mm end walls | the platform | `COMPOSE_BRIDGE_LEN` (the depth) |
 
 The angles come from an ergonomics research pass and stay provisional until the angle test prints are tried.
 

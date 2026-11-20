@@ -35,6 +35,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 ## Files
 
 - **`layout.py`:** the left half's keys in its own frame, plus the plate posts and feet. The right half is the mirror image.
+- **`preroute.py`:** the nets laid out by hand on the half boards before the autorouter runs, and the router each board uses ([what it lays](rev2.md#laid-out-by-hand)).
 - **`keyboard.py`:** the keyboard's name, the credit for its key layout, its tent and tilt, and its USB ids.
 - **Releases:** ready-to-use STLs, JLCPCB Gerbers, `keyboard.json` and the BOM for a built revision's recommended configuration. Tags start with `compose58-`.
 

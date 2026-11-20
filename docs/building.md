@@ -10,7 +10,7 @@ You only need this to change the design. Ready-made files are on a layout's rele
 |---|---|---|---|
 | Python | 3.11+ (3.12 with apt's KiCad) | everything | packages in `requirements.txt`: CadQuery, trimesh, manifold3d, shapely, numpy, scipy, matplotlib, networkx, rtree |
 | KiCad | **7** (developed on 7.0.11) | boards | its `pcbnew` module must import in that Python. KiCad 8 and 9 removed parts of the API the generators use (see [Porting to KiCad 8/9](#porting-to-kicad-89)). |
-| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java **21+**, Freerouting **2.1.0** (optional: Java 25 and Freerouting 2.5.0, see [Routing](#routing)) | routing | point `FREEROUTING` at the jar, or put it at `../tools/freerouting.jar`. Not 2.5.0 (see [Routing](#routing)). Freerouting 2.1.0 is built for Java 21: with an older `java` first on PATH the routing commands stop and say so. |
+| Java + [Freerouting](https://github.com/freerouting/freerouting/releases) | Java **21+** and Freerouting **2.1.0**; beside them Java **25** and Freerouting **2.5.0**, for the boards that name it (see [Routing](#routing)) | routing | point `FREEROUTING` at the 2.1.0 jar, or put it at `../tools/freerouting.jar`. That jar has to be 2.1.0; 2.5.0 goes beside it as `freerouting-2.5.0.jar`. Compose58's half boards and the controller rev 2 name 2.5.0: without it they are routed with 2.1.0, which gives other boards than CI's. Freerouting 2.1.0 is built for Java 21: with an older `java` first on PATH the routing commands stop and say so. |
 | ngspice | any recent | controller simulation only | |
 | Node | 20+ | renders and board previews only | Playwright needs 20; Ubuntu 24.04's apt Node is 18. Run `npm install` in `compose/render/web/`, then `npx playwright install chromium`. |
 
@@ -35,6 +35,13 @@ pip3 install --break-system-packages -r requirements.txt cairosvg pillow
 (cd compose/render/web && npm install && npx playwright install --with-deps chromium)
 ```
 
+For Freerouting 2.5.0 as well (the router Compose58's boards and the controller rev 2 name): any Java 25, with `JAVA25` pointing at its `java`, and the jar beside the other one:
+
+```sh
+curl -fsSL -o ../tools/freerouting-2.5.0.jar \
+    https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
+```
+
 **Docker (macOS, or anywhere):** the repo's `Dockerfile` builds the same stack. On macOS this is the easy route: KiCad's macOS app bundles its own Python, and its `pcbnew` only loads in that interpreter.
 
 ```sh
@@ -42,7 +49,7 @@ docker build -t compose .               # give Docker all CPU cores and >= 8 GB 
 docker run --rm -it -v "$PWD":/work/compose-keyboards -w /work/compose-keyboards compose
 ```
 
-`FREEROUTING` and `NODE_PATH` are set inside the image. It builds natively on arm64 (Apple silicon).
+`FREEROUTING` and `NODE_PATH` are set inside the image. It builds natively on arm64 (Apple silicon). Colima shares only your home folder with containers, so keep the repo under it.
 
 **Smoke test:**
 
@@ -54,7 +61,7 @@ python3 -m compose gasket-case /tmp/r2 && python3 -m compose gasket-checks /tmp/
 
 The same code can give STLs that differ at tessellation level from one machine to the next (the Python and CadQuery versions, x86_64 or arm64): the same bounds, volumes a fraction of a mm³ apart. So a mismatch with someone else's files doesn't mean the geometry changed: compare the meshes (volume, bounds, symmetric difference), and check your own changes against a build of the unchanged code on the same machine (see [Checking a change](#checking-a-change)).
 
-**Memory:** on 4 cores every command fits in 8 GB. The largest peaks: routing an RGB half board 5.4 GB, `gasket-checks` 2.6 GB. Routing runs one Freerouting job per two cores (see [Routing](#routing)), so more cores take more memory there. Colima shares only your home folder with containers, so keep the repo under it.
+**Memory:** on 4 cores every command fits in 8 GB. The largest peaks: routing an RGB half board 5.4 GB, `gasket-checks` 2.6 GB. Routing runs one Freerouting job per two cores (see [Routing](#routing)), so more cores take more memory there.
 
 ## Commands
 
@@ -114,7 +121,7 @@ How `route()` in `compose/pcb/toolbox.py` drives Freerouting:
   - **Seeds.** Asking it the same job twice gives the same routing twice (its optimizer may finish one junction differently: see Continuous integration). So when an attempt isn't DRC-clean, the next one puts the job another way: the nets of the Specctra file listed in another order, and the routing outline moved in by 0.001 mm per seed. The board that is asked for stays the same; the board the router comes back with changes, the same way on every machine. Attempt n uses the seed the layout names (0 if it names none) plus n - 1, and seed 0 changes nothing. When a later attempt is the clean one, the build prints its seed: name it in `ROUTER` and the board routes in one attempt again. The attempts stay with 2.5.0; 2.1.0 steps in only where 2.5.0 isn't installed.
   - It can't route the thumb-row net (ROW4) on any rev 2 half board, plain ones included. With ROW4 pre-routed (below) it routes both plain boards and the solder RGB board in one attempt, in 35 to 216 s: Compose58 routes those three with it, with no seed.
   - The hotswap RGB board it routes with that board's 5 V rail and D nets pre-routed as well (below) and seed 8: the first that came out clean. Seeds 0 to 6 left 3 to 25 connections open; seed 7 was clean until the M2 holes got their no-copper areas and leaves 5 open since. An attempt on this board ends in 4 to 6 minutes, clean or not. Freerouting 2.1.0 hasn't routed this board with its rail laid. Where 2.5.0 isn't installed (the Docker image has 2.1.0 only), build it with `COMPOSE_PREROUTE=0`: 2.1.0 then routes everything, the rail included.
-  - The controller rev 2 board it routes as it is, with nothing pre-routed and no seed, in one attempt of about 5 minutes. The board names it itself (`ROUTER` in `compose/controller/rev2.py`). Freerouting 2.1.0 needed two or three attempts of about a minute each on this board, and still routes it where 2.5.0 isn't installed.
+  - The controller rev 2 board it routes as it is, with nothing pre-routed and no seed, in one attempt: the whole `controller` command takes about 3½ minutes on CI's runners. The board names it itself (`ROUTER` in `compose/controller/rev2.py`). Freerouting 2.1.0 needed two or three attempts of about a minute each on this board, and still routes it where 2.5.0 isn't installed.
 
 **Pre-routed nets.** Autorouting everything is the default, and a new layout needs nothing more. A layout can also lay chosen nets out itself before the router runs, in `layouts/<name>/preroute.py` (the mechanism is `compose/pcb/preroute.py`):
 
@@ -132,7 +139,7 @@ node compose/render/web/svg2png.js out/compose58/rev2/png/board_<board>_bottom.s
 node compose/render/web/svg2png.js out/compose58/rev2/png/board_<board>_bottom.svg big.png 1400 3   # 3x, for close-ups
 ```
 
-Outputs go to `out*/`, which is not committed: releases carry them.
+Outputs go to `out/` (and `out_cache/`, what a slow solve leaves for the next run). Neither is committed: releases carry the files.
 
 ## Repository layout
 
@@ -146,17 +153,20 @@ compose/            the platform (Python package)
                       (jumper.py), text and logo as shapes (lettering.py), half-board art (art.py), nets laid out
                       before the router (preroute.py)
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
-  checks/             fit, assembly, gasket and printability checks; the flex jumper as an elastic strip (flex_sim.py)
+  checks/             fit, assembly, gasket and printability checks (gasket.py), the section drawings
+                      (gasket_sections.py), the flex jumper as an elastic strip (flex_sim.py)
   sim/                copper-level and ngspice simulations (copper.py: a board's copper as geometry)
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware_rev2.py    QMK keyboard definition, plain and RGB
   order_rev2.py       the order folder (out/<layout>/order)
   outputs.py          where a run writes when no folder is named
-layouts/<name>/     one folder per layout: its key list and hardware positions (layout.py); what its keyboard is
-                    called, its tent and tilt and its USB ids (keyboard.py);
-                    optionally the nets it routes itself (preroute.py)
-docs/               platform docs (this wiki), images: rev 2's case, controller, half boards and jumpers each have a page
-  layouts/<name>/README.md   each layout's own pages: revisions, build guides, releases
+layouts/<name>/     one folder per layout: its keys and hardware positions (layout.py); what its keyboard is
+                    called, its tent and tilt and its USB ids (keyboard.py); optionally the nets it routes
+                    itself (preroute.py); and its own pages and pictures (README.md, rev2.md, images/)
+docs/               the platform's pages and their pictures: the case, the controller, the half boards and the
+                    jumpers each have one
+.github/            CI: the workflow (workflows/checks.yml), its scripts and their tests (ci/), and the
+                    runners' setup (actions/setup)
 ```
 
 ## Customising
@@ -195,7 +205,7 @@ Every design change goes through the existing checks (case checks, DRC, the copp
   The boards can't be compared byte for byte (KiCad gives every item a new id on every build): `.github/ci/sameboard.py` compares two boards item by item, and CI runs it against the base (see [Continuous integration](#continuous-integration)).
 - **Moving code between modules:** `python3 .github/ci/imports.py` checks, without running anything, that every name the code takes from another of its modules exists. It covers the commands no job runs (the renders). It also checks that the controller rev 2's commands (`controller`, `sim-controller`, `spice-controller`) reach no layout through their imports: it is the same board under every layout.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance and the return's through the GND pour from the copper, and holds a pre-routed rail and its return to 150 mΩ together; `python3 -m compose.sim.sheet` checks the method it reads the pour with, without KiCad); `flex-sim` passes. After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
+- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance and the return's through the GND pour from the copper, and holds a pre-routed rail and its return to 150 mΩ together; `python3 -m compose.sim.sheet` checks the method it reads the pour with, without KiCad); `flex-sim` passes. After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/<layout>/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
 
 ## Continuous integration
 
@@ -203,13 +213,19 @@ Every design change goes through the existing checks (case checks, DRC, the copp
 
 Every download and install in the jobs' setup step has a time limit of 3 to 5 minutes. One that stalls, which the runners' Ubuntu mirror does now and then, is stopped and fails the job with a "Setup stalled" error naming it: that is the runner, not the change, and running the job again answers it.
 
-A design change moves the outputs on purpose, so the comparison with the base is reported in the run summary and fails nothing: the case STLs and both `keyboard.json` files against a build of the base, the jumper and the controller against the base's, and each half board that routes against the board routed before, with `.github/ci/sameboard.py`. The base is the commit of `main` the run is merged with (`.github/ci/base.py`), which can be newer than the one the pull request was opened on. That compares the job the router was handed (its `.dsn` byte for byte and the way it was called), then the boards item by item, leaving out only the ids KiCad gives every item on every build. It has three verdicts. "The same board": every item the same. "The same routing, finished another way by the router's optimizer": Freerouting 2.5.0 routes a job the same way pass for pass, but its optimizer can end on one of a few boards (seen once: one junction of one net, a quarter of a millimetre of track); the router's log shows the routing passes are the same and which optimizer pass parted, and only tracks of the nets that pass moved may differ. "Differs": anything else, with the reason. A change that is meant to leave the design alone, a reorganisation or a new check, has to read "identical" on every line and "the same job" with "the same board" or "the same routing" for every half board and for the controller.
+A design change moves the outputs on purpose, so the comparison with the base is reported in the run summary and fails nothing: the case STLs and both `keyboard.json` files against a build of the base, the jumper and the controller against the base's, and each half board that routes against the board routed before, with `.github/ci/sameboard.py`. The base is the commit of `main` the run is merged with (`.github/ci/base.py`), which can be newer than the one the pull request was opened on. That compares the job the router was handed (its `.dsn` byte for byte and the way it was called), then the boards item by item, leaving out only the ids KiCad gives every item on every build. It has three verdicts. "The same board": every item the same. "The same routing, finished another way by the router's optimizer": Freerouting 2.5.0 routes a job the same way pass for pass, but its optimizer can end on one of a few boards (seen on Compose58's plain hotswap board, which comes out with 684 or 685 track segments: one junction of one net, a quarter of a millimetre of track); the router's log shows the routing passes are the same and which optimizer pass parted, and only tracks of the nets that pass moved may differ. "Differs": anything else, with the reason. A change that is meant to leave the design alone, a reorganisation or a new check, has to read "identical" on every line and "the same job" with "the same board" or "the same routing" for every half board and for the controller.
 
-Compose58's four half boards route with Freerouting 2.5.0, which routes the same way on every run (its optimizer's finish aside, above): one job and one attempt each, about 2 minutes for a plain board, 4 for the solder RGB board and 8 for the hotswap RGB board. A board that finds no clean route fails its job: after 10 attempts (30 for an RGB board) or 55 minutes, whichever comes first. Routed with 2.1.0, which is random, an RGB half board could miss a clean route for 30 attempts in a row on 4 cores. The workflow races such a board: three jobs of four Freerouting runs per attempt, up to 55 minutes each, with `sim-half-rev2` taking the first that comes out DRC-clean. Which boards race follows from the layout: a board its `preroute.py` gives a router that routes the same way every run (`ROUTER`) gets one job, a board on the default router gets three. The bar is the same as on your machine.
+Compose58's four half boards route with Freerouting 2.5.0, which routes the same way on every run (its optimizer's finish aside, above): one job and one attempt each. On CI's runners a plain board's build takes about a minute, the solder RGB board's 2½ to 4 and the hotswap RGB board's 5½, after about 1½ minutes of setup. A board that finds no clean route fails its job: after 10 attempts (30 for an RGB board) or 55 minutes, whichever comes first. Routed with 2.1.0, which is random, an RGB half board could miss a clean route for 30 attempts in a row on 4 cores. The workflow races such a board: three jobs of four Freerouting runs per attempt, up to 55 minutes each, with `sim-half-rev2` taking the first that comes out DRC-clean. Which boards race follows from the layout: a board its `preroute.py` gives a router that routes the same way every run (`ROUTER`) gets one job, a board on the default router gets three. The bar is the same as on your machine.
 
 A half board is routed only when something its routing reads has changed. Every clean route is cached with a record of what it read: the files it imported or opened, the folders it listed and the module names it looked for, plus the setup action (which pins the router), `requirements.txt` and the workflow (`.github/ci/routed.py`). When none of those has changed, KiCad is the same version and the cached board still passes DRC on the runner, that board is used instead; `sim-half-rev2` and `order-rev2` then run on it as on a fresh one. The run summary says for each board whether it was routed or reused, and why.
 
-A pull request runs only the suites its changes can reach. Each full run on `main` records the repository files every suite read: modules imported (and module names it tried to import), files opened, folders listed (`.github/ci/traced.py`); only what git tracks counts, so a command's own output folder is not in it. The `plan` job compares those with the files the pull request changes (`.github/ci/plan.py`) and lists the reasons in the run summary. A docs-only change runs nothing; a change to one layout's files runs that layout's suites and no other's, and a new layout, having no record, runs its own. The controller belongs to no keyboard, so it is a suite of its own: when it runs, every layout's boards run with it, because the half boards are simulated against its board. A change to the boards alone still builds the controller's board for that simulation and skips its SPICE job. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record. Only the pull request's own changes count, from the commit on `main` it starts from. The record can be older than that commit (a full run on `main` takes a while; past three merges behind, the plan says so in a warning, since that means `main`'s runs are not saving it): if `main` has since changed something a suite reads, that suite runs to be safe, unless the pull request holds only documents and their pictures (`*.md`, images in an `images` folder).
+A pull request runs only the suites its changes can reach:
+
+- **The record.** Each full run on `main` records the repository files every suite read: modules imported (and module names it tried to import), files opened, folders listed (`.github/ci/traced.py`). Only what git tracks counts, so a command's own output folder is not in it. The `plan` job compares the record with the files the pull request changes (`.github/ci/plan.py`) and lists the reasons in the run summary.
+- **What runs.** A docs-only change runs nothing. A change to one layout's files runs that layout's suites and no other's, and a new layout, having no record, runs its own. The controller belongs to no keyboard, so it is a suite of its own: when it runs, every layout's boards run with it, because the half boards are simulated against its board. A change to the boards alone still builds the controller's board for that simulation and skips its SPICE job. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record.
+- **Whose changes.** Only the pull request's own changes count, from the commit on `main` it starts from. The record can be older than that commit, since a full run on `main` takes a while: if `main` has since changed something a suite reads, that suite runs to be safe, unless the pull request holds only documents and their pictures (`*.md`, images in an `images` folder). Past three merges behind, the plan says so in a warning: that means `main`'s runs are not saving the record.
+
+The renders (`gasket-render`) are not run by CI, by choice: they need Node and a browser, and they check nothing. `imports.py` covers the names they take from other modules; run them yourself after a change to what they draw.
 
 ## Notes for working on the code
 

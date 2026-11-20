@@ -2,7 +2,7 @@
 
 [Home](../README.md) › Docs › Rev 2
 
-The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. Its commands are `gasket-*`, `half-rev2`, `flex-*` and `*-rev2`.
+The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. Every command of `python3 -m compose` builds or checks a part of it.
 
 Rev 1, the generation before it (a screwed sandwich mount, PicoBlade cables), was built as Compose58 and is no longer in this repository: its files are in the release [`compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1) and its source is at the tag [`compose58-rev1-final`](https://github.com/edulpn/compose-keyboards/tree/compose58-rev1-final).
 
