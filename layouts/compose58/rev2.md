@@ -1,6 +1,6 @@
 # Compose58 rev 2
 
-[Compose58](README.md) › rev 2 · **Status: in progress.** The case, cover, controller and half boards are designed and checked; nothing is built yet.
+[Compose58](README.md) › rev 2 · **Status: in progress.** The case, cover, controller, half boards and flex jumper are designed and checked; nothing is built yet.
 
 ![rev 2](images/rev2_hero.png)
 
@@ -9,7 +9,7 @@
 | **Case** | one-piece tub, gasket-mounted plates, bevelled frames, lift-off middle cover |
 | **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, a 20-pin vertical connector per half) |
 | **Half boards** | one reversible board for both halves, in four variants: hotswap or solder, with or without per-key RGB |
-| **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.6 mm, bent by hand as it's plugged in |
+| **Jumpers** | one custom 20-conductor flex PCB for both halves (two per keyboard), 27.6 mm, shipped flat; it takes its bends by itself once both ends are plugged in |
 | **Angles** | splay 10°, tent 12°, tilt 0° (provisional) |
 | **Hardware** | M3 screws and heat-set inserts; M2 for board to plate |
 
@@ -74,12 +74,12 @@ How they work: [rev 2 half boards](../../docs/half-boards-rev2.md).
 
 ### Laid out by hand
 
-What [`preroute.py`](preroute.py) lays before the autorouter runs, beside ROW4 (the thumb row) on all four boards:
+What [`preroute.py`](preroute.py) lays before the autorouter runs: ROW4 (the thumb row) on all four boards, and:
 
 | | |
 |---|---|
-| 5 V rail | laid out by hand before the autorouter runs ([`preroute.py`](preroute.py)): a 0.5 mm trunk along every key row, between each switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back, so both faces keep room for what has to cross a row. The rows are tied into a mesh by a 1 mm spine down the outer edge and a 0.8 mm one down the inner edge; slot 2 feeds the top row, slot 19 the second row and the inner spine. `sim-half-rev2` reads its resistance from the routed copper: from the connector to the farthest LED, 81 mΩ as the left half and 76 mΩ as the right on the solder RGB board, 82 and 77 mΩ on the hotswap RGB board. It reads the return too, through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 4 and 20: 14 and 12 mΩ on the solder RGB board, 31 and 27 mΩ on the hotswap RGB board. The worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half; the most is 113 mΩ (hotswap RGB, left half). All of these figures include 20 % for temperature and plating tolerance. |
-| D nets, hotswap RGB board | laid out by hand too: each key's socket pad on either face to its diode. The sockets' pads sit on both faces, so every key needs two links across the board (D and its column), and with the rail laid as well the autorouter didn't finish the board. Each D net runs from the pad beside the diode straight to the diode on that pad's face, and on over the top of the switch to a via above the other pad. The columns, the rows and the LED data are left to the autorouter (Freerouting 2.5.0, see [Routing](../../docs/building.md#routing)). |
+| 5 V rail, RGB boards | a 0.5 mm trunk along every key row, between each switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back, so both faces keep room for what has to cross a row. The rows are tied into a mesh by a 1 mm spine down the outer edge and a 0.8 mm one down the inner edge; slot 2 feeds the top row, slot 19 the second row and the inner spine. `sim-half-rev2` reads its resistance from the routed copper: from the connector to the farthest LED, 81 mΩ as the left half and 76 mΩ as the right on the solder RGB board, 82 and 77 mΩ on the hotswap RGB board. It reads the return too, through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 4 and 20: 14 and 12 mΩ on the solder RGB board, 31 and 27 mΩ on the hotswap RGB board. The worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half; the most is 113 mΩ (hotswap RGB, left half). All of these figures include 20 % for temperature and plating tolerance. |
+| D nets, hotswap RGB board | each key's socket pad on either face to its diode. The sockets' pads sit on both faces, so every key needs two links across the board (D and its column), and with the rail laid as well the autorouter didn't finish the board. Each D net runs from the pad beside the diode straight to the diode on that pad's face, and on over the top of the switch to a via above the other pad. The columns, the rows and the LED data are left to the autorouter (Freerouting 2.5.0, see [Routing](../../docs/building.md#routing)). |
 
 ### Checked
 

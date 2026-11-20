@@ -53,7 +53,8 @@ Ergo42 under the MIT license.
 Copyright (c) 2017 Biacco42
 https://github.com/Biacco42/Ergo42
 
-https://opensource.org/licenses/mit-license.php```
+https://opensource.org/licenses/mit-license.php
+```
 
 ## three.js (renders only)
 
