@@ -13,10 +13,10 @@ Each half has an interface plane: the plane through its inner edge, perpendicula
 
 Assembly order:
 
-1. Carrier or controller board, plus the Pico (screws from above).
-2. Plates with switches and wiring, or with their PCB.
-3. Frames.
-4. Sandwich and post screws from under the case.
-5. Cover.
+1. Controller board onto its posts, clamped by its standoffs, then the Pico.
+2. Each half board onto its plate, its jumper plugged in first.
+3. Plates, with their boards, onto the pads.
+4. Frames, then their screws from under the case.
+5. Jumpers into the controller, then the cover.
 
-`python3 -m compose checks` sweeps each part along its real install direction, in that order, from 0.3 to 30 mm, and fails on any contact. Negative controls (parts pushed the wrong way) prove the test can see a collision.
+`python3 -m compose gasket-checks` sweeps each part along its real install direction (plates and frames along the plate normal, the controller and the cover straight down) and fails on any contact with what is already in place.

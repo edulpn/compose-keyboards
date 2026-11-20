@@ -12,9 +12,9 @@ import sys
 import tempfile
 
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SAY = "import compose.params as P; print(P.REV, getattr(P, 'LAYOUT', None), getattr(P, 'TENT_DEG', None))"
+SAY = "import compose.params as P; print(getattr(P, 'LAYOUT', None), getattr(P, 'TENT_DEG', None))"
 SAY_OUT = ("from compose.__main__ import passed; from compose import outputs as O; "
-           "print(passed([], 1, 'a'), passed(['--plan'], 2, 'a'), passed(['--resilk'], None, 'a'), passed(['mine', '--plan'], 2, 'a'), "
+           "print(passed([], 'a'), passed(['--plan'], 'a'), passed(['--resilk'], None), passed(['mine', '--plan'], 'a'), "
            "'|', O.controller(), O.order('a'), O.cache('a'))")
 SAY_KB = ("import compose.params as P; print(P.BOARD_NAME, P.CREDIT, P.REVISION, f'{P.TENT_DEG} {P.TILT_DEG}', "
           "f'{P.USB_VID} {P.USB_PID} {P.USB_PID_RGB}', sep=' | ')")
@@ -23,53 +23,46 @@ CASES = [
     ("the help lists the layouts", ["-m", "compose", "--help"], {}, 0, "layouts: "),
     ("no arguments: the help", ["-m", "compose"], {}, 0, "commands:"),
     ("a command there is not", ["-m", "compose", "nope"], {}, 2, "commands:"),
-    ("a layout there is not", ["-m", "compose", "--layout", "nope", "firmware"], {}, 2, "no layouts/nope/layout.py"),
-    ("the same with =", ["-m", "compose", "--layout=nope", "firmware"], {}, 2, "no layouts/nope/layout.py"),
+    ("a layout there is not", ["-m", "compose", "--layout", "nope", "firmware-rev2"], {}, 2, "no layouts/nope/layout.py"),
+    ("the same with =", ["-m", "compose", "--layout=nope", "firmware-rev2"], {}, 2, "no layouts/nope/layout.py"),
     ("--layout with no name", ["-m", "compose", "--layout"], {}, 2, "needs a name"),
-    ("the folder's old name", ["-m", "compose", "--layout", "lily58", "firmware"], {}, 2, "no layouts/lily58/layout.py"),
-    ("a path for a layout", ["-m", "compose", "--layout", "../layouts/compose58", "firmware"], {}, 2, "no layouts/../layouts/compose58/layout.py"),
+    ("the folder's old name", ["-m", "compose", "--layout", "lily58", "firmware-rev2"], {}, 2, "no layouts/lily58/layout.py"),
+    ("a path for a layout", ["-m", "compose", "--layout", "../layouts/compose58", "firmware-rev2"], {}, 2, "no layouts/../layouts/compose58/layout.py"),
     ("a layout and no command: the help", ["-m", "compose", "--layout", "compose58"], {}, 0, "commands:"),
     ("the controller takes no layout", ["-m", "compose", "--layout", "compose58", "controller", "out"], {}, 2, "takes no --layout"),
     ("its simulation neither", ["-m", "compose", "--layout=compose58", "spice-controller", "out"], {}, 2, "takes no --layout"),
-    ("params with no keyboard", ["-c", SAY], {}, 0, "None None None"),
-    ("params for rev 1", ["-c", SAY], {"COMPOSE_REV": "1", "COMPOSE_LAYOUT": "compose58"}, 0, "1 compose58 6.0"),
-    ("params for rev 2", ["-c", SAY], {"COMPOSE_REV": "2", "COMPOSE_LAYOUT": "compose58"}, 0, "2 compose58 12.0"),
-    ("a setting by its new name", ["-c", SAY], {"COMPOSE_REV": "2", "COMPOSE_LAYOUT": "compose58", "COMPOSE_TENT": "9"}, 0, "2 compose58 9.0"),
-    ("a rev with no layout", ["-c", SAY], {"COMPOSE_REV": "2"}, 1, "come together"),
-    ("a layout with no rev", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58"}, 1, "come together"),
-    ("a rev there is not", ["-c", SAY], {"COMPOSE_REV": "3", "COMPOSE_LAYOUT": "compose58"}, 1, "a rev 1 and a rev 2"),
-    ("the old name of the rev", ["-c", SAY], {"C58_REV": "2"}, 1, "follows from the command"),
-    ("the old name of a setting", ["-c", SAY], {"COMPOSE_REV": "2", "COMPOSE_LAYOUT": "compose58", "C58_TENT": "9"}, 1, "COMPOSE_TENT now"),
+    ("params with no keyboard", ["-c", SAY], {}, 0, "None None"),
+    ("params for a keyboard", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58"}, 0, "compose58 12.0"),
+    ("a setting by its new name", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58", "COMPOSE_TENT": "9"}, 0, "compose58 9.0"),
+    ("the old name of the rev", ["-c", SAY], {"C58_REV": "2"}, 1, "one rev, and nothing to set"),
+    ("the old name of a setting", ["-c", SAY], {"COMPOSE_LAYOUT": "compose58", "C58_TENT": "9"}, 1, "COMPOSE_TENT now"),
     ("the old name of the pre-route switch", ["-c", SAY], {"C58_PREROUTE": "0"}, 1, "COMPOSE_PREROUTE now"),
     ("an old name there never was", ["-c", SAY], {"C58_NOPE": "1"}, 1, "no setting of that name"),
     ("a value only a keyboard has, read with none", ["-c", "import compose.params as P; P.TENT_DEG"], {}, 1, "this run builds none"),
     ("the layout read with none", ["-c", "import compose.params as P; P.LAYOUT"], {}, 1, "this run builds none"),
-    ("no folder named: one per keyboard and rev, and the controller's; a folder named: that one", ["-c", SAY_OUT], {}, 0,
-     "['out/a/rev1'] ['out/a/rev2', '--plan'] ['out/controller', '--resilk'] ['mine', '--plan'] | out/controller out/a/order out_cache/a"),
+    ("no folder named: one per keyboard, and the controller's; a folder named: that one", ["-c", SAY_OUT], {}, 0,
+     "['out/a/rev2'] ['out/a/rev2', '--plan'] ['out/controller', '--resilk'] ['mine', '--plan'] | out/controller out/a/order out_cache/a"),
     ("the controller's and the order folder named by the environment", ["-c", SAY_OUT], {"CTRL_OUT": "c", "ORDER_OUT": "o"}, 0,
      "| c o out_cache/a"),
     ("the keyboard's name read with none", ["-c", "import compose.params as P; P.BOARD_NAME"], {}, 1, "this run builds none"),
-    ("what the layout says of its keyboard, rev 1", ["-c", SAY_KB], {"COMPOSE_REV": "1", "COMPOSE_LAYOUT": "compose58"}, 0,
-     "Compose58 | layout: Lily58 by kata0510 | rev 1 | 6.0 5.0 | 0xFEED 0x4C58 0x4C59"),
-    ("and rev 2", ["-c", SAY_KB], {"COMPOSE_REV": "2", "COMPOSE_LAYOUT": "compose58"}, 0,
+    ("what the layout says of its keyboard", ["-c", SAY_KB], {"COMPOSE_LAYOUT": "compose58"}, 0,
      "Compose58 | layout: Lily58 by kata0510 | rev 2 | 12.0 0.0 | 0xFEED 0x4C58 0x4C59"),
 ]
 
-# layouts made up for the test, each a keyboard.py: (what is tried, the file or None for no file, the rev, the exit
-# code, a word the output must have)
-ONLY2 = 'NAME = "Two"\nCREDIT = "layout: nobody"\nREVS = (2,)\nTENT_DEG = {2: 8.0}\nTILT_DEG = {2: 1.0}\n' \
-        'USB_VID = "0xFEED"\nUSB_PID = "0x0001"\nUSB_PID_RGB = "0x0002"\n'
+# layouts made up for the test, each a keyboard.py: (what is tried, the file or None for no file, the exit code,
+# a word the output must have)
+TWO = 'NAME = "Two"\nCREDIT = "layout: nobody"\nTENT_DEG = 8.0\nTILT_DEG = 1.0\n' \
+      'USB_VID = "0xFEED"\nUSB_PID = "0x0001"\nUSB_PID_RGB = "0x0002"\n'
 MADE_UP = [
-    ("a layout built in rev 2 only, in rev 2", ONLY2, "2", 0, "Two | layout: nobody | rev 2 | 8.0 1.0 | 0xFEED 0x0001 0x0002"),
-    ("the same in rev 1", ONLY2, "1", 1, "Two (layouts/made_up) is not built in rev 1: its keyboard.py lists rev 2."),
-    ("a layout with no keyboard.py", None, "2", 1, "layouts/made_up/keyboard.py is missing"),
-    ("a keyboard.py that leaves two things out", ONLY2.replace("CREDIT", "CREDITS").replace("USB_PID_RGB", "USB_RGB"), "2", 1,
+    ("a layout made up here", TWO, 0, "Two | layout: nobody | rev 2 | 8.0 1.0 | 0xFEED 0x0001 0x0002"),
+    ("a layout with no keyboard.py", None, 1, "layouts/made_up/keyboard.py is missing"),
+    ("a keyboard.py that leaves two things out", TWO.replace("CREDIT", "CREDITS").replace("USB_PID_RGB", "USB_RGB"), 1,
      "does not say CREDIT, USB_PID_RGB"),
-    ("a rev listed with no angle for it", ONLY2.replace("(2,)", "(1, 2)"), "1", 1, "gives no TENT_DEG for it"),
+    ("an angle that is not a number", TWO.replace("TENT_DEG = 8.0", "TENT_DEG = {2: 8.0}"), 1, "TENT_DEG has to be a number of degrees"),
 ]
 
 
-SETTINGS = {"COMPOSE_REV", "COMPOSE_LAYOUT", "COMPOSE_SPLAY", "COMPOSE_TENT", "COMPOSE_TILT", "COMPOSE_GAP_TOP", "COMPOSE_BRIDGE_LEN",
+SETTINGS = {"COMPOSE_LAYOUT", "COMPOSE_SPLAY", "COMPOSE_TENT", "COMPOSE_TILT", "COMPOSE_GAP_TOP", "COMPOSE_BRIDGE_LEN",
             "COMPOSE_PREROUTE"}
 
 
@@ -119,7 +112,7 @@ def main():
     bad += bool(wrong)
     print(("ok   " if not wrong else "FAIL ") + "every layout's keyboard.py is plain constants and says what params.py asks"
           + ("" if not wrong else f": {wrong}"))
-    old = {"C58_" + n[len("COMPOSE_"):] for n in SETTINGS} - {"C58_LAYOUT"}
+    old = {"C58_" + n[len("COMPOSE_"):] for n in SETTINGS} - {"C58_LAYOUT"} | {"C58_REV"}
     stray = {n: f for n, f in named().items() if n not in SETTINGS and not (n in old | {"C58_"} and f == "compose/params.py")
              and not (n == "C58_" and f.startswith("docs/"))}
     bad += bool(stray)
@@ -133,7 +126,7 @@ def main():
         bad += not ok
         print(("ok   " if ok else "FAIL ") + f"{name}: exit {r.returncode}" + ("" if ok else f" (expected {code} and {word!r}): {out.strip()[-300:]}"))
     with tempfile.TemporaryDirectory() as tmp:                 # the made-up layouts: `layouts` found here, `compose` in ROOT
-        for i, (name, text, rev, code, word) in enumerate(MADE_UP):
+        for i, (name, text, code, word) in enumerate(MADE_UP):
             d = os.path.join(tmp, str(i), "layouts", "made_up")
             os.makedirs(d)
             for f in (os.path.join(d, "..", "__init__.py"), os.path.join(d, "__init__.py")):
@@ -142,7 +135,7 @@ def main():
                 with open(os.path.join(d, "keyboard.py"), "w") as fh:
                     fh.write(text)
             r = subprocess.run([sys.executable, "-c", SAY_KB], cwd=os.path.join(tmp, str(i)), capture_output=True, text=True,
-                               env={**base, "PYTHONPATH": ROOT, "COMPOSE_REV": rev, "COMPOSE_LAYOUT": "made_up"})
+                               env={**base, "PYTHONPATH": ROOT, "COMPOSE_LAYOUT": "made_up"})
             out = r.stdout + r.stderr
             ok = r.returncode == code and word in out
             bad += not ok

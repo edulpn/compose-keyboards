@@ -10,8 +10,8 @@ What is checked
   B  clearances: plate float to the case and frame, cover to frames, board / parts to the case
   C  gasket stack: at every pad, seat -> flange -> frame distances measured on the solids along the
      plate normal (installed pad thickness and squeeze of the weatherstrip tape)
-  D  assembly paths: plate and frame drop in along the plate normal, the cover goes down 1.5 mm forward of
-     home and slides back onto its hooks, the controller goes in tongues-first, tilted
+  D  assembly paths: plate and frame drop in along the plate normal, the cover drops straight onto its
+     standoffs, the controller straight onto its posts
   E  hardware: screw / standoff / insert engagement, Pico gap, cable plugs under the cover
   F  printability: each exported part in its print orientation is watertight and has no overhang steeper
      than 45 degrees off the bed (short bridges over holes allowed). Every part's size on the bed is printed;
@@ -259,7 +259,7 @@ def parts_world(jumpers=True):
 
 
 def main():
-    # ---- the layout itself, before anything is built round it (rev 1's build stops on these; nothing of rev 2 did)
+    # ---- the layout itself, before anything is built round it
     issues = G.validate_layout()
     rec("L layout: keycaps >= 0.5 mm apart, inner edge straight along the centre section, hardware inside the outline",
         not issues, f"{len(G.LAYOUT.keys)} keys per half" + ("".join("; " + i for i in issues)))

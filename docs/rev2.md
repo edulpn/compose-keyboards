@@ -2,7 +2,9 @@
 
 [Home](../README.md) › Docs › Rev 2
 
-The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. Its commands select it (`gasket-*`, `half-rev2`, `flex-*`, `*-rev2`); rev 1 has its own commands and is untouched.
+The platform's second generation: a gasket-mount case, a shared controller board, reversible half boards in four variants and a flex jumper per half, with the checks and simulations that go with them. Its commands are `gasket-*`, `half-rev2`, `flex-*` and `*-rev2`.
+
+Rev 1, the generation before it (a screwed sandwich mount, PicoBlade cables), was built as Compose58 and is no longer in this repository: its files are in the release [`compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1) and its source is at the tag [`compose58-rev1-final`](https://github.com/edulpn/compose-keyboards/tree/compose58-rev1-final).
 
 All of it is generated for the layout a command is given with `--layout`. So far that is one layout, Compose58. Where these pages quote a figure or show a picture of it they say so, and [Compose58's rev 2 page](../layouts/compose58/rev2.md) has that keyboard's sizes, parts and check results.
 
@@ -16,7 +18,7 @@ All of it is generated for the layout a command is given with `--layout`. So far
 
 ## Design notes and ideas
 
-Collected while building rev 1; none of them blocks a rev 1 build.
+Collected while building the generation before this one.
 
 | idea | status | notes |
 |---|---|---|
@@ -24,5 +26,5 @@ Collected while building rev 1; none of them blocks a rev 1 build.
 | Controller rev 2 first, then the half boards | done | See [controller rev 2](controller-rev2.md). The half-board side of the standard is done too: connector on the bottom face, same physical slot order. The halves join the controller through custom flex jumpers, so the controller stays the same whatever a layout's angles. |
 | Bridge cover lifts off without touching the jumpers | done | The jumpers run below the cover's parting line; the cover never clamps, guides or closes over them. Cables to modules in the cover (OLED, pointing device) are long enough to set the cover beside the board, or unplug at the controller's front-edge connectors. |
 | No perimeter screws through the half board | done | The plate edge is clamped in the gasket between frame and case: fewer parts than 14 through-screws. |
-| Ergonomic defaults | provisional | Tent, splay plus separation (tied together on a unibody), front-to-back tilt (studies tend to favour flat or negative tilt over rev 1's 5°) and typing height, from a research pass; to be weighed against rev 1 daily use and the angle test prints. Other angles: regenerate from `compose/params.py` and order your own half boards and jumpers (the controller is unaffected). |
+| Ergonomic defaults | provisional | Tent, splay plus separation (tied together on a unibody), front-to-back tilt (studies tend to favour flat or negative tilt) and typing height, from a research pass; to be weighed against daily use and the angle test prints. Other angles: set tent and tilt in the layout's `keyboard.py` (splay is the platform's, `COMPOSE_SPLAY`), rebuild, and order your own half boards and jumpers (the controller is unaffected). |
 | Flex cuts in the half board | open | Paired with a thinner plate (a parametric web thickness, 5 mm only at the supports). Only meaningful with the gasket mount. |

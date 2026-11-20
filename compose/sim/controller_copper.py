@@ -9,7 +9,7 @@ Independent of the net names the board was built with:
                   numbers; each terminal's two tails on one copper node; the contact face toward the Pico
        74HCT125   DIP-14 pinout from pin 1 = the square pad, counter-clockwise seen from the side its body is on
        C2         + lead = square pad;  headers pin 1 = square pad;  Qwiic pins in a row from pin 1
-  3. The netlist those parts make is compared with the spec below (written from the README, not from
+  3. The netlist those parts make is compared with the spec below (written from docs/controller-rev2.md, not from
      compose/controller/rev2.py), for the fully populated board and with the optional RGB parts left out.
   4. Silkscreen labels are checked against what the copper under them does.
   5. Two model halves (42 keys each, diode per key, reversible board = right half mirrored) are joined by
@@ -43,7 +43,7 @@ def ok(cond, msg):
     return cond
 
 
-# ---------------------------------------------------------------- the spec (README "Controller rev 2")
+# ---------------------------------------------------------------- the spec (docs/controller-rev2.md)
 PICO_PINOUT = {1: "GP0", 2: "GP1", 3: "GND", 4: "GP2", 5: "GP3", 6: "GP4", 7: "GP5", 8: "GND", 9: "GP6", 10: "GP7",
                11: "GP8", 12: "GP9", 13: "GND", 14: "GP10", 15: "GP11", 16: "GP12", 17: "GP13", 18: "GND", 19: "GP14",
                20: "GP15", 21: "GP16", 22: "GP17", 23: "GND", 24: "GP18", 25: "GP19", 26: "GP20", 27: "GP21",

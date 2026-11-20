@@ -28,8 +28,8 @@ from compose import params as PR
 from compose import layout as layouts
 
 LAYOUT = layouts.get()
-POSTS = tuple(LAYOUT.posts)          # the plate posts as the layout gives them: rev 1's board plan (compose.pcb.layout)
-#                                       moves LAYOUT.posts clear of its parts, rev 2 solves its own from these
+POSTS = tuple(LAYOUT.posts)          # the plate posts as the layout gives them: the half board's plan
+#                                       (compose.pcb.rev2_half) solves its own from these
 P = PR.KEY_PITCH
 
 
@@ -155,9 +155,6 @@ def apply(M, p):
     return (M @ np.array([p[0], p[1], p[2], 1.0]))[:3]
 
 
-S_MIRROR = np.diag([-1.0, 1, 1, 1])
-
-
 def _ops_local_to_P(z0):
     ax, ay = ANCHOR
     return [("t", -ax, -ay, 0), ("r", "y", -PR.TENT_DEG), ("r", "z", -PR.SPLAY_DEG), ("t", -PR.GAP_TOP / 2, 0, z0)]
@@ -180,13 +177,11 @@ def solve_z0():
 
 
 Z0 = solve_z0()                       # plate underside height at the inner edge (P frame)
-Z_DECK = Z0 + PR.PLATE_T              # plate top at the inner edge = bridge top = cover underside
 OPS_LP = _ops_local_to_P(Z0)
 OPS_PW = [("r", "x", PR.TILT_DEG)]
 M_LP = _ops_matrix(OPS_LP)
 M_PW = _ops_matrix(OPS_PW)
 M_LW = M_PW @ M_LP
-M_RW = S_MIRROR @ M_LW @ S_MIRROR
 
 
 def _run(shape, ops):
@@ -207,7 +202,6 @@ def _inverse(ops):
 
 
 def L2W(shape):  return _run(shape, OPS_LP + OPS_PW)          # left local -> world
-def R2W(shape):  return L2W(shape).mirror("YZ")              # (mirror image) right half
 def P2W(shape):  return _run(shape, OPS_PW)                  # bridge frame -> world
 def P2L(shape):  return _run(shape, _inverse(OPS_LP))        # bridge frame -> left local
 def W2L(shape):  return _run(shape, _inverse(OPS_LP + OPS_PW))
@@ -300,9 +294,4 @@ def validate_layout():
         if not OUTLINE.exterior.intersects(seg):
             issues.append(f"inner edge not straight at local y={y:.1f} (bridge too long for this layout)")
             break
-    for x, y in LAYOUT.screws:
-        from shapely.geometry import Point
-        p = Point(x, y)
-        if not OUTLINE.contains(p) or OUTLINE.exterior.distance(p) < PR.SCREW_EDGE_INSET - 0.1:
-            issues.append(f"screw at ({x:.1f},{y:.1f}) too close to the edge")
     return issues

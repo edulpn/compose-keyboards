@@ -40,7 +40,6 @@ class Layout:
     keys: list
     inner_col: int                  # column index on the inner edge
     inner_col_stagger: float        # its stagger (units), sets the splay pivot
-    screws: list = field(default_factory=list)    # M3 sandwich screws (x, y)
     posts: list = field(default_factory=list)     # M2 plate supports (x, y)
     feet: list = field(default_factory=list)      # rubber feet (x, y)
 

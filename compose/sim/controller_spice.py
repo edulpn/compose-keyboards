@@ -13,7 +13,7 @@ Circuit simulation of the controller rev 2 (ngspice), worst-case corners swept:
   F  Matrix (QMK COL2ROW, rows strobed, columns read with the RP2040 pull-ups): low level through the diode,
      select / unselect timing against QMK's delays, jumper and controller-trace crosstalk into the columns.
 
-Track lengths, widths and parallel runs come from the routed board (out/pcb/controller_rev2.kicad_pcb);
+Track lengths, widths and parallel runs come from the routed board (outdir/pcb/controller_rev2.kicad_pcb);
 parts are modelled from their datasheet limits (sources in the report). Jumper and half-board values are
 swept over generous ranges (the jumper up to 100 mm, so other layouts' jumpers are covered too).
 """

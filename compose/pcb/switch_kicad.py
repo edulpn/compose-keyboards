@@ -1,5 +1,5 @@
 """
-The MX switch as a KiCad footprint: the reversible footprint both generations' half boards place, built from
+The MX switch as a KiCad footprint: the reversible footprint the half boards place, built from
 the measurements in params.py. Its geometry without KiCad (the plate's hole, the socket's body, the holes it
 drills) is switch.py.
 """

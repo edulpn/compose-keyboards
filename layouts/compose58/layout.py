@@ -30,21 +30,8 @@ def layout():
     keys.append(Key((inner + 1.0) * P, -3.35 * P, 0.0, 1.0, 1.0, 4, 1, "[", "]", grid=False))   # extra inner key
 
     kk = {k.label_l: k for k in keys}
-    s = PR.SCREW_EDGE_INSET
-    x_out = -P / 2 - M + s
-    ax = inner * P + P / 2 + M
-    ay = stagger[inner] * P + P / 2 + M
-    screws = [
-        (x_out, P / 2 + M - s),                                    # back outer
-        (ax - s, ay - s),                                          # back inner
-        (x_out, -1.5 * P),                                         # outer middle
-        (x_out, -3.5 * P - M + s),                                 # front outer
-        key_point(kk["Gui"], 0.5 * P, -(0.5 * P + M - s)),         # thumb row front
-        key_point(kk["Space"], 0.5 * P + M - s, -0.45 * P),        # beside the 1.5u
-        (kk["["].x + 0.5 * P + M - s, kk["["].y + 0.25 * P),       # beside the inner key
-    ]
     # plate supports: on column boundaries c1|c2 and c3|c4, 3 mm above the
-    # centres of rows 1 and 3 (clear of the row wires 12.5 mm above each key)
+    # centres of rows 1 and 3
     posts = []
     for c in (1, 3):
         for r in (1, 3):
@@ -52,4 +39,4 @@ def layout():
     xo = -P / 2 - M + 12
     feet = [(xo, P / 2 + M - 12), (xo, -3.5 * P - M + 12),
             key_point(kk["Lower"], 0.0, -(0.5 * P + M - 12))]
-    return Layout("lily58", keys, inner, stagger[inner], screws, posts, feet)
+    return Layout("lily58", keys, inner, stagger[inner], posts, feet)

@@ -19,8 +19,6 @@ The shared controller board for every Compose split layout: one board, one conne
 | `python3 -m compose sim-controller` | copper-level simulation |
 | `python3 -m compose spice-controller` | ngspice simulation |
 
-It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
-
 **On this page:** [Board](#board) · [Jumper connectors and slot order](#jumper-connectors-and-slot-order) · [Pins](#pins) · [Front connectors](#front-connectors) · [Optional RGB](#optional-rgb) · [BOM](#bom) · [Simulation](#simulation)
 
 ## Board
@@ -44,7 +42,7 @@ It is a breaking change from rev 1 (PicoBlade cables, 10 × 12 matrix).
 
 **Silkscreen:**
 
-- Rev 1's art font (DejaVu Sans). The ∘ ring and "Compose" title stand up the left strip beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
+- The half boards' art font (DejaVu Sans). The ∘ ring and "Compose" title stand up the left strip beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
 - Every label sits against what it names: `lhs` / `rhs` along each jumper connector's contact row with "1" beside slot 1's contact; pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
 
 ## Jumper connectors and slot order

@@ -4,7 +4,7 @@ Thanks for wanting to improve Compose. Issues, build reports and photos, new lay
 
 ## Before you open a pull request
 
-- Run the checks for whatever you touched (`python3 -m compose checks` / `gasket-checks`, the simulations for boards) and say in the PR what you ran and what passed.
+- Run the checks for whatever you touched (`python3 -m compose gasket-checks` for the case, the simulations for boards) and say in the PR what you ran and what passed.
 - Don't commit generated outputs (`out*/`); releases carry those.
 - Keep layouts self-contained: a new layout is a folder in `layouts/` with its key list and hardware positions.
 

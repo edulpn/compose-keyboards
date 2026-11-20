@@ -11,13 +11,12 @@ ngspice) and checks, wherever they are written, at the top of a file or inside a
   from compose.x import y as Y
   ... Y.name ...                      `name` is bound at the top level of compose.x.y, wherever Y means that
                                       module (not where a function has its own variable of that name)
-  COMMANDS in compose/__main__.py     every command's module exists and its rev is 1, 2 or None; no command but
-                                      rev 1's own reaches one of rev 1's modules through its imports; and the
-                                      commands with no rev (the controller rev 2's) reach no layout
+  COMMANDS in compose/__main__.py     every command's module exists, and each says whether it builds a keyboard
+                                      (True or False); the commands that build none (the controller rev 2's)
+                                      reach no layout
 
-This is what breaks when code moves between modules, and it covers the commands no CI job runs (rev 1's
-boards, simulation and renders, which are released and not rebuilt). It does not check calls, arguments or
-names built at run time (importlib.import_module with a computed name).
+This is what breaks when code moves between modules, and it covers the commands no CI job runs (the renders).
+It does not check calls, arguments or names built at run time (importlib.import_module with a computed name).
 """
 import ast
 import os
@@ -27,11 +26,7 @@ PACKAGES = ("compose", "layouts")
 # Names known not to resolve, with the reason they are left: (file, name as written) -> why. One that starts
 # resolving, or goes away, has to be taken off this list: the check fails until it is.
 KNOWN = {}
-# Rev 1 is released and kept as it is; the controller rev 2 and rev 2 are built on what is shared, not on rev 1's
-# modules, so a change to rev 1's code cannot reach them (nor theirs it). Rev 1's commands are the ones COMMANDS
-# gives rev 1; the modules that are rev 1's without being a command's:
-REV1_ALSO = ("compose.pcb.layout", "compose.case.sandwich", "compose.case.assembly")
-# The controller rev 2 is one board under every keyboard: its commands have no rev in COMMANDS, and its build and
+# The controller rev 2 is one board under every keyboard: its commands build none in COMMANDS, and its build and
 # its simulations load no layout. A layout is loaded by compose.geom (when it is imported), read through
 # compose.layout, and kept in layouts/.
 LAYOUT = ("compose.geom", "compose.layout", "layouts")
@@ -263,20 +258,12 @@ class Repo:
                     tgt = env.get(n.value.id)
                     if tgt and tgt not in self.open and n.attr not in self.names[tgt] and not n.attr.startswith("__"):
                         out.append(f"{at}: {n.value.id}.{n.attr}: {tgt} has no {n.attr}")
-        cmds, revs = self.commands(), self.revs()
+        cmds, keyboard = self.commands(), self.keyboard()
         out += [f"compose/__main__.py: command {cmd}: no module {mod}" for cmd, mod in cmds.items() if mod not in self.mods]
-        out += [f"compose/__main__.py: command {cmd}: rev {rev!r}: a command builds rev 1, rev 2 or (None) neither"
-                for cmd, rev in revs.items() if rev not in (1, 2, None) or isinstance(rev, bool)]
-        rev1 = {mod for cmd, mod in cmds.items() if revs[cmd] == 1} | set(REV1_ALSO)
+        out += [f"compose/__main__.py: command {cmd}: {kb!r}: a command says whether it builds a keyboard, True or False"
+                for cmd, kb in keyboard.items() if not isinstance(kb, bool)]
         for cmd, mod in cmds.items():
-            if revs[cmd] == 1 or mod not in self.mods:
-                continue
-            via = self.reached(mod)
-            for hit in sorted(rev1 & set(via)):
-                out.append(f"compose/__main__.py: command {cmd}: reaches rev 1's {hit} ({self._chain(via, hit, mod)}): what both "
-                           f"generations use belongs in a module of its own")
-        for cmd, mod in cmds.items():
-            if revs[cmd] is not None or mod not in self.mods:
+            if keyboard[cmd] is not False or mod not in self.mods:
                 continue
             via = self.reached(mod)
             hits = [self._chain(via, x, mod) for x in set(via) | {mod} if x in LAYOUT or x.split(".")[0] in LAYOUT]
@@ -294,7 +281,7 @@ class Repo:
         return " <- ".join(chain + [mod])
 
     def _table(self):
-        """COMMANDS in compose/__main__.py: {command: (module, rev, what it does)}."""
+        """COMMANDS in compose/__main__.py: {command: (module, whether it builds a keyboard, what it does)}."""
         main = self.trees.get("compose.__main__")
         for n in (main.body if main else []):
             if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "COMMANDS" for t in n.targets):
@@ -305,8 +292,8 @@ class Repo:
         """{command: module}."""
         return {cmd: row[0] for cmd, row in self._table().items()}
 
-    def revs(self):
-        """{command: the rev it builds (1 or 2), or None for a command of the controller rev 2}."""
+    def keyboard(self):
+        """{command: whether it builds a keyboard (False: a command of the controller rev 2)}."""
         return {cmd: row[1] for cmd, row in self._table().items()}
 
     def imported(self, m):

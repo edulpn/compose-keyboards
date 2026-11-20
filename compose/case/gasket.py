@@ -6,9 +6,9 @@ Rev 2 printed parts: gasket mount, one-piece tub, controller rev 2 in the middle
   frame2_local()   left frame, local frame: bevelled ring over the flange, skirt down to the case wall,
                    trim lip over the case's reveal, M3 inserts; stops at the bridge (the cover takes over)
   case2_world()    the tub: walls + pad ledge per half, open middle, bridge back/front walls, inner pad seats,
-                   front cover posts, controller bosses, USB opening, feet
-  cover2_P()       middle cover (P frame), flush with the frames, overlapping the plates' inner bands
-                   without touching them; hooked under the back wall, two screws at the front
+                   controller posts, USB opening, feet
+  cover2_P()       middle cover (P frame), flush with the frames; drops straight onto the controller's four
+                   standoffs and takes four M3 screws
 
 Gasket stack (local z): pad seat LEDGE_TOP | pad | flange FLANGE_Z0..+FLANGE_T | pad | frame FRAME_LIP_Z.
 """
@@ -189,10 +189,10 @@ def middle_side_local(gap):
 
 
 def frame2_local():
-    """Full ring around the key field (rev 1's bevelled look): skirt + trim lip down to the case wall on the
+    """Full ring around the key field, bevelled: skirt + trim lip down to the case wall on the
     outer edges; along the bridge an inner rail that ends at the interface plane (the cover continues it)."""
     outer = ring(O_OUTER)
-    bevel = loft(outer, TH, G.miter_offset(outer, PR.BEZEL_BEVEL), PR.FRAME_TOP_Z)     # rev 1's bevel, from the plate top
+    bevel = loft(outer, TH, G.miter_offset(outer, PR.BEZEL_BEVEL), PR.FRAME_TOP_Z)     # the bevel, from the plate top
     env = bevel.fuse(prism(outer, PR.SEAM_Z - PR.TRIM_LIP_H - 1.0, TH))                # the frame's outside, nothing pokes out
     body = bevel
     # skirt and trim lip from the exact outer ring the bevel starts from (no simplification), so their outer
@@ -357,7 +357,7 @@ def case2_world():
 
 # ================================================================ cover
 def cover2_P():
-    """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like rev 1.
+    """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like the frames.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
     standoffs, four M3 screws."""
     z0 = CT.cover_under
