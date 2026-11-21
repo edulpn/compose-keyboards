@@ -80,20 +80,20 @@ def half_rev2(f, s):
 
 def row4(f, s, slot):
     L = H.fp2local
-    n = np.array(s.ffc.n)
+    n = np.array(s.conn.n)
     keys = [ks for ks in s.keys if ks.row == 4]
     inner = max(keys, key=lambda ks: ks.k.x)                       # the key beside the inner column
     thumbs = sorted((ks for ks in keys if ks is not inner), key=lambda ks: -ks.k.x)
     side = max((ks for ks in s.keys if ks.row < 4 and ks.cathode[0] > ks.k.x), key=lambda ks: (ks.cathode[0], -ks.row))
-    # connector: both faces' pads to one via under the cable side, then out past the mounting pad to the edge strip
+    # connector: from its pin to a via under the body on the bridge side, then down the back face under the rest of
+    # the row (the rail's spine runs on the front there) and on past the body's front end
     p = slot[12 + 4]
     via = tuple(p + n * UNDER)
     f.via(ROW, via)
     f.track(ROW, "F", [p, via], ROW_W)
     f.track(ROW, "B", [p, via], ROW_W)
-    lane = (float(s.ffc.c[0] + H.FFC_MP[0] + H.FFC_MP[2] / 2 + 0.725), float(p[1]))
     k = inner.k
-    down = [via, lane, (lane[0], side.cathode[1] - 1.6), L(k, -9.3, -16.3), L(k, -9.3, ROW_FY - 0.6)]
+    down = [via, (via[0], side.cathode[1] - 1.6), L(k, -9.3, -16.3), L(k, -9.3, ROW_FY - 0.6)]
     f.through(ROW, "B", down, ROW_W)
     # the inner key's diode, along the front of the key
     cx, cy = _fp(k, inner.cathode)
@@ -146,7 +146,7 @@ def dnets(f, s):
 
 def rail(f, s, slot):
     L = H.fp2local
-    n = np.array(s.ffc.n)
+    n = np.array(s.conn.n)
     px, py = H.LED_PAD_X, H.LED_AT[1] - H.LED_PAD_Y               # the LEDs' 5 V pads: +px on F, -px on B
     capx, capy = H.CAP_AT[0], H.CAP_AT[1] - 1.475                 # the capacitors' 5 V pads: +capx on B, -capx on F
     last = max((ks for ks in s.keys if ks.row == 4), key=lambda ks: ks.k.x)       # the key beside the inner column:
@@ -200,7 +200,7 @@ def rail(f, s, slot):
     x2 = _fp(k2, (max(ks.cathode[0] for ks in s.keys if ks.row < 4) + 1.85, 0))[0]     # clear of the inner column's diode
     xi = -8.3
     j3 = (L(ki, xi, 0)[0], end(rows[3][-1], 1)[1])                # where row 3's trunk meets the spine
-    spine = [under, (under[0], s.ffc.c[1] - 15.0), L(k2, x2, -7.5), L(k2, x2, TRUNK_FY), L(k2, x2, 9.0),
+    spine = [under, (under[0], s.conn.c[1] - 15.0), L(k2, x2, -7.5), L(k2, x2, TRUNK_FY), L(k2, x2, 9.0),
              L(ki, xi, -12.0), j3, L(ki, xi, TRUNK_FY)]
     f.through(RAIL, "F", spine, SPINE_IN_W)
     f.route(RAIL, "F", end(rows[2][-1], 1), spine[3], TRUNK_W)

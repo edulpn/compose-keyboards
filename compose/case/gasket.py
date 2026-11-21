@@ -357,17 +357,6 @@ def case2_world():
 
 
 # ================================================================ cover
-def cover_jumper_pockets_P(z0, gap):
-    """Pockets in the cover's underside over the jumpers' top bends: the box round where the designed left jumper
-    comes within 3 mm of the cover, grown 2 mm, COVER_JUMPER_POCKET deep, kept 1 mm inside the cover's side; and its
-    mirror for the right jumper."""
-    from compose.pcb import jumper as J
-    near = J.solid_P(J.solve()).intersect(big_box(-200, 200, -200, 200, z0 - 3.0, z0 + 20.0)).BoundingBox()
-    box_ = big_box(near.xmin - 2.0, near.xmax + 2.0, near.ymin - 2.0, near.ymax + 2.0, z0 - 1.0, z0 + PR.COVER_JUMPER_POCKET)
-    left = box_.cut(G.half_space_P(-1, gap + 1.0))
-    return left.fuse(left.mirror("YZ"))
-
-
 def cover2_P():
     """Flat slab between the frames' inner rails, flush with their tops, bevelled back and front like the frames.
     Window over the Pico (open to the back for the USB plug); drops straight onto the four controller
@@ -383,7 +372,6 @@ def cover2_P():
     body = body.cut(G.half_space_P(-1, gap)).cut(G.half_space_P(1, gap))
     hw = PR.PICO_W / 2 - PR.WINDOW_EDGE_OVER_PCB
     body = body.cut(big_box(-hw, hw, CT.y_pc - PR.PICO_L / 2 - PR.WINDOW_FRONT_MARGIN, 20.0, z0 - 1, CT.cover_top + 1))
-    body = body.cut(cover_jumper_pockets_P(z0, gap))
     from compose.controller import rev2_std as CS
     bosses = union([cyl(x, y, CS.COVER_BOSS_R, z0 - CS.COVER_BOSS_H, z0 + 0.01) for x, y in cover_screws_P()])   # sits on the hex top
     body = body.fuse(bosses)

@@ -5,8 +5,8 @@ Independent of the net names the board was built with:
   1. Copper connectivity is rebuilt from geometry (pads, tracks and vias that touch on a layer).
   2. Parts are placed the way a builder would, from their datasheets:
        Pico       pinout at its mechanical pin positions (pin 1 top-left seen from above, USB at the back)
-       FFC        Molex 52610 vertical: contacts at the physical slots (slot 1 = the back-most), whatever the pad
-                  numbers; each terminal's two tails on one copper node; the contact face toward the Pico
+       cable      Molex PicoBlade 53048 right angle: contacts at the physical slots (slot 1 = the back-most), whatever
+                  the pad numbers; one straight row, the body (its opening) outward of it
        74HCT125   DIP-14 pinout from pin 1 = the square pad, counter-clockwise seen from the side its body is on
        C2         + lead = square pad;  headers pin 1 = square pad;  Qwiic pins in a row from pin 1
   3. The netlist those parts make is compared with the spec below (written from docs/controller-rev2.md, not from
@@ -14,7 +14,7 @@ Independent of the net names the board was built with:
      out is read from the same copper (electrical_variants).
   4. Silkscreen labels are checked against what the copper under them does.
   5. Two model halves (42 keys each, diode per key, reversible board = right half mirrored) are joined by
-     20-way jumpers (same physical slot order at both ends); the QMK COL2ROW scan runs with the rev 2 pin
+     20-way cables (same physical slot order at both ends); the QMK COL2ROW scan runs with the rev 2 pin
      config: every key alone, random chords, the ghosting square, and a cable fitted flipped (the pinout's
      reversal safety).
   6. Negative controls: a swapped firmware pin, a reversed right connector, reversed diodes, an injected
@@ -82,7 +82,7 @@ def spec_nets():
             add("NC_" + f, ("pico", pin))                     # RUN, ADC_VREF, 3V3_EN, VSYS: must stay unconnected
     for side in ("L", "R"):
         for s, f in SLOTS.items():
-            pin = ("ffc" + side, s)
+            pin = ("pb" + side, s)
             if f == "GND":
                 add("GND", pin)
             elif f == "5V_LED":
@@ -95,7 +95,6 @@ def spec_nets():
                 add("RGB_L_IN" if side == "L" else "RGB_R_IN", pin)
             elif f == "RGB_FROM_HALF":
                 add("RGB_L_RET" if side == "L" else "NC_RGB_END", pin)
-        # (the Molex 52610 has no mounting tabs)
     # I2C + AUX
     add("GND", ("J4", 1)); add("3V3", ("J4", 2)); add("GP15", ("J4", 3)); add("GP14", ("J4", 4))
     add("GND", ("J5", 1)); add("3V3", ("J5", 2)); add("GP14", ("J5", 3)); add("GP15", ("J5", 4)); add("GND", ("J5", "MP"))
@@ -136,43 +135,25 @@ class Board:
 def place_parts(B):
     """Map every physical part pin to a copper group, from mechanical positions and datasheet pinouts."""
     pins = {}
-    # the Molex 52610's terminals each have two tails (a pad either side of the body): the part joins them, so
-    # join their copper first (before any node is looked up)
-    cu = B.cu
-    for side in ("L", "R"):
-        fp = B.fp["J" + side]
-        for y in {round(ToMM(p.GetPosition().y), 2) for p in fp.Pads()}:
-            idx = []
-            for p in fp.Pads():
-                if abs(ToMM(p.GetPosition().y) - y) < 0.01:
-                    q = Point(ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
-                    idx += [i for i, (g, lay, lab) in enumerate(cu.items) if lay == pcbnew.F_Cu
-                            and lab not in ("track", "zone") and g.contains(q)][:1]
-            for i in idx[1:]:
-                cu.union(idx[0], i)
     # Pico: pin 1 top-left seen from above with USB at the back (-y); 2.54 mm pitch, rows 17.78 mm apart
     for p in range(1, 41):
         x = -8.89 if p <= 20 else 8.89
         y = -24.13 + (p - 1) * 2.54 if p <= 20 else 24.13 - (p - 21) * 2.54
         pins[("pico", p)] = B.node((CX + x, CY + y))
-    # cable connectors (Molex 52610, vertical): contacts at the physical slots, slot 1 = the back-most (each
-    # terminal's two tails joined above, so they're one node)
-    for side in ("L", "R"):
+    # cable connectors (Molex PicoBlade 53048, right angle): contacts at the physical slots, slot 1 = the back-most,
+    # in one straight row; the body, and the opening the cable's plug goes into, outward of it
+    for side, sx in (("L", -1), ("R", 1)):
         fp = B.fp["J" + side]
-        ys = sorted({round(ToMM(p.GetPosition().y), 2) for p in fp.Pads()})
-        ok(len(ys) == 20, f"FFC {side}: 20 contact positions")
-        rows = {}
-        for i, y in enumerate(ys):
-            tails = [p for p in fp.Pads() if abs(ToMM(p.GetPosition().y) - y) < 0.01]
-            nodes = {B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))) for p in tails}
-            ok(len(tails) == 2 and len(nodes) == 1, f"FFC {side} slot {i + 1}: two tails, one terminal")
-            pins[("ffc" + side, i + 1)] = nodes.pop()
-            for p in tails:
-                rows.setdefault(round(ToMM(p.GetSize().x if p.GetSize().x > p.GetSize().y else p.GetSize().y), 2),
-                                []).append(ToMM(p.GetPosition().x) - CX)
-        # Molex's pattern: the contact-face row has the longer pads (1.85 vs 1.65); it must face the Pico (inboard)
-        long_x = sum(rows[max(rows)]) / len(rows[max(rows)]); short_x = sum(rows[min(rows)]) / len(rows[min(rows)])
-        ok(abs(long_x) < abs(short_x), f"FFC {side}: contact face toward the Pico (the jumper's conductors face inboard)")
+        pads = sorted((p for p in fp.Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
+        ok(len(pads) == 20, f"cable connector {side}: 20 contacts")
+        for i, p in enumerate(pads):
+            pins[("pb" + side, i + 1)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
+        xs = {round(ToMM(p.GetPosition().x), 2) for p in pads}
+        ok(len(xs) == 1, f"cable connector {side}: one straight row")
+        fp.BuildCourtyardCaches()
+        bb = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
+        mid = (ToMM(bb.GetLeft()) + ToMM(bb.GetRight())) / 2
+        ok((mid - xs.pop()) * sx > 0, f"cable connector {side}: its body and opening outward, toward the half")
     # DIP-14: pin 1 = the square pad; the rest counter-clockwise seen from above
     u = B.fp["U2"]
     pads = [p for p in u.Pads()]
@@ -268,12 +249,12 @@ def electrical_variants(pins):
     ok(all(g(("U2", p)) == g(("pico", 3)) for p in (9, 12)) and all(g(("U2", p)) == g(("U2", 14)) for p in (10, 13)),
        "unused buffers 3/4: inputs grounded, outputs disabled (OE high)")
     ok(g(("R4", 1)) == g(("U2", 2)) and g(("R4", 2)) == g(("pico", 3)), "100k pull-down holds the buffer input low before the Pico boots")
-    ok(g(("R3", "a")) == g(("U2", 3)) and g(("R3", "b")) == g(("ffcL", 3)), "data: buffer -> 330 ohm -> left FFC slot 3")
-    ok(g(("ffcL", 18)) == g(("R5", "a")) and g(("R5", "b")) == g(("U2", 5)) and g(("R6", 1)) == g(("U2", 5))
+    ok(g(("R3", "a")) == g(("U2", 3)) and g(("R3", "b")) == g(("pbL", 3)), "data: buffer -> 330 ohm -> left cable slot 3")
+    ok(g(("pbL", 18)) == g(("R5", "a")) and g(("R5", "b")) == g(("U2", 5)) and g(("R6", 1)) == g(("U2", 5))
        and g(("R6", 2)) == g(("pico", 3)), "chain return: left slot 18 -> 220 ohm -> buffer 2 input, 100k pull-down")
-    ok(g(("U2", 6)) == g(("R7", "a")) and g(("R7", "b")) == g(("ffcR", 3)), "buffer 2 -> 330 ohm -> right FFC slot 3")
-    ok(g(("ffcL", 18)) != g(("ffcR", 3)), "the hop is re-driven, not wired straight through")
-    others = [k for k, v in pins.items() if v == g(("ffcR", 18)) and k != ("ffcR", 18)]
+    ok(g(("U2", 6)) == g(("R7", "a")) and g(("R7", "b")) == g(("pbR", 3)), "buffer 2 -> 330 ohm -> right cable slot 3")
+    ok(g(("pbL", 18)) != g(("pbR", 3)), "the hop is re-driven, not wired straight through")
+    others = [k for k, v in pins.items() if v == g(("pbR", 18)) and k != ("pbR", 18)]
     ok(not others, "right slot 18 (end of chain) left open")
     # with the group empty, which Pico pins see anything new? GP13 only sees R4/U2 pads -> unloaded
     gp13 = [k for k, v in pins.items() if v == g(("pico", 17)) and k[0] not in ("pico",)]
@@ -313,13 +294,13 @@ def silk_truth(B, pins):
         if got != want[txt]:
             bad.append(f"'{txt}' sits on {best} = {got}")
     ok(not bad and n >= 10, f"{n} header labels name the net of the pin they sit on" + (f": {bad}" if bad else ""))
-    # FFC "1" marks and L/R
+    # the cable connectors' "1" marks and L/R
     for side, sx, nm in (("L", -1, "lhs"), ("R", 1, "rhs")):
         ones = [(x, y) for t, x, y in texts if t == "1" and (x - CX) * sx > 0]
         s1 = B.cu.items  # noqa
         fp = B.fp["J" + side]
         y1 = min(ToMM(p.GetPosition().y) for p in fp.Pads())
-        ok(ones and abs(ones[0][1] - y1) < 1.0, f"FFC {side}: the '1' mark is level with slot 1")
+        ok(ones and abs(ones[0][1] - y1) < 1.0, f"cable connector {side}: the '1' mark is level with slot 1")
         lr = [(x, y) for t, x, y in texts if t == nm]
         ok(lr and (lr[0][0] - CX) * sx > 0, f"'{nm}' printed beside the {'left' if sx < 0 else 'right'} connector")
 
@@ -362,7 +343,7 @@ def assemble(pins, cable_flip=None, right_conn_reversed=False):
             if right_conn_reversed and side == "R":
                 c_slot = 20 - lat
             h_lat = 19 - lat if cable_flip == side else lat          # a flipped cable reverses the order
-            cn = pins[("ffc" + side, c_slot)]
+            cn = pins[("pb" + side, c_slot)]
             link(("C", cn), (side, hc[h_lat]))
         for r in range(6):
             for c in range(7):
@@ -471,7 +452,7 @@ def negative_controls(pins):
     r1, _ = run_scan(pins, qmk=q, quiet=True)
     ok(len(r1["single"]) > 0, "two column pins swapped in the firmware is caught")
     r2, _ = run_scan(pins, right_conn_reversed=True, quiet=True)
-    ok(len(r2["single"]) > 0, "right FFC numbered by pad instead of by slot (not turned 180 deg) is caught")
+    ok(len(r2["single"]) > 0, "right connector numbered by pad instead of by slot (not turned 180 deg) is caught")
     # diodes reversed
     edges, keys, diodes = assemble(pins)
     scan = scanner(pins, edges, keys, [(c_, a) for a, c_ in diodes], QMK_V2)
@@ -482,9 +463,9 @@ def negative_controls(pins):
     a, b = p2[("pico", 5)], p2[("pico", 6)]
     p2 = {k: (a if v == b else v) for k, v in p2.items()}
     ok(not quiet_compare(p2), "an injected short (GP3-GP4) is caught by the netlist compare")
-    # cut track: give one FFC contact its own island
+    # cut track: give one cable contact its own island
     p3 = dict(pins)
-    p3[("ffcL", 8)] = ("cut", 1)
+    p3[("pbL", 8)] = ("cut", 1)
     ok(not quiet_compare(p3), "a cut track (left slot 8, COL3) is caught by the netlist compare")
     r4, _ = run_scan(p3, quiet=True)
     ok(len(r4["single"]) > 0, "... and by the scan (that column's keys go dead)")
@@ -508,7 +489,7 @@ def main():
     compare(pins, spec_nets(), "populated")
     electrical_variants(pins)
     silk_truth(B, pins)
-    print("\n== QMK COL2ROW scan through two FFCs into model halves (rev 2 pin config)")
+    print("\n== QMK COL2ROW scan through two cables into model halves (rev 2 pin config)")
     run_scan(pins)
     flipped_cable_safety(pins)
     negative_controls(pins)

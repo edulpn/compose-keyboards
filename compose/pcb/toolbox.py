@@ -5,7 +5,7 @@ JLCPCB, SVG previews. Needs KiCad 7 (pcbnew) and java + tools/freerouting.jar. I
 switch: the half boards' switch footprint is compose.pcb.switch_kicad.
 
 The boards themselves are built elsewhere: the rev 2 half boards in
-compose.pcb.rev2_half, the jumper in compose.pcb.jumper, the controller rev 2 in compose.controller.rev2.
+compose.pcb.rev2_half, the controller rev 2 in compose.controller.rev2.
 A caller that writes somewhere else sets PCB_OUT here before it builds.
 """
 from compose import must

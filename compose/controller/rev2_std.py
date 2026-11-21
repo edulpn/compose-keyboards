@@ -9,18 +9,20 @@ Y_BACK, Y_FRONT = -26.0, 30.0              # board edges (56 mm); back edge at t
 CORNER_R = 2.0
 PCB_T = 1.6
 PICO_X, PICO_Y = 8.89, 24.13               # socket rows at x = +-8.89, pins 1/20 at y = -+24.13
-# cable connectors: two Molex 52610-2072 (Easy-On, vertical, 20 pos, 1.0 mm, slider latch), top face, square to the
-# side edges at fixed positions, so the controller doesn't depend on any layout's angles (each layout's flex
-# jumpers take those up). The cable slot is 1.4 mm in from the body's contact face (the pin 1 notch side), which
-# faces the Pico; slot order by physical position, slot 1 at the back, as before.
-VFFC_SLOT_X = 14.8                         # |x| of the cable slot (the flex's plane)
-VFFC_Y0 = 2.6                              # connector centre (y): the body's front end keeps the front standoffs' 3.3 mm
-VFFC_L, VFFC_D = 26.6, 3.6                 # body length (along y) and depth (across)
-VFFC_SLOT_IN = 1.4                         # contact face -> slot (the flex's plane)
-VFFC_H = 5.75                              # height, slider latched (7.25 with it open)
-VFFC_INSERT = 4.1                          # flex end inside the connector
-# the halves' connector (Molex 200528, right angle, on each half's bottom face)
-FFC_ENTRY_H = 1.0                          # cable slot height above the face the connector sits on (1.9 mm body; Molex drawing)
+# cable connectors: two Molex PicoBlade 53048-2010 (1.25 mm, 20 pos, right angle, through hole), top face, along the
+# side edges with their openings outward, at fixed positions: each layout's 20-pin PicoBlade cables take up its
+# angles. Slot order by physical position, slot 1 at the back. Body sizes as rev 1 modelled the 12-pin 53048 and
+# 53047, its length grown with the pin count.
+PB_N, PB_PITCH = 20, 1.25
+PB_ROW_X = 13.0                            # |x| of the pin row
+PB_Y0 = 2.0                                # centre of the row (y): the body's front end clears the front standoffs
+PB_BODY_IN, PB_BODY_OUT = 1.55, 4.95       # body from the pin row toward the Pico / outward to its opening
+PB_L = (PB_N - 1) * PB_PITCH + 3.2         # body length (along the row)
+PB_H = 3.6                                 # body height above the board
+PB_PLUG_OUT = 7.5                          # the mated plug (~3 mm past the opening) and its cable's first bend: kept clear
+# the halves' connector (Molex PicoBlade 53047-2010, vertical, through hole, on each half's bottom face)
+HALF_PB_UNDER = 4.3                        # body height under the half board
+HALF_PB_PLUG_DROP = 12.0                   # the mated plug and its cable's first bend, under the body: kept clear
 CLIP_X, CLIP_Y = 16.6, -14.3               # behind CLIP_Y the board is only 2 x CLIP_X wide (the plates' inner seats)
 # four M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four case posts,
 # clamping it; the cover drops onto them and takes four M3 x 6 screws (the same screws and inserts as the frames)

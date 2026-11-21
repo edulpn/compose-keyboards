@@ -13,7 +13,7 @@
 # Pushes to main and manual runs always run everything.
 #
 # A design change moves the outputs on purpose, so they are compared with the base's and the result reported,
-# failing nothing (case STLs, keyboard.json, the jumper, the controller, and each half board that routes against
+# failing nothing (case STLs, keyboard.json, the controller, and each half board that routes against
 # the board routed before): a change meant to leave them alone has to read "identical".
 #
 # A half board is routed only when something its routing reads has changed since it was last routed
@@ -294,41 +294,8 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  jumper:
-    needs: plan
-    if: needs.plan.outputs.run_boards == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        layout: ${{ fromJSON(needs.plan.outputs.boards) }}
-    name: jumper (${{ matrix.layout }})
-    env: { LAYOUT: "${{ matrix.layout }}" }
-    steps:
-      - uses: actions/checkout@v7
-        with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-      - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT flex-jumper o2
-      - uses: actions/upload-artifact@v7
-        with: { name: "board-${{ matrix.layout }}-jumper-s1", path: "o2/pcb/jumper_rev2*", retention-days: 7 }
-      - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT flex-sim o2
-      - uses: actions/upload-artifact@v7
-        with: { name: "deps-boards-${{ matrix.layout }}-jumper", path: deps, retention-days: 7 }
-      - name: the same jumper as the base's? (reported)
-        if: github.event_name == 'pull_request'
-        run: |
-          base=$(python3 .github/ci/base.py)
-          git worktree add -q --detach "$RUNNER_TEMP/base" $base
-          if ! (cd "$RUNNER_TEMP/base" && python3 -m compose --layout $LAYOUT flex-jumper "$RUNNER_TEMP/bj") > "$RUNNER_TEMP/base.log" 2>&1; then
-            tail -5 "$RUNNER_TEMP/base.log"
-            echo "::notice::$LAYOUT jumper: the base ${base:0:9} did not build here, so there is nothing to compare with"; exit 0
-          fi
-          python3 .github/ci/sameboard.py "$RUNNER_TEMP/bj/pcb/jumper_rev2.kicad_pcb" o2/pcb/jumper_rev2.kicad_pcb \
-              name=jumper_rev2 was="built from the base ${base:0:9}"
-
   boards-sim:
-    needs: [plan, controller, half, jumper]
+    needs: [plan, controller, half]
     if: needs.plan.outputs.run_boards == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -347,7 +314,7 @@ jobs:
       - name: one routed copy of every board
         run: |
           mkdir -p o2/pcb
-          for b in controller $LAYOUT-jumper $LAYOUT-half_rev2_hotswap $LAYOUT-half_rev2_solder $LAYOUT-half_rev2_hotswap_rgb \
+          for b in controller $LAYOUT-half_rev2_hotswap $LAYOUT-half_rev2_solder $LAYOUT-half_rev2_hotswap_rgb \
                    $LAYOUT-half_rev2_solder_rgb; do
             d=$(ls -d boards/board-$b-s* 2>/dev/null | sort | head -1)
             [ -n "$d" ] || { echo "::error::no routed board for $b (see its job's log)"; exit 1; }
@@ -361,7 +328,7 @@ jobs:
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
   checks-passed:
-    needs: [plan, rev2, controller, spice, half, jumper, boards-sim]
+    needs: [plan, rev2, controller, spice, half, boards-sim]
     if: always()
     runs-on: ubuntu-24.04
     steps:

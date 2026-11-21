@@ -57,7 +57,7 @@ def dist(a, b):
 
 
 # ---------------------------------------------------------------- the controller as placed (board frame -> P)
-H_TOP = {"U1": 8.5, "JL": CS.VFFC_H, "JR": CS.VFFC_H, "J4": 8.5, "J6": 8.5, "J5": 4.3}
+H_TOP = {"U1": 8.5, "JL": CS.PB_H, "JR": CS.PB_H, "J4": 8.5, "J6": 8.5, "J5": 4.3}
 PLUG_TOP = {"J4": CS.TOP_PLUG_H, "J6": CS.TOP_PLUG_H, "J5": 10.0}
 H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": CS.BOTTOM_PARTS_H, "R": 3.0}
 
@@ -123,9 +123,9 @@ def _controller_solids():
     return out
 
 
-# ---------------------------------------------------------------- rev 2 half board: underside parts; flex jumpers
+# ---------------------------------------------------------------- rev 2 half board: underside parts; the cables
 HALF_PART_H = {"sockets": PR.HS_HEIGHT, "diodes": PR.DIODE_BODY[1], "caps": 1.3,
-               "ffc": 2.1,       # Molex 200528: 1.9 +/- 0.2 mm (drawing)
+               "conn": CS.HALF_PB_UNDER,      # PicoBlade 53047, vertical
                "leds": 1.0,      # SK6812 MINI-E: 1.78 body - 0.84 above the leads = 0.94 below the pads, + solder
                "heads": PR.M2_HEAD_H,
                "pins": 2.0}
@@ -144,7 +144,7 @@ def half_parts_local():
         "sockets": s.socks,
         "diodes": uu([LS([ks.cathode, ks.anode]).buffer(PR.DIODE_BODY[1] / 2) for ks in s.keys]),
         "caps": uu([H2.cap_box(G.LAYOUT.keys[i], f).buffer(-0.5) for i in s.caps for f in ("B", "F")]),
-        "ffc": s.ffc.body,
+        "conn": s.conn.body,
         "leds": uu(s.ledcut),            # reverse-mount MINI-E: the body (3.2 x 2.8) within its cutout
         "heads": uu([Point(p).buffer(PR.M2_HEAD_D / 2) for p in s.posts]),
         "pins": uu([Point(SW.fp2local(k, *pp)).buffer(0.8) for k in G.LAYOUT.keys
@@ -154,25 +154,21 @@ def half_parts_local():
     return union(sol)
 
 
-def jumpers_P():
-    """Both flex jumpers (bridge frame P): the solved left one and its mirror. A compound: they're only used for
-    interference checks."""
-    from compose.pcb import jumper as J
-    left = J.solid_P(J.solve())
-    return cq.Compound.makeCompound([left, left.mirror("YZ")])
-
-
-def jumper_insert_P():
-    """What the controller end of a jumper sweeps while it's pushed 4.1 mm straight down into its slot (cover
-    off): the stiffened end's column from the slot opening up to 4.1 mm above where it ends up."""
-    from compose.pcb import jumper as J
-    g = J.solve()
-    top = g.ctrl.top
-    W, T = PR.JUMPER_W, J.T_SOLID
-    lo = top + J.Z * 0.05
-    sol = (cq.Workplane("XY").box(T, W, J.STIFF_OUT + CS.VFFC_INSERT, centered=(True, True, False))
-           .translate(cq.Vector(*lo)).val())
-    return cq.Compound.makeCompound([sol, sol.mirror("YZ")])
+def cable_plugs():
+    """Where the 20-pin PicoBlade cables are rigid, both sides, as {"ctrl plugs": world solid, "half plugs": world
+    solid}: at the controller, past each connector's opening, the mated plug and its cable's first bend (PB_PLUG_OUT
+    by the body's length and height); at each half, under the connector's body, the mated plug and the cable's first
+    bend (HALF_PB_PLUG_DROP). Between them the cable runs free with its slack in the bay (150 mm), not modelled."""
+    from compose.pcb import rev2_half as H2
+    bt = CT.board_top
+    ctrl = []
+    for sx in (-1, 1):
+        x0, x1 = sorted((sx * (CS.PB_ROW_X + CS.PB_BODY_OUT), sx * (CS.PB_ROW_X + CS.PB_BODY_OUT + CS.PB_PLUG_OUT)))
+        ys = [CT.to_P(0.0, y)[1] for y in (CS.PB_Y0 - CS.PB_L / 2, CS.PB_Y0 + CS.PB_L / 2)]
+        ctrl.append(big_box(x0, x1, min(ys), max(ys), bt, bt + CS.PB_H))
+    z0 = -PR.PCB_T - CS.HALF_PB_UNDER
+    half = mirror_pair(poly_prism(H2.plan("hotswap", True).conn.body, z0 - CS.HALF_PB_PLUG_DROP, z0))
+    return {"ctrl plugs": G.P2W(union(ctrl)), "half plugs": half}
 
 
 # ---------------------------------------------------------------- gasket pads (installed thickness)
@@ -239,7 +235,7 @@ def mirror_pair(local):
     return w.fuse(w.mirror("YZ"))
 
 
-def parts_world(jumpers=True):
+def parts_world(cables=True):
     """Every part of the assembled keyboard (world frame) as the checks use them: {name: solid}, plus the gasket
     pads (lower, upper)."""
     case = C.case2_world()
@@ -256,8 +252,8 @@ def parts_world(jumpers=True):
     pads_lo, pads_up = mirror_pair(union(lo)), mirror_pair(union(up))
     parts = dict(case=case, plate=plate, frame=frame, cover=cover, **{"half pcb": half_pcb, "half parts": half_parts},
                  **ctrl)
-    if jumpers:
-        parts["jumpers"] = G.P2W(jumpers_P())
+    if cables:
+        parts.update(cable_plugs())
     return parts, case, pads_lo, pads_up
 
 
@@ -267,8 +263,6 @@ def main():
     rec("L layout: keycaps >= 0.5 mm apart, inner edge straight along the centre section, hardware inside the outline",
         not issues, f"{len(G.LAYOUT.keys)} keys per half" + ("".join("; " + i for i in issues)))
     print("building parts ...", flush=True)
-    from compose.pcb import jumper as J
-    jg = J.solve()                                       # the jumper path (raises if there's none)
     parts, case, pads_lo, pads_up = parts_world()
     plateL, frameL = C.plate2_local(), C.frame2_local()
     plate, frame = parts["plate"], parts["frame"]
@@ -300,9 +294,12 @@ def main():
                        ("top parts", "case", 0.3), ("bottom parts", "case", 0.3), ("pico", "cover", 0.5),
                        ("pico", "case", 0.3), ("half pcb", "case", 0.3), ("standoffs", "case", 0.3),
                        ("ctrl board", "plate", 0.5), ("top parts", "plate", 0.5), ("ctrl board", "half pcb", 0.5),
-                       ("half parts", "case", 0.3), ("jumpers", "case", 0.5), ("jumpers", "plate", 1.0),
-                       ("jumpers", "frame", 0.5), ("jumpers", "cover", 0.5), ("jumpers", "half pcb", 0.5),
-                       ("jumpers", "standoffs", 0.5), ("jumpers", "pico", 0.5), ("jumpers", "ctrl board", 0.5)):
+                       ("half parts", "case", 0.3),
+                       ("ctrl plugs", "case", 0.5), ("ctrl plugs", "plate", 0.5), ("ctrl plugs", "frame", 0.5),
+                       ("ctrl plugs", "cover", 0.5), ("ctrl plugs", "half pcb", 0.5), ("ctrl plugs", "half parts", 0.5),
+                       ("ctrl plugs", "standoffs", 0.5), ("ctrl plugs", "pico", 0.5), ("ctrl plugs", "half plugs", 0.5),
+                       ("half plugs", "case", 0.5), ("half plugs", "ctrl board", 0.5), ("half plugs", "top parts", 0.5),
+                       ("half plugs", "bottom parts", 0.5), ("half plugs", "standoffs", 0.5)):
         if a not in parts_b or b_ not in parts_b:
             continue
         d = dist(parts_b[a], parts_b[b_])
@@ -378,15 +375,6 @@ def main():
     rec("E mated header plugs under the cover", CS.TOP_PLUG_H <= CS.STANDOFF_L + CS.COVER_BOSS_H - 0.4,
         f"{CS.TOP_PLUG_H} mm of {CS.STANDOFF_L + CS.COVER_BOSS_H} mm")
     fl = CT.board_bot - PR.FLOOR_T
-    sk = max(abs(v) for v in jg.skews)
-    rec(f"E jumper path: one straight strip for both sides, climb {jg.rise_deg:.0f} deg, every bend r {jg.r} mm with its "
-        f"bend line <= {math.degrees(sk):.1f} deg off square", jg.r >= 1.4 and min(jg.Ls) >= 0 and sk <= J.SKEW_MAX + 1e-9,
-        f"straights {' / '.join(f'{v:.2f}' for v in jg.Ls)} mm, {jg.length:.1f} mm long")
-    ins = G.P2W(jumper_insert_P())
-    hits = {nm: GK_vol for nm in ("plate", "frame", "pico", "standoffs", "top parts", "case")
-            if nm in parts and (GK_vol := vol(ins, parts[nm])) >= 1e-3}
-    rec("E jumper's controller end slides 4.1 mm straight down into its slot (cover off)", not hits,
-        ", ".join(f"{k} {v:.2f} mm3" for k, v in hits.items()) or "clear")
     rec("E room under the controller for the bottom parts", fl - CS.BOTTOM_PARTS_H >= PR.CTRL_FLOOR_CLEAR, f"{fl:.1f} mm to the floor")
 
     # ---- F: printability of the exported parts in their print orientation

@@ -9,7 +9,7 @@ import routed  # noqa: E402
 
 DEPS = ["compose/pcb/rev2_half.py", "compose/params.py", "layouts/compose58/layout.py", "layouts/",
         "import:layouts.compose58.preroute", "import:compose.pcb.rev2_half",
-        "o2/pcb/half.ses", "o2/pcb/", "out_cache/compose58/jumper_row_y.json"]         # what the command wrote and read back
+        "o2/pcb/half.ses", "o2/pcb/", "out_cache/compose58/solve.json"]         # what the command wrote and read back
 FILES = {"compose/pcb/rev2_half.py": "board", "compose/params.py": "params", "layouts/compose58/layout.py": "keys",
          "compose/sim/half_rev2.py": "sim", "docs/building.md": "docs",
          ".github/actions/setup/action.yml": "freerouting-2.1.0", ".github/workflows/checks.yml": "jobs", "requirements.txt": "shapely",

@@ -5,16 +5,16 @@ Compose controller rev 2: the shared controller board for all Compose split layo
 
 Interface (the standard; see docs/controller-rev2.md):
   - Raspberry Pi Pico footprint (socketed on 2x 1x20 female headers, 8.5 mm), USB end = back (-y here).
-  - Two 20-position 1.0 mm FFC/FPC connectors (Molex 52610-2072, vertical, slider latch), top face, square to
-    the side edges at fixed positions (rev2_std: VFFC_*), contact face toward the Pico, so the board doesn't
-    depend on any layout's angles: each layout's flex jumpers take them up. Slot order back -> front, the same on both sides:
+  - Two 20-position 1.25 mm cable connectors (Molex PicoBlade 53048-2010, right angle, through hole), top face,
+    along the side edges with their openings outward, at fixed positions (rev2_std: PB_*), so the board doesn't
+    depend on any layout's angles: each layout's cables take them up. Slot order back -> front, the same on both sides:
         1 GND, 2 5V_LED, 3 RGB data to the half, 4 GND (guard), 5-11 COL0-6, 12-17 ROW0-5,
         18 RGB data back from the half, 19 5V_LED, 20 GND
     Reversal-safe: a cable fitted flipped (slot k meets 21-k) puts 5 V on 5 V, GND on GND, the two RGB data
     lines on each other (through the 330 ohm) and rows on columns - nothing is damaged, keys just scramble.
     (the right connector is turned 180 deg, so its pad numbers run the other way; nets follow the slot).
-    The halves join through custom flex jumpers (compose/pcb/jumper.py): conductors on one face, the same
-    physical slot order at both ends.
+    The halves join through 20-pin PicoBlade cables (150 mm): a reversed cable (or a half's connector fitted turned
+    round) is the flipped case above, and turning the half's connector 180 deg puts it right.
   - Matrix: 6 rows shared by both halves (GP0-5), 7 columns per half
     (left GP6-12, right GP22, 21, 20, 19, 18, 17, 16 = COL0-6). QMK: 6 x 14.
   - I2C1 on GP14 (SDA) / GP15 (SCL), 4.7k pull-ups to 3.3 V: 4-pin OLED-style header + Qwiic.
@@ -29,9 +29,9 @@ Interface (the standard; see docs/controller-rev2.md):
     USB end. M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four
     case posts, clamping it; the cover drops onto them and takes four M3 x 6 screws.
     Copper- and part-free circles around them on top; no bottom part or lead over the posts.
-  - Top face: Pico sockets, the two FFC connectors and the front connector row only. Bottom face: every
+  - Top face: Pico sockets, the two cable connectors and the front connector row only. Bottom face: every
     passive and the RGB buffer (through-hole, soldered from the top), I2C pull-ups.
-Everything is through-hole except the two FFC connectors and the Qwiic connector.
+Everything is through-hole except the Qwiic connector.
 """
 from compose import must
 import pathlib
@@ -52,7 +52,7 @@ ROUTER = "2.5.0"                           # the Freerouting version this board 
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
 from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
-                         VFFC_SLOT_X, VFFC_Y0, VFFC_SLOT_IN, VFFC_L, VFFC_D)
+                         PB_N, PB_PITCH, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_L, PB_PLUG_OUT)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
 LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the half boards
@@ -72,7 +72,7 @@ POWER_W = 0.4
 
 
 def slot_nets(side):
-    """Net for each FFC slot 1..20 (slot 1 at the back), same order on both connectors."""
+    """Net for each cable slot 1..20 (slot 1 at the back), same order on both connectors."""
     s = {1: "GND", 2: "+5V_LED", 4: "GND", 19: "+5V_LED", 20: "GND"}
     for i, g in enumerate(COLS[side]):
         s[5 + i] = f"GP{g}"
@@ -155,55 +155,42 @@ def outline_poly():
     return CS.outline()
 
 
-VFFC_PAD_A = (1.85, -0.025)                # contact-face row: length (across), centre from the contact face (into the body +)
-VFFC_PAD_B = (1.65, 3.725)                 # far row
-VFFC_PAD_W = 0.6
-
-
-def vffc_x(side):
-    """x (board frame) of the connector's contact face; the body goes outward from it, toward the edge."""
+def pb_fp(b, side, net):
+    """Molex PicoBlade 53048-2010 (right angle, 20 pos, 1.25 mm), KiCad's footprint, along the side edge with its
+    opening outward: slot k at y = PB_Y0 + (k - 10.5) * PB_PITCH, slot 1 at the back. Which end pin 1 goes to follows
+    from the footprint: its body (the courtyard) has to lie outward of the pin row."""
     sx = -1 if side == "L" else 1
-    return sx * (VFFC_SLOT_X - VFFC_SLOT_IN)
-
-
-def vffc_fp(b, side, net):
-    """Molex 52610-2072 (Easy-On, vertical, 20 pos, 1.0 mm), Molex's recommended pattern: two pad rows per
-    contact (the terminal's two tails), 0.6 mm wide. Placed for `side`: contact face (pin 1 notch side) toward
-    the Pico, slot k at y = VFFC_Y0 - 9.5 + (k - 1) (slot 1 at the back). Built in board-centred mm
-    (origin = Pico centre), then moved there."""
-    sx = -1 if side == "L" else 1
-    fp = pcbnew.FOOTPRINT(b)
-    fp.SetFPID(pcbnew.LIB_ID("compose", "Molex_52610-2072_1x20_P1.00mm_Vertical"))
-    fp.SetReference(f"J{side}")
-    fp.SetValue("Molex 52610-2072")
-    fp.Value().SetVisible(False)
-    xc = vffc_x(side)
     sn = slot_nets(side)
-    for k in range(1, 21):
-        y = VFFC_Y0 - 9.5 + (k - 1)
-        pin = str(k if side == "L" else 21 - k)                # pin 1 at the notch end: back on the left, front on the right
-        for ln, off in (VFFC_PAD_A, VFFC_PAD_B):
-            PK.add_pad(fp, pin, "smd", "rect", (xc + sx * off, y), (ln, VFFC_PAD_W))
-        for p in fp.Pads():
-            if p.GetNumber() == pin and sn.get(k):
+    yb, yf = PB_Y0 - (PB_N - 1) / 2 * PB_PITCH, PB_Y0 + (PB_N - 1) / 2 * PB_PITCH
+    for first_back in (True, False):
+        fp = add(b, "Connector_Molex", f"Molex_PicoBlade_53048-{PB_N:02d}10_1x{PB_N:02d}_P1.25mm_Horizontal", f"J{side}",
+                 f"Molex PicoBlade 53048-{PB_N:02d}10")
+        a_, z_ = ("1", str(PB_N)) if first_back else (str(PB_N), "1")
+        PK.place_by_pads(fp, a_, C(sx * PB_ROW_X, yb), z_, C(sx * PB_ROW_X, yf))
+        x0, _, x1, _ = crt(fp)
+        if (x0 + x1) / 2 * sx > PB_ROW_X:
+            break
+    else:
+        raise RuntimeError("PicoBlade 53048: its body is never outward of its pin row")
+    # the sizes the case is built with (rev2_std) against KiCad's own 20-pin body outline (its fab layer)
+    fab = [g for g in fp.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() == pcbnew.F_Fab]
+    must(fab, "PicoBlade 53048: KiCad's footprint has no body outline on F.Fab")
+    bb = fab[0].GetBoundingBox()
+    for g in fab[1:]:
+        bb.Merge(g.GetBoundingBox())
+    fx = sorted(abs(pcbnew.ToMM(v) - CX) for v in (bb.GetLeft(), bb.GetRight()))
+    fl = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
+    print(f"  J{side}: KiCad's body {fx[0]:.2f} .. {fx[1]:.2f} mm out, {fl:.2f} long; the standard's "
+          f"{PB_ROW_X - PB_BODY_IN:.2f} .. {PB_ROW_X + PB_BODY_OUT:.2f}, {PB_L:.2f}")
+    must(abs(fx[0] - (PB_ROW_X - PB_BODY_IN)) < 0.4 and abs(fx[1] - (PB_ROW_X + PB_BODY_OUT)) < 0.4
+         and abs(fl - PB_L) < 0.4, "PicoBlade 53048: rev2_std's body sizes don't match KiCad's 20-pin footprint")
+    fp.Value().SetVisible(False)
+    for p in fp.Pads():
+        if p.GetNumber().isdigit():
+            n = int(p.GetNumber())
+            k = n if first_back else PB_N + 1 - n
+            if sn.get(k):
                 p.SetNet(net(sn[k]))
-    x_far = xc + sx * VFFC_D
-    y0, y1 = VFFC_Y0 - VFFC_L / 2, VFFC_Y0 + VFFC_L / 2
-    PK.silk_poly(fp, [(xc, y0), (x_far, y0), (x_far, y1), (xc, y1)], pcbnew.F_Fab, 0.1)
-    for yy in (y0, y1):                                      # body ends on the silk (the sides carry pads)
-        s_ = pcbnew.FP_SHAPE(fp, pcbnew.SHAPE_T_SEGMENT)
-        s_.SetStart0(V(xc, yy)); s_.SetEnd0(V(x_far, yy))
-        s_.SetLayer(pcbnew.F_SilkS); s_.SetWidth(MM(0.15))
-        s_.SetDrawCoord()
-        fp.Add(s_)
-    yn = y0 if side == "L" else y1                           # pin 1 notch end: a small triangle at the contact face
-    tri = [(xc - sx * 0.2, yn + (1 if side == "L" else -1) * 0.2), (xc - sx * 0.9, yn + (1 if side == "L" else -1) * 0.2),
-           (xc - sx * 0.55, yn + (1 if side == "L" else -1) * 0.8)]
-    PK.silk_poly(fp, tri, pcbnew.F_SilkS, 0.15)
-    xa = xc - sx * (VFFC_PAD_A[0] / 2 - VFFC_PAD_A[1])
-    xb = xc + sx * (VFFC_PAD_B[1] + VFFC_PAD_B[0] / 2)
-    PK.courtyard(fp, min(xa, xb) - 0.25, y0 - 0.25, max(xa, xb) + 0.25, y1 + 0.25, pcbnew.F_CrtYd)
-    fp.Move(V(CX, CY))                                       # built relative to the Pico centre
     return fp
 
 
@@ -246,11 +233,10 @@ def build():
                 p.SetNet(net(pin_net[pin]))
         keep(h)
 
-    # ---- cable connectors: Molex 52610 vertical, square to the side edges, contact face toward the Pico;
-    #      slot 1 at the back (nets by physical position, so the right one's pad numbers run the other way)
-    for side, sx in (("L", -1), ("R", 1)):
-        j = vffc_fp(b, side, net)
-        keep(j)
+    # ---- cable connectors: PicoBlade right angle along the side edges, openings outward; slot 1 at the back (nets by
+    #      physical position, so the right one's pad numbers run the other way)
+    for side in ("L", "R"):
+        keep(pb_fp(b, side, net))
 
     # ---- cover standoff holes (M3) in the corners, with copper keep-outs for the standoff / case boss
     for i, (x, y) in enumerate(COVER_HOLES):
@@ -301,11 +287,22 @@ def build():
         setnets(r, {"1": n, "2": n2}, net)
         keep(r)
 
-    # ---- bottom, back-right strip beside the Pico (next to VBUS, Pico pin 40): optional polyfuse, standing
+    # ---- bottom, back-right strip beside the Pico (next to VBUS, Pico pin 40): optional polyfuse, standing, right
+    #      behind JR. Moved back from -14.6 as far as KiCad's footprints need: its courtyard 0.2 mm clear of JR's
+    #      pin joints on the bottom, its own joints on the top 0.2 mm clear of JR's courtyard
     f1 = add(b, "Fuse", "Fuse_Bourns_MF-RHT050", "F1", "MF-RHT050")
     put(f1, C(0, 0), angle=90)
     x0, y0, x1, y1 = crt(f1)
-    f1.Move(V(13.0 - (x0 + x1) / 2, -14.6 - (y0 + y1) / 2))         # its top-side joints clear of JR
+    f1.Move(V(13.0 - (x0 + x1) / 2, -14.6 - (y0 + y1) / 2))
+
+    def pths(fp):
+        return [(pcbnew.ToMM(q.GetPosition().y) - CY, pcbnew.ToMM(max(q.GetSize().x, q.GetSize().y)) / 2)
+                for q in fp.Pads() if q.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
+    jr = fps["JR"]
+    back = max(0.0, crt(f1)[3] - (min(y - r for y, r in pths(jr)) - 0.2),
+               max(y + r for y, r in pths(f1)) - (crt(jr)[1] - 0.2))
+    f1.Move(V(0.0, -back))
+    print(f"  F1: {back:.2f} mm behind -14.6 for JR, courtyard {', '.join(f'{v:.2f}' for v in crt(f1))}")
     setnets(f1, {"1": "VBUS", "2": "+5V_LED"}, net)
     keep(f1)
 
@@ -386,12 +383,14 @@ def check_layout(fps):
                 continue
             for q in pth(fp):
                 must(Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}")
-        if abs(x) > VFFC_SLOT_X - 1.0:                         # the jumpers come over the edge strip, 21 mm wide
-            must(abs(y - VFFC_Y0) - STANDOFF_KEEP > 10.5 + 1.0, "standoff in the jumper's path")
+        for sx in (-1, 1):                                     # the mated plugs and their cables, past the openings
+            plug = box(*sorted((sx * (PB_ROW_X + PB_BODY_OUT), sx * (PB_ROW_X + PB_BODY_OUT + PB_PLUG_OUT))),
+                       PB_Y0 - PB_L / 2, PB_Y0 + PB_L / 2)
+            must(not keep.intersects(plug), f"standoff at {x, y} in a cable plug's way")
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
 
 
-TITLE_Y0, TITLE_Y1 = -18.9, -11.4         # title window up the left strip: between the back standoff's keep-out
+TITLE_Y0, TITLE_Y1 = -18.9, -12.2         # title window up the left strip: between the back standoff's keep-out
                                            #   and the cable connector's back end
 
 
@@ -423,7 +422,7 @@ def art(b):
     # optional RGB parts (bottom): boxed under the Pico, F1 back-right; "RGB" on the bottom silk
     bsilk_rect(b, -5.4, -24.4, 5.4, 19.42)
     blabel(b, "RGB", 4.55, -21.0, angle=-90)
-    blabel(b, "RGB", 13.0, -7.9)
+    blabel(b, "RGB", 16.5, -7.9)                                 # outward of JR's pins
     # connectors (front row): every name sits against the thing it names
     # J4 (OLED / I2C): pin names standing on the header's outline, the group name centred right over them
     em = LABEL_EM
@@ -439,11 +438,12 @@ def art(b):
     L("AUX", 7.49 + 0.5, ROW_Y, anchor="l")
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
-    # cable connectors: the side name along the contact row, centred on it; "1" right beside slot 1's contact
-    for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside:
-        x_in = abs(vffc_x("R")) - VFFC_PAD_A[0] / 2 + VFFC_PAD_A[1]   # in the strip between the Pico's socket
-        L(s, sx * (x_in - 1.5), VFFC_Y0, angle=90 * sx)              #   and the connector's contact-face pads
-        L("1", sx * (x_in - 0.9), VFFC_Y0 - 9.5)
+    # cable connectors: the side name along the pin row, centred on it, and "1" level with slot 1's pin, both just
+    # outside the opening (the strip between the Pico's socket and the body is too narrow): seen while plugging in
+    for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside
+        x_out = PB_ROW_X + PB_BODY_OUT + 1.2
+        L(s, sx * x_out, PB_Y0, angle=90 * sx)
+        L("1", sx * x_out, PB_Y0 - (PB_N - 1) / 2 * PB_PITCH)
     return rec
 
 
