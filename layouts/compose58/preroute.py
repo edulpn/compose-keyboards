@@ -11,7 +11,7 @@ Optional: delete this file, or set COMPOSE_PREROUTE=0, and the autorouter routes
          through a via at either end, so the front copper stays open in the column gaps and the back copper
          under the keys for everything that has to cross a row. The rows are tied into a mesh: a 1 mm spine
          down the outer edge, a 0.8 mm one down the inner edge from connector slot 19, slot 10 into the
-         top row, and the thumb row joined at both ends.
+         top row (up the connector's cable side, clear of the columns), and the thumb row joined at both ends.
   D1..   on the hotswap RGB board, every key's D net: its socket pad on each face to its diode. On this board
          the sockets' pads sit on both faces, so each key needs two links across the board (D and its column),
          and with the rail laid as well the router didn't finish it. The D nets are laid the way the router
@@ -184,14 +184,23 @@ def rail(f, s, slot):
     for (x, y) in tops:
         f.route(RAIL, "F", (x, y), (xo, y), TRUNK_W)
     f.track(RAIL, "F", [(xo, y) for _, y in tops], SPINE_OUT_W)
-    # the connector: slot 10 into the top row, slot 19 into the second; a via beside each pad joins the two faces' pads
-    for sl, r in ((10, 0), (19, 1)):
-        p = slot[sl]
-        via = tuple(p - n * LANE)
-        f.route(RAIL, "F", end(rows[r][-1], 1), via, TRUNK_W)
-        f.via(RAIL, via)
-        f.track(RAIL, "F", [via, p], SPUR_W)
-        f.track(RAIL, "B", [via, p], SPUR_W)
+    # the connector: slot 19 into the second row, a via beside its pad joining the two faces' pads; slot 10 into the
+    # top row up the connector's cable side and round its back end, clear of the columns leaving slots 2-8 inboard
+    p = slot[19]
+    via = tuple(p - n * LANE)
+    f.route(RAIL, "F", end(rows[1][-1], 1), via, TRUNK_W)
+    f.via(RAIL, via)
+    f.track(RAIL, "F", [via, p], SPUR_W)
+    f.track(RAIL, "B", [via, p], SPUR_W)
+    p = slot[10]
+    under = tuple(p + n * UNDER)
+    u = np.array(s.conn.u)
+    back = tuple(np.array(under) + u * (float(np.dot(np.array(s.conn.c) - np.array(under), u)) + H.PB_L / 2 + 1.2))
+    f.via(RAIL, under)                                            # joins the two faces' pads
+    f.track(RAIL, "F", [p, under], SPUR_W)
+    f.track(RAIL, "B", [p, under], SPUR_W)
+    f.through(RAIL, "F", [under, back], TRUNK_W)
+    f.route(RAIL, "F", back, end(rows[0][-1], 1), TRUNK_W)
     # the inner edge: from slot 19 under the connector's cable side, down past rows 2 and 3 to the inner key
     p = slot[19]
     under = tuple(p + n * UNDER)
