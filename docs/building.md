@@ -77,13 +77,11 @@ python3 -m compose spice-controller   # ngspice simulation
 python3 -m compose half-rev2          # the four half boards: place, route, DRC, Gerbers
 python3 -m compose half-rev2 --plan             # placement drawing only (fast)
 python3 -m compose half-rev2 --preroute         # the layout's pre-routed copper only: laid, checked against the plan, drawn (no KiCad)
-python3 -m compose flex-jumper        # the flex jumper (one part, both sides): shape solved from the case, DRC, Gerbers, flat drawing
-python3 -m compose sim-half-rev2      # half boards + jumpers + controller rev 2, copper level (after all are built)
-python3 -m compose flex-sim           # the jumper as an elastic strip: seated, insertion, gasket travel, length
+python3 -m compose sim-half-rev2      # half boards + cables + controller rev 2, copper level (after all are built)
 python3 -m compose order-rev2         # every board's JLCPCB zip, checked against its board and its DRC report, in out/compose58/order + ORDER.md
 python3 -m compose firmware-rev2      # QMK keyboard.json, plain and RGB
 python3 -m compose gasket-case        # printable parts
-python3 -m compose gasket-checks      # fit, gasket, assembly, jumper and printability checks
+python3 -m compose gasket-checks      # fit, gasket, assembly, cable and printability checks
 python3 -m compose gasket-sections    # cross-section drawings
 python3 -m compose gasket-render      # renders (assembly views need the routed half boards and controller)
 ```
@@ -149,12 +147,11 @@ compose/            the platform (Python package)
   geom.py, layout.py  frames and transforms; the Layout/Key types
   case/               the gasket-mount case (gasket.py) and the key holes it cuts (keyholes.py)
   pcb/                the KiCad toolbox every board is built with (toolbox.py), the switch as geometry (switch.py)
-                      and as a KiCad footprint (switch_kicad.py), the half boards (rev2_half.py), the flex jumper
-                      (jumper.py), text and logo as shapes (lettering.py), half-board art (art.py), nets laid out
-                      before the router (preroute.py)
+                      and as a KiCad footprint (switch_kicad.py), the half boards (rev2_half.py), text and logo as
+                      shapes (lettering.py), half-board art (art.py), nets laid out before the router (preroute.py)
   controller/         controller rev 2 board and its mechanical standard (rev2_std.py)
   checks/             fit, assembly, gasket and printability checks (gasket.py), the section drawings
-                      (gasket_sections.py), the flex jumper as an elastic strip (flex_sim.py)
+                      (gasket_sections.py)
   sim/                copper-level and ngspice simulations (copper.py: a board's copper as geometry)
   render/             renders and board previews (web/ holds the MIT render helpers)
   firmware_rev2.py    QMK keyboard definition, plain and RGB
@@ -163,8 +160,8 @@ compose/            the platform (Python package)
 layouts/<name>/     one folder per layout: its keys and hardware positions (layout.py); what its keyboard is
                     called, its tent and tilt and its USB ids (keyboard.py); optionally the nets it routes
                     itself (preroute.py); and its own pages and pictures (README.md, rev2.md, images/)
-docs/               the platform's pages and their pictures: the case, the controller, the half boards and the
-                    jumpers each have one
+docs/               the platform's pages and their pictures: the case, the controller and the half boards
+                    each have one
 .github/            CI: the workflow (workflows/checks.yml), its scripts and their tests (ci/), and the
                     runners' setup (actions/setup)
 ```
@@ -205,15 +202,15 @@ Every design change goes through the existing checks (case checks, DRC, the copp
   The boards can't be compared byte for byte (KiCad gives every item a new id on every build): `.github/ci/sameboard.py` compares two boards item by item, and CI runs it against the base (see [Continuous integration](#continuous-integration)).
 - **Moving code between modules:** `python3 .github/ci/imports.py` checks, without running anything, that every name the code takes from another of its modules exists. It covers the commands no job runs (the renders). It also checks that the controller rev 2's commands (`controller`, `sim-controller`, `spice-controller`) reach no layout through their imports: it is the same board under every layout.
 - **Controller rev 2:** DRC clean; `sim-controller` and `spice-controller` pass.
-- **Rev 2:** `gasket-checks` all pass; half-board and jumper DRC end at 0 errors and 0 unconnected (`half-rev2` and `flex-jumper` fail otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance and the return's through the GND pour from the copper, and holds a pre-routed rail and its return to 150 mΩ together; `python3 -m compose.sim.sheet` checks the method it reads the pour with, without KiCad); `flex-sim` passes. After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half's jumper connector (`jumper_row_y()` re-derives its row; the result is cached in `out_cache/<layout>/`, keyed by the sources and the parameter values it depends on) and the jumper: rebuild the half boards and the jumper (`flex-jumper`) before `sim-half-rev2`, which reads both. Then `order-rev2` for the order folder.
+- **Rev 2:** `gasket-checks` all pass; half-board DRC ends at 0 errors and 0 unconnected (`half-rev2` fails otherwise); `sim-half-rev2` passes for all four boards (on the RGB boards it also reads the 5 V rail's resistance and the return's through the GND pour from the copper, and holds a pre-routed rail and its return to 150 mΩ together; `python3 -m compose.sim.sheet` checks the method it reads the pour with, without KiCad). After a change to a layout's `preroute.py`, or to the placement under it, `half-rev2 --preroute` shows in seconds whether the pre-routed copper still clears everything. A change to the case or its angles moves the half board's inner edge, and with it the half's connector (its row stays level with the controller's): rebuild the half boards before `sim-half-rev2`. Then `order-rev2` for the order folder.
 
 ## Continuous integration
 
-`.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs. Each layout in `layouts/` gets its own: the case and firmware (`gasket-case`, `gasket-checks`, `firmware-rev2`, the section drawings, and one command run with no folder named), the boards (the four half boards, the jumper, then `sim-half-rev2` and `order-rev2`), and the controller, which belongs to no layout, runs once (its board, copper simulation and SPICE). A new layout needs nothing in the workflow: the `plan` job lists the layouts and hands every job its own. The `checks-passed` job sums them up: it's the one status to require.
+`.github/workflows/checks.yml` runs the suites above on GitHub's standard runners (4 cores, 16 GB) for every pull request and every push to `main`, as parallel jobs. Each layout in `layouts/` gets its own: the case and firmware (`gasket-case`, `gasket-checks`, `firmware-rev2`, the section drawings, and one command run with no folder named), the boards (the four half boards, then `sim-half-rev2` and `order-rev2`), and the controller, which belongs to no layout, runs once (its board, copper simulation and SPICE). A new layout needs nothing in the workflow: the `plan` job lists the layouts and hands every job its own. The `checks-passed` job sums them up: it's the one status to require.
 
 Every download and install in the jobs' setup step has a time limit of 3 to 5 minutes. One that stalls, which the runners' Ubuntu mirror does now and then, is stopped and fails the job with a "Setup stalled" error naming it: that is the runner, not the change, and running the job again answers it.
 
-A design change moves the outputs on purpose, so the comparison with the base is reported in the run summary and fails nothing: the case STLs and both `keyboard.json` files against a build of the base, the jumper and the controller against the base's, and each half board that routes against the board routed before, with `.github/ci/sameboard.py`. The base is the commit of `main` the run is merged with (`.github/ci/base.py`), which can be newer than the one the pull request was opened on. That compares the job the router was handed (its `.dsn` byte for byte and the way it was called), then the boards item by item, leaving out only the ids KiCad gives every item on every build. It has three verdicts. "The same board": every item the same. "The same routing, finished another way by the router's optimizer": Freerouting 2.5.0 routes a job the same way pass for pass, but its optimizer can end on one of a few boards (seen on Compose58's plain hotswap board, which comes out with 684 or 685 track segments: one junction of one net, a quarter of a millimetre of track); the router's log shows the routing passes are the same and which optimizer pass parted, and only tracks of the nets that pass moved may differ. "Differs": anything else, with the reason. A change that is meant to leave the design alone, a reorganisation or a new check, has to read "identical" on every line and "the same job" with "the same board" or "the same routing" for every half board and for the controller.
+A design change moves the outputs on purpose, so the comparison with the base is reported in the run summary and fails nothing: the case STLs and both `keyboard.json` files against a build of the base, the controller against the base's, and each half board that routes against the board routed before, with `.github/ci/sameboard.py`. The base is the commit of `main` the run is merged with (`.github/ci/base.py`), which can be newer than the one the pull request was opened on. That compares the job the router was handed (its `.dsn` byte for byte and the way it was called), then the boards item by item, leaving out only the ids KiCad gives every item on every build. It has three verdicts. "The same board": every item the same. "The same routing, finished another way by the router's optimizer": Freerouting 2.5.0 routes a job the same way pass for pass, but its optimizer can end on one of a few boards (seen on Compose58's plain hotswap board, which comes out with 684 or 685 track segments: one junction of one net, a quarter of a millimetre of track); the router's log shows the routing passes are the same and which optimizer pass parted, and only tracks of the nets that pass moved may differ. "Differs": anything else, with the reason. A change that is meant to leave the design alone, a reorganisation or a new check, has to read "identical" on every line and "the same job" with "the same board" or "the same routing" for every half board and for the controller.
 
 Compose58's four half boards route with Freerouting 2.5.0, which routes the same way on every run (its optimizer's finish aside, above): one job and one attempt each. On CI's runners a plain board's build takes about a minute, the solder RGB board's 2½ to 4 and the hotswap RGB board's 5½, after about 1½ minutes of setup. A board that finds no clean route fails its job: after 10 attempts (30 for an RGB board) or 55 minutes, whichever comes first. Routed with 2.1.0, which is random, an RGB half board could miss a clean route for 30 attempts in a row on 4 cores. The workflow races such a board: three jobs of four Freerouting runs per attempt, up to 55 minutes each, with `sim-half-rev2` taking the first that comes out DRC-clean. Which boards race follows from the layout: a board its `preroute.py` gives a router that routes the same way every run (`ROUTER`) gets one job, a board on the default router gets three. The bar is the same as on your machine.
 
@@ -255,7 +252,6 @@ The calls live in:
 
 - `compose/pcb/toolbox.py`: `add_pad`, `silk_poly`, `drc`;
 - `compose/pcb/rev2_half.py`: `led_fp`, `gnd_pour`, `gnd_fanout`;
-- `compose/pcb/jumper.py`: `build_board`;
 - `compose/controller/rev2.py`, `compose/checks/gasket.py`, `compose/sim/controller_copper.py`.
 
 After porting, every DRC and simulation must still pass.

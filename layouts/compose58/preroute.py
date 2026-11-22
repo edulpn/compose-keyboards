@@ -10,7 +10,7 @@ Optional: delete this file, or set COMPOSE_PREROUTE=0, and the autorouter routes
          on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back,
          through a via at either end, so the front copper stays open in the column gaps and the back copper
          under the keys for everything that has to cross a row. The rows are tied into a mesh: a 1 mm spine
-         down the outer edge, a 0.8 mm one down the inner edge from connector slot 19, slot 2 straight into the
+         down the outer edge, a 0.8 mm one down the inner edge from connector slot 11, slot 2 straight into the
          top row, and the thumb row joined at both ends.
   D1..   on the hotswap RGB board, every key's D net: its socket pad on each face to its diode. On this board
          the sockets' pads sit on both faces, so each key needs two links across the board (D and its column),
@@ -87,7 +87,7 @@ def row4(f, s, slot):
     side = max((ks for ks in s.keys if ks.row < 4 and ks.cathode[0] > ks.k.x), key=lambda ks: (ks.cathode[0], -ks.row))
     # connector: from its pin to a via under the body on the bridge side, then down the back face under the rest of
     # the row (the rail's spine runs on the front there) and on past the body's front end
-    p = slot[12 + 4]
+    p = slot[4 + 4]
     via = tuple(p + n * UNDER)
     f.via(ROW, via)
     f.track(ROW, "F", [p, via], ROW_W)
@@ -184,16 +184,16 @@ def rail(f, s, slot):
     for (x, y) in tops:
         f.route(RAIL, "F", (x, y), (xo, y), TRUNK_W)
     f.track(RAIL, "F", [(xo, y) for _, y in tops], SPINE_OUT_W)
-    # the connector: slot 2 into the top row, slot 19 into the second; a via beside each pad joins the two faces' pads
-    for sl, r in ((2, 0), (19, 1)):
+    # the connector: slot 2 into the top row, slot 11 into the second; a via beside each pad joins the two faces' pads
+    for sl, r in ((2, 0), (11, 1)):
         p = slot[sl]
         via = tuple(p - n * LANE)
         f.route(RAIL, "F", end(rows[r][-1], 1), via, TRUNK_W)
         f.via(RAIL, via)
         f.track(RAIL, "F", [via, p], SPUR_W)
         f.track(RAIL, "B", [via, p], SPUR_W)
-    # the inner edge: from slot 19 under the connector's cable side, down past rows 2 and 3 to the inner key
-    p = slot[19]
+    # the inner edge: from slot 11 under the connector's cable side, down past rows 2 and 3 to the inner key
+    p = slot[11]
     under = tuple(p + n * UNDER)
     f.track(RAIL, "F", [p, under], SPUR_W)
     k2, ki = rows[2][-1].k, inner.k

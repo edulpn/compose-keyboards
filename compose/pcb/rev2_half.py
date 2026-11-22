@@ -1,25 +1,26 @@
 """
 Rev 2 half boards (controller rev 2 standard):  python3 -m compose half-rev2 OUT [board ...]
 
-  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 18)
+  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 10)
   half_rev2_hotswap_rgb / half_rev2_solder_rgb   an SK6812 MINI-E under every switch, chained, 100 nF per 3 LEDs
   --plan       the placement drawing only          --preroute   the layout's pre-routed copper laid, checked against
                                                                 the plan and drawn (neither needs KiCad)
 
 One reversible board serves both halves: the left half has its switches on F and everything else
 on B; the right half is the same board flipped (switches on B, the rest on F). So every one-sided part has a
-copy on each face (hotswap sockets, LEDs, capacitors, the cable connector) and only the bottom face's copies
+copy on each face (hotswap sockets, LEDs, capacitors, the cable connectors) and only the bottom face's copies
 are fitted. Through-hole parts (diodes, solder-in switches) serve both.
 
   - Outline: the plate outline less PCB_INSET (inside the gasket pads). No case screws go through it: the
     board hangs from the plate on four M2 screws into heat-set inserts in the plate (posts solved here).
   - Matrix: the layout's (row, col), COL2ROW, a through-hole diode per key in the same spot at every key.
-  - Cable connector: Molex PicoBlade 53047-2010 (20 pos, 1.25 mm, vertical, through hole) along the inner edge,
-    fitted from the face away from the switches (one footprint serves both halves), its pin row on the bridge-frame
-    line of the controller's connector row, so the 20-pin PicoBlade cable runs straight across. Pins get their nets
-    by physical position: the back-most pin is slot 1, as on the controller (the cable keeps the order; a reversed
-    one, or the connector fitted turned round, is the controller's flipped case, put right by turning it 180 deg).
-  - Slots: 1 GND, 2 5V, 3 RGB in, 4 GND, 5-11 COL0-6, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
+  - Cable connectors: Molex PicoBlade 53047-1210 behind a 53047-0810 (1.25 mm, vertical, through hole), end to end
+    along the inner edge, fitted from the face away from the switches (one footprint each serves both halves), their
+    pins on the bridge-frame line of the controller's connector row and level with its slots, so the 12-way and
+    8-way PicoBlade cables run straight across. Pins get their nets by physical position: the back-most pin is slot
+    1, as on the controller (the cables keep the order; a reversed one, or a connector fitted turned round, is the
+    controller's flipped case, put right by turning it 180 deg).
+  - Slots: 12-pin 1 GND, 2 5V, 3 RGB in, 4-9 ROW0-5, 10 RGB out, 11 5V, 12 GND; 8-pin 13 GND, 14-20 COL0-6.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
@@ -64,18 +65,21 @@ LED_PINS = {"1": (1, -1), "2": (1, 1), "3": (-1, 1), "4": (-1, -1)}   # VDD, DOU
 CAP_EVERY = 3                        # 100 nF (1206) per this many LEDs (hot-plug inrush, see the controller sim)
 CAP_AT = (5.6, 5.05)                 # footprint coords, upright (pads along y) beside the LED, inside the switch
                                      #   cell, so the row gaps stay free for the diodes
-PB_N, PB_PITCH = 20, 1.25
-PB_LIB, PB_NAME = "Connector_Molex", f"Molex_PicoBlade_53047-{PB_N:02d}10_1x{PB_N:02d}_P1.25mm_Vertical"
-PB_BODY = (-((PB_N - 1) * PB_PITCH + 3.2) / 2, ((PB_N - 1) * PB_PITCH + 3.2) / 2, -1.6, 1.6)
-                                     # body along the row (u) / across it toward the bridge (n), from the pin row's
-                                     #   centre: build() holds these to KiCad's own 20-pin footprint
+from compose.controller.rev2_std import PB_N, PB_END, PB_L, PB_PARTS, pb_bodies, slot_off   # noqa: E402
+PB_LIB = "Connector_Molex"
+PB_ACROSS = 2.05                     # the body across the row, either way: KiCad's fab outline runs 2.05 mm to one
+                                     #   side of the pins and 1.15 to the other, and the right half's part (fitted
+                                     #   from the other face) has it the other way round
+PB_BODY = (-PB_L / 2, PB_L / 2, -PB_ACROSS, PB_ACROSS)
+                                     # both bodies and the space between, along the row (u) / across it toward the
+                                     #   bridge (n), from the row's centre: build() holds them to KiCad's footprints
 PB_EDGE = 1.0                        # body to the board's inner edge, at least
 PB_GAP = 0.6                         # the connector (body and pins) to any other part, both faces (it's through-hole):
                                      #   hand-soldered, so as far as the diodes' pads keep
 PB_PAD = (1.3, 0.8)                  # pin pad for the plan's copper checks: across the row x along it
-SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 4: "GND", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
-SLOT_NET.update({5 + c: f"COL{c}" for c in range(7)})
-SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
+SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 10: "RGB_OUT", 11: "+5V", 12: "GND", 13: "GND"}
+SLOT_NET.update({4 + r: f"ROW{r}" for r in range(6)})
+SLOT_NET.update({14 + c: f"COL{c}" for c in range(7)})
 POST_SEARCH = 18.0
 M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part (the plan), and no copper on either face
                                      #   (a rule area: no tracks, vias or pour). The screw's head bears on one face and
@@ -196,7 +200,7 @@ def conn_place(keep, ol):
         raise RuntimeError("no room for the cable connector near the inner edge")
     c, bx, s, back = best
     f2 = lambda v: tuple(float(t) for t in v)
-    pads = [f2(c + u * ((PB_N - 1) / 2 - i) * PB_PITCH) for i in range(PB_N)]   # back-most first (index 0 = slot 1)
+    pads = [f2(c - u * slot_off(k)) for k in range(1, PB_N + 1)]   # back-most first (index 0 = slot 1)
     return SimpleNamespace(c=f2(c), u=f2(u), n=f2(n), body=bx, pads=pads, shift=float(s), back=float(back))
 
 
@@ -449,7 +453,7 @@ def field(s, keepouts=()):
     slot = slot_of_pad_xy(s)
     for face in ("B", "F"):                                       # through-hole: the same pad on both faces
         for p in s.conn.pads:
-            f.pad(face, quad(p, *PB_PAD), slot_net(slot[p], s.rgb), f"J1.slot{slot[p]}")
+            f.pad(face, quad(p, *PB_PAD), slot_net(slot[p], s.rgb), f"J{1 if slot[p] <= PB_PARTS[0] else 2}.slot{slot[p]}")
     for x, y in s.posts:
         f.hole(Point(x, y).buffer(PR.M2_CLEAR / 2))
         f.keepout(Point(x, y).buffer(M2_KEEP))                    # under the screw's head and the plate's insert
@@ -614,38 +618,41 @@ def build(name):
                 for p in c_.Pads():
                     p.SetNet(net("+5V" if p.GetNumber() == "1" else "GND"))
                 b.Add(c_)
-    # ---- cable connector: through-hole, one footprint for both halves (fitted from the face away from the switches);
-    #      nets by physical position (back-most pin = slot 1). Its body outline on the back, where the left half has it
+    # ---- cable connectors: through-hole, one footprint each for both halves (fitted from the face away from the
+    #      switches); nets by physical position (back-most pin = slot 1). Their body outlines on the back, where the
+    #      left half has them
     slot = slot_of_pad_xy(s)
-    j = PK.lib_fp(b, PB_LIB, PB_NAME)
-    j.SetReference("J1")
-    j.Reference().SetVisible(False)
-    j.Value().SetVisible(False)
-    j.Flip(j.GetPosition(), False)
-    PK.place_by_pads(j, "1", K(s.conn.pads[0]), str(PB_N), K(s.conn.pads[-1]))
-    for p in j.Pads():
-        if not p.GetNumber().isdigit():
-            continue
-        xy = (pcbnew.ToMM(p.GetPosition().x) - PK.OX, PK.OY - pcbnew.ToMM(p.GetPosition().y))
-        k_ = [q for q in slot if math.dist(q, xy) < 1e-3]
-        must(k_, f"cable connector pin {p.GetNumber()} off the planned row")
-        nm = slot_net(slot[k_[0]], rgb)
-        if nm:
-            p.SetNet(net(nm))
-    # the body sizes the plan used (PB_BODY) against KiCad's own 20-pin outline (its fab layer)
-    fab = [g for g in j.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() in (pcbnew.F_Fab, pcbnew.B_Fab)]
-    must(fab, "PicoBlade 53047: KiCad's footprint has no body outline on the fab layer")
-    bb = fab[0].GetBoundingBox()
-    for g in fab[1:]:
-        bb.Merge(g.GetBoundingBox())
-    cx_, cy_ = K(s.conn.c)
-    across = sorted((pcbnew.ToMM(bb.GetLeft()) - cx_, pcbnew.ToMM(bb.GetRight()) - cx_))
-    along = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
-    print(f"  J1: KiCad's body {across[0]:.2f} .. {across[1]:.2f} mm across the row, {along:.2f} along it; the plan's "
-          f"{PB_BODY[2]:.2f} .. {PB_BODY[3]:.2f}, {PB_BODY[1] - PB_BODY[0]:.2f}")
-    must(abs(along - (PB_BODY[1] - PB_BODY[0])) < 0.4 and across[0] >= PB_BODY[2] - 0.4 and across[1] <= PB_BODY[3] + 0.4,
-         "PicoBlade 53047: PB_BODY doesn't hold KiCad's 20-pin footprint")
-    b.Add(j)
+    for i, (k0, n_, y0, y1) in enumerate(pb_bodies()):
+        ref = f"J{i + 1}"
+        j = PK.lib_fp(b, PB_LIB, f"Molex_PicoBlade_53047-{n_:02d}10_1x{n_:02d}_P1.25mm_Vertical")
+        j.SetReference(ref)
+        j.Reference().SetVisible(False)
+        j.Value().SetVisible(False)
+        j.Flip(j.GetPosition(), False)
+        PK.place_by_pads(j, "1", K(s.conn.pads[k0 - 1]), str(n_), K(s.conn.pads[k0 + n_ - 2]))
+        for p in j.Pads():
+            if not p.GetNumber().isdigit():
+                continue
+            xy = (pcbnew.ToMM(p.GetPosition().x) - PK.OX, PK.OY - pcbnew.ToMM(p.GetPosition().y))
+            k_ = [q for q in slot if math.dist(q, xy) < 1e-3]
+            must(k_, f"cable connector {ref} pin {p.GetNumber()} off the planned row")
+            nm = slot_net(slot[k_[0]], rgb)
+            if nm:
+                p.SetNet(net(nm))
+        # the body the plan used (PB_BODY: this part's stretch of it) against KiCad's own outline (its fab layer)
+        fab = [g for g in j.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() in (pcbnew.F_Fab, pcbnew.B_Fab)]
+        must(fab, f"PicoBlade 53047-{n_:02d}10: KiCad's footprint has no body outline on the fab layer")
+        bb = fab[0].GetBoundingBox()
+        for g in fab[1:]:
+            bb.Merge(g.GetBoundingBox())
+        cx_, cy_ = K(s.conn.c)
+        across = sorted((pcbnew.ToMM(bb.GetLeft()) - cx_, pcbnew.ToMM(bb.GetRight()) - cx_))
+        along = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
+        print(f"  {ref}: KiCad's body {across[0]:.2f} .. {across[1]:.2f} mm across the row, {along:.2f} along it; the "
+              f"plan's {PB_BODY[2]:.2f} .. {PB_BODY[3]:.2f}, {y1 - y0:.2f}")
+        must(abs(along - (y1 - y0)) < 0.4 and across[0] >= PB_BODY[2] - 0.4 and across[1] <= PB_BODY[3] + 0.4,
+             f"PicoBlade 53047-{n_:02d}10: PB_BODY doesn't hold KiCad's footprint")
+        b.Add(j)
     # ---- M2 holes (board -> plate inserts)
     for i, (x, y) in enumerate(s.posts):                      # no courtyard: they sit in the column gaps,
         h = pcbnew.FOOTPRINT(b)                                  #   inside the switches' 15 mm courtyards
@@ -661,12 +668,14 @@ def build(name):
     from compose.pcb import art as pcb_art
     art = pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else ""))
     PK.add_art_half(b, art, PK.OX, PK.OY)
-    p1 = np.array(s.conn.pads[0])
     u, n = np.array(s.conn.u), np.array(s.conn.n)
     lhs, rhs = PR.HALF_NAMES
+    k2 = pb_bodies()[1][0]                                        # the front connector's pin 1
     for face, nm, lay, mir in (("B", lhs, pcbnew.B_SilkS, True), ("F", rhs, pcbnew.F_SilkS, False)):
-        PK.text(b, "1", K(tuple(float(t) for t in p1 + u * (PB_BODY[1] - (PB_N - 1) / 2 * PB_PITCH + 0.8))), lay, 1.0,
-                mirror=mir)                                       # past the body's back end, by slot 1
+        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 0.8))), lay, 1.0,
+                mirror=mir)                                       # past the back body's end, by slot 1
+        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[k2 - 1]) - n * (PB_ACROSS + 0.9))), lay, 1.0,
+                mirror=mir)                                       # inboard of the front one's pin 1 (slot 13)
         PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir, angle=90)
     # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
     pre = PRE.hook("half_rev2")
@@ -998,10 +1007,10 @@ def laid(name):
 
 
 def rail_points(s, face):
-    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 2 and 19, every LED's
+    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 2 and 11, every LED's
     5 V pad. Plate-local points for Field.resistance."""
     slot = {v: k for k, v in slot_of_pad_xy(s).items()}
-    return ([(slot[2], face), (slot[19], face)],
+    return ([(slot[2], face), (slot[11], face)],
             [(led_pads(L.keys[i], face)["1"].centroid.coords[0], face) for i in s.led_order])
 
 
@@ -1036,7 +1045,7 @@ def preroute_report(out, which=None):
         if "+5V" in f.nets():
             for face, half in (("B", PR.HALF_NAMES[0]), ("F", PR.HALF_NAMES[1])):
                 feeds, loads = rail_points(s, face)
-                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 2 + 19 to the "
+                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 2 + 11 to the "
                       f"farthest LED ({f.resistance('+5V', feeds, loads, width=PR.TRACE_W) * 1e3:.0f} at the signal width)")
         draw_laid(f, os.path.join(out, "pcb", f"{name}_preroute.png"))
     return bad

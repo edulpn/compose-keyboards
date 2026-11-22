@@ -5,16 +5,18 @@ Compose controller rev 2: the shared controller board for all Compose split layo
 
 Interface (the standard; see docs/controller-rev2.md):
   - Raspberry Pi Pico footprint (socketed on 2x 1x20 female headers, 8.5 mm), USB end = back (-y here).
-  - Two 20-position 1.25 mm cable connectors (Molex PicoBlade 53048-2010, right angle, through hole), top face,
-    along the side edges with their openings outward, at fixed positions (rev2_std: PB_*), so the board doesn't
-    depend on any layout's angles: each layout's cables take them up. Slot order back -> front, the same on both sides:
-        1 GND, 2 5V_LED, 3 RGB data to the half, 4 GND (guard), 5-11 COL0-6, 12-17 ROW0-5,
-        18 RGB data back from the half, 19 5V_LED, 20 GND
-    Reversal-safe: a cable fitted flipped (slot k meets 21-k) puts 5 V on 5 V, GND on GND, the two RGB data
-    lines on each other (through the 330 ohm) and rows on columns - nothing is damaged, keys just scramble.
-    (the right connector is turned 180 deg, so its pad numbers run the other way; nets follow the slot).
-    The halves join through 20-pin PicoBlade cables (150 mm): a reversed cable (or a half's connector fitted turned
-    round) is the flipped case above, and turning the half's connector 180 deg puts it right.
+  - Per side two 1.25 mm cable connectors end to end (Molex PicoBlade 53048-1210 behind a 53048-0810, right angle,
+    through hole), top face, along the side edges with their openings outward, at fixed positions (rev2_std: PB_*),
+    so the board doesn't depend on any layout's angles: each layout's cables take them up. Their 20 contacts are
+    slots by physical position, back -> front, the same on both sides:
+        12-pin  1 GND, 2 5V_LED, 3 RGB data to the half, 4-9 ROW0-5, 10 RGB data back from the half, 11 5V_LED, 12 GND
+        8-pin   13 GND, 14-20 COL0-6
+    Reversal-safe: a 12-way cable fitted flipped (slot k meets 13-k) puts 5 V on 5 V, GND on GND, the two RGB data
+    lines on each other (through the 330 ohm) and rows on rows; an 8-way one (k meets 33-k) GND on COL6 and columns
+    on columns - nothing is damaged, keys just scramble. The two cables differ in size, so they can't be swapped.
+    (the right connectors are turned 180 deg, so their pad numbers run the other way; nets follow the slot).
+    The halves join through a 12-way and an 8-way PicoBlade cable each (150 mm): a reversed cable (or a half's
+    connector fitted turned round) is the flipped case above, and turning the half's connector 180 deg puts it right.
   - Matrix: 6 rows shared by both halves (GP0-5), 7 columns per half
     (left GP6-12, right GP22, 21, 20, 19, 18, 17, 16 = COL0-6). QMK: 6 x 14.
   - I2C1 on GP14 (SDA) / GP15 (SCL), 4.7k pull-ups to 3.3 V: 4-pin OLED-style header + Qwiic.
@@ -22,16 +24,17 @@ Interface (the standard; see docs/controller-rev2.md):
   - AUX header: GP26, GP27, GP28 (ADC pins), 3.3 V, 5 V (VBUS), GND.
   - Optional RGB, all on the BOTTOM face (outlined "RGB" on the bottom silkscreen; the case has ~24 mm under
     the board, so nothing is limited by the Pico's 8.5 mm socket height): 74HCT125 buffer (3.3 V -> 5 V data, in spec for WS2812),
-    100 nF, 330 ohm series resistor, MF-RHT050 polyfuse VBUS -> LED 5 V, 10 uF bulk (hot-plug friendly, see the sim).
+    100 nF, 330 ohm series resistor, MF-NSMF050-2 polyfuse VBUS -> LED 5 V (1206, beside the Pico's VBUS pin), 10 uF
+    bulk (hot-plug friendly, see the sim).
     A second gate of the 74HCT125 (220 ohm in, 100k pull-down, 330 ohm out) re-drives the chain from the
     left half to the right half. Leave it all empty and the cables' 5 V lines stay dead; firmware RGB off.
-  - Mounting: four M3 holes, (+-17.75, +19.5) beside the Pico's front end and (+-13.7, -22.5) beside its
+  - Mounting: four M3 holes, (+-17.75, +20.5) beside the Pico's front end and (+-13.7, -22.5) beside its
     USB end. M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four
     case posts, clamping it; the cover drops onto them and takes four M3 x 6 screws.
     Copper- and part-free circles around them on top; no bottom part or lead over the posts.
   - Top face: Pico sockets, the two cable connectors and the front connector row only. Bottom face: every
     passive and the RGB buffer (through-hole, soldered from the top), I2C pull-ups.
-Everything is through-hole except the Qwiic connector.
+Everything is through-hole except the Qwiic connector and the polyfuse.
 """
 from compose import must
 import pathlib
@@ -52,11 +55,13 @@ ROUTER = "2.5.0"                           # the Freerouting version this board 
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
 from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
-                         PB_N, PB_PITCH, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_L, PB_PLUG_OUT)
+                         PB_PITCH, PB_END, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_L, PB_PLUG_OUT,
+                         pb_bodies, slot_off)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
 LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the half boards
 ROW_Y = 27.8                               # front connector row (header pins)
+F1_AT = (6.2, -20.5)                       # polyfuse (bottom): its centre
 
 PICO_GPIO = {1: 0, 2: 1, 4: 2, 5: 3, 6: 4, 7: 5, 9: 6, 10: 7, 11: 8, 12: 9, 14: 10, 15: 11, 16: 12, 17: 13,
              19: 14, 20: 15, 21: 16, 22: 17, 24: 18, 25: 19, 26: 20, 27: 21, 29: 22, 31: 26, 32: 27, 34: 28}
@@ -72,14 +77,15 @@ POWER_W = 0.4
 
 
 def slot_nets(side):
-    """Net for each cable slot 1..20 (slot 1 at the back), same order on both connectors."""
-    s = {1: "GND", 2: "+5V_LED", 4: "GND", 19: "+5V_LED", 20: "GND"}
-    for i, g in enumerate(COLS[side]):
-        s[5 + i] = f"GP{g}"
+    """Net for each cable slot 1..20 (slot 1 at the back), same order on both sides: the 12-pin's slots 1-12, the
+    8-pin's 13-20."""
+    s = {1: "GND", 2: "+5V_LED", 11: "+5V_LED", 12: "GND", 13: "GND"}
     for i, g in enumerate(ROWS):
-        s[12 + i] = f"GP{g}"
-    s[3] = "RGB_L_IN" if side == "L" else "RGB_R_IN"      # data into the half: between 5 V (AC ground) and GND
-    s[18] = "RGB_L_RET" if side == "L" else None           # data back from the left half (right: end of the chain)
+        s[4 + i] = f"GP{g}"
+    for i, g in enumerate(COLS[side]):
+        s[14 + i] = f"GP{g}"
+    s[3] = "RGB_L_IN" if side == "L" else "RGB_R_IN"      # data into the half: between 5 V (AC ground) and ROW0
+    s[10] = "RGB_L_RET" if side == "L" else None           # data back from the left half (right: end of the chain)
     return s
 
 
@@ -155,43 +161,48 @@ def outline_poly():
     return CS.outline()
 
 
-def pb_fp(b, side, net):
-    """Molex PicoBlade 53048-2010 (right angle, 20 pos, 1.25 mm), KiCad's footprint, along the side edge with its
-    opening outward: slot k at y = PB_Y0 + (k - 10.5) * PB_PITCH, slot 1 at the back. Which end pin 1 goes to follows
-    from the footprint: its body (the courtyard) has to lie outward of the pin row."""
+def pb_fps(b, side, net):
+    """The side's two Molex PicoBlade 53048 (right angle, 1.25 mm: a 12-pin behind an 8-pin), KiCad's footprints,
+    along the side edge with their openings outward: slot k at y = PB_Y0 + slot_off(k), slot 1 at the back. Which end
+    pin 1 goes to follows from each footprint: its body (the courtyard) has to lie outward of the pin row."""
     sx = -1 if side == "L" else 1
     sn = slot_nets(side)
-    yb, yf = PB_Y0 - (PB_N - 1) / 2 * PB_PITCH, PB_Y0 + (PB_N - 1) / 2 * PB_PITCH
-    for first_back in (True, False):
-        fp = add(b, "Connector_Molex", f"Molex_PicoBlade_53048-{PB_N:02d}10_1x{PB_N:02d}_P1.25mm_Horizontal", f"J{side}",
-                 f"Molex PicoBlade 53048-{PB_N:02d}10")
-        a_, z_ = ("1", str(PB_N)) if first_back else (str(PB_N), "1")
-        PK.place_by_pads(fp, a_, C(sx * PB_ROW_X, yb), z_, C(sx * PB_ROW_X, yf))
-        x0, _, x1, _ = crt(fp)
-        if (x0 + x1) / 2 * sx > PB_ROW_X:
-            break
-    else:
-        raise RuntimeError("PicoBlade 53048: its body is never outward of its pin row")
-    # the sizes the case is built with (rev2_std) against KiCad's own 20-pin body outline (its fab layer)
-    fab = [g for g in fp.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() == pcbnew.F_Fab]
-    must(fab, "PicoBlade 53048: KiCad's footprint has no body outline on F.Fab")
-    bb = fab[0].GetBoundingBox()
-    for g in fab[1:]:
-        bb.Merge(g.GetBoundingBox())
-    fx = sorted(abs(pcbnew.ToMM(v) - CX) for v in (bb.GetLeft(), bb.GetRight()))
-    fl = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
-    print(f"  J{side}: KiCad's body {fx[0]:.2f} .. {fx[1]:.2f} mm out, {fl:.2f} long; the standard's "
-          f"{PB_ROW_X - PB_BODY_IN:.2f} .. {PB_ROW_X + PB_BODY_OUT:.2f}, {PB_L:.2f}")
-    must(abs(fx[0] - (PB_ROW_X - PB_BODY_IN)) < 0.4 and abs(fx[1] - (PB_ROW_X + PB_BODY_OUT)) < 0.4
-         and abs(fl - PB_L) < 0.4, "PicoBlade 53048: rev2_std's body sizes don't match KiCad's 20-pin footprint")
-    fp.Value().SetVisible(False)
-    for p in fp.Pads():
-        if p.GetNumber().isdigit():
-            n = int(p.GetNumber())
-            k = n if first_back else PB_N + 1 - n
-            if sn.get(k):
-                p.SetNet(net(sn[k]))
-    return fp
+    out = []
+    for i, (k0, n, _, _) in enumerate(pb_bodies()):
+        yb, yf = PB_Y0 + slot_off(k0), PB_Y0 + slot_off(k0 + n - 1)
+        ref = f"J{side}{i + 1}"
+        for first_back in (True, False):
+            fp = add(b, "Connector_Molex", f"Molex_PicoBlade_53048-{n:02d}10_1x{n:02d}_P1.25mm_Horizontal", ref,
+                     f"Molex PicoBlade 53048-{n:02d}10")
+            a_, z_ = ("1", str(n)) if first_back else (str(n), "1")
+            PK.place_by_pads(fp, a_, C(sx * PB_ROW_X, yb), z_, C(sx * PB_ROW_X, yf))
+            x0, _, x1, _ = crt(fp)
+            if (x0 + x1) / 2 * sx > PB_ROW_X:
+                break
+        else:
+            raise RuntimeError(f"PicoBlade 53048-{n:02d}10: its body is never outward of its pin row")
+        # the sizes the case is built with (rev2_std) against KiCad's own body outline (its fab layer)
+        fab = [g for g in fp.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() == pcbnew.F_Fab]
+        must(fab, f"PicoBlade 53048-{n:02d}10: KiCad's footprint has no body outline on F.Fab")
+        bb = fab[0].GetBoundingBox()
+        for g in fab[1:]:
+            bb.Merge(g.GetBoundingBox())
+        fx = sorted(abs(pcbnew.ToMM(v) - CX) for v in (bb.GetLeft(), bb.GetRight()))
+        fl = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
+        ln = (n - 1) * PB_PITCH + 2 * PB_END
+        print(f"  {ref}: KiCad's body {fx[0]:.2f} .. {fx[1]:.2f} mm out, {fl:.2f} long; the standard's "
+              f"{PB_ROW_X - PB_BODY_IN:.2f} .. {PB_ROW_X + PB_BODY_OUT:.2f}, {ln:.2f}")
+        must(abs(fx[0] - (PB_ROW_X - PB_BODY_IN)) < 0.4 and abs(fx[1] - (PB_ROW_X + PB_BODY_OUT)) < 0.4
+             and abs(fl - ln) < 0.4, f"PicoBlade 53048-{n:02d}10: rev2_std's body sizes don't match KiCad's footprint")
+        fp.Value().SetVisible(False)
+        for p in fp.Pads():
+            if p.GetNumber().isdigit():
+                m = int(p.GetNumber())
+                k = k0 - 1 + (m if first_back else n + 1 - m)
+                if sn.get(k):
+                    p.SetNet(net(sn[k]))
+        out.append(fp)
+    return out
 
 
 def build():
@@ -234,9 +245,10 @@ def build():
         keep(h)
 
     # ---- cable connectors: PicoBlade right angle along the side edges, openings outward; slot 1 at the back (nets by
-    #      physical position, so the right one's pad numbers run the other way)
+    #      physical position, so the right ones' pad numbers run the other way)
     for side in ("L", "R"):
-        keep(pb_fp(b, side, net))
+        for fp in pb_fps(b, side, net):
+            keep(fp)
 
     # ---- cover standoff holes (M3) in the corners, with copper keep-outs for the standoff / case boss
     for i, (x, y) in enumerate(COVER_HOLES):
@@ -287,22 +299,12 @@ def build():
         setnets(r, {"1": n, "2": n2}, net)
         keep(r)
 
-    # ---- bottom, back-right strip beside the Pico (next to VBUS, Pico pin 40): optional polyfuse, standing, right
-    #      behind JR. Moved back from -14.6 as far as KiCad's footprints need: its courtyard 0.2 mm clear of JR's
-    #      pin joints on the bottom, its own joints on the top 0.2 mm clear of JR's courtyard
-    f1 = add(b, "Fuse", "Fuse_Bourns_MF-RHT050", "F1", "MF-RHT050")
+    # ---- bottom, beside the Pico's VBUS pin (40, back right): optional polyfuse, 1206 (the strip behind the cable
+    #      connectors has no room for a radial one), lengthwise between C2 and the Pico's socket pins
+    f1 = add(b, "Fuse", "Fuse_1206_3216Metric_Pad1.42x1.75mm_HandSolder", "F1", "MF-NSMF050-2")
     put(f1, C(0, 0), angle=90)
     x0, y0, x1, y1 = crt(f1)
-    f1.Move(V(13.0 - (x0 + x1) / 2, -14.6 - (y0 + y1) / 2))
-
-    def pths(fp):
-        return [(pcbnew.ToMM(q.GetPosition().y) - CY, pcbnew.ToMM(max(q.GetSize().x, q.GetSize().y)) / 2)
-                for q in fp.Pads() if q.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
-    jr = fps["JR"]
-    back = max(0.0, crt(f1)[3] - (min(y - r for y, r in pths(jr)) - 0.2),
-               max(y + r for y, r in pths(f1)) - (crt(jr)[1] - 0.2))
-    f1.Move(V(0.0, -back))
-    print(f"  F1: {back:.2f} mm behind -14.6 for JR, courtyard {', '.join(f'{v:.2f}' for v in crt(f1))}")
+    f1.Move(V(F1_AT[0] - (x0 + x1) / 2, F1_AT[1] - (y0 + y1) / 2))
     setnets(f1, {"1": "VBUS", "2": "+5V_LED"}, net)
     keep(f1)
 
@@ -368,7 +370,7 @@ def check_layout(fps):
             for q, r in pth(fps[c], r=True):
                 must(not boxes[a].intersects(Point(q).buffer(r - 1e-3)), f"{a} courtyard over {c}'s joint at {q}")
     pico = box(-10.5, -25.5, 10.5, 25.5)
-    for ref in ("J4", "J5", "J6", "JL", "JR"):
+    for ref in ("J4", "J5", "J6", "JL1", "JL2", "JR1", "JR2"):
         must(boxes[ref].intersection(pico).area < 1e-6, f"{ref} is under the Pico")
     for x, y in COVER_HOLES:
         keep = Point(x, y).buffer(STANDOFF_KEEP)              # standoff hex on top
@@ -419,10 +421,9 @@ def art(b):
     # cover standoffs
     for x, y in COVER_HOLES:
         silk_circle(b, x, y, 2.2)
-    # optional RGB parts (bottom): boxed under the Pico, F1 back-right; "RGB" on the bottom silk
-    bsilk_rect(b, -5.4, -24.4, 5.4, 19.42)
+    # optional RGB parts (bottom): boxed under the Pico, F1 included at the back right; "RGB" on the bottom silk
+    bsilk_rect(b, -5.4, -24.4, 7.6, 19.42)
     blabel(b, "RGB", 4.55, -21.0, angle=-90)
-    blabel(b, "RGB", 16.5, -7.9)                                 # outward of JR's pins
     # connectors (front row): every name sits against the thing it names
     # J4 (OLED / I2C): pin names standing on the header's outline, the group name centred right over them
     em = LABEL_EM
@@ -438,12 +439,14 @@ def art(b):
     L("AUX", 7.49 + 0.5, ROW_Y, anchor="l")
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
-    # cable connectors: the side name along the pin row, centred on it, and "1" level with slot 1's pin, both just
-    # outside the opening (the strip between the Pico's socket and the body is too narrow): seen while plugging in
+    # cable connectors: the side name along the pin row, centred on it, and "1" level with each connector's
+    # pin 1 (slots 1 and 13), all just outside the openings (the strip between the Pico's socket and the bodies is too
+    # narrow): seen while plugging in
     for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside
-        x_out = PB_ROW_X + PB_BODY_OUT + 1.2
+        x_out = PB_ROW_X + PB_BODY_OUT + 1.7                         # 1.2 mm past the courtyard
         L(s, sx * x_out, PB_Y0, angle=90 * sx)
-        L("1", sx * x_out, PB_Y0 - (PB_N - 1) / 2 * PB_PITCH)
+        for k0, _, _, _ in pb_bodies():
+            L("1", sx * x_out, PB_Y0 + slot_off(k0))
     return rec
 
 

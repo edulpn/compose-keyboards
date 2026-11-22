@@ -5,8 +5,9 @@ Independent of the net names the board was built with:
   1. Copper connectivity is rebuilt from geometry (pads, tracks and vias that touch on a layer).
   2. Parts are placed the way a builder would, from their datasheets:
        Pico       pinout at its mechanical pin positions (pin 1 top-left seen from above, USB at the back)
-       cable      Molex PicoBlade 53048 right angle: contacts at the physical slots (slot 1 = the back-most), whatever
-                  the pad numbers; one straight row, the body (its opening) outward of it
+       cable      Molex PicoBlade 53048 right angle, a 12-pin behind an 8-pin per side: contacts at the physical slots
+                  (slot 1 = the back-most), whatever the pad numbers; one straight row, the bodies (their openings)
+                  outward of it
        74HCT125   DIP-14 pinout from pin 1 = the square pad, counter-clockwise seen from the side its body is on
        C2         + lead = square pad;  headers pin 1 = square pad;  Qwiic pins in a row from pin 1
   3. The netlist those parts make is compared with the spec below (written from docs/controller-rev2.md, not from
@@ -14,9 +15,9 @@ Independent of the net names the board was built with:
      out is read from the same copper (electrical_variants).
   4. Silkscreen labels are checked against what the copper under them does.
   5. Two model halves (42 keys each, diode per key, reversible board = right half mirrored) are joined by
-     20-way cables (same physical slot order at both ends); the QMK COL2ROW scan runs with the rev 2 pin
-     config: every key alone, random chords, the ghosting square, and a cable fitted flipped (the pinout's
-     reversal safety).
+     a 12-way and an 8-way cable each (same physical slot order at both ends); the QMK COL2ROW scan runs with the
+     rev 2 pin config: every key alone, random chords, the ghosting square, and a cable fitted flipped (the
+     pinout's reversal safety).
   6. Negative controls: a swapped firmware pin, a reversed right connector, reversed diodes, an injected
      short and a cut track must all be caught.
 """
@@ -51,10 +52,19 @@ PICO_PINOUT = {1: "GP0", 2: "GP1", 3: "GND", 4: "GP2", 5: "GP3", 6: "GP4", 7: "G
                20: "GP15", 21: "GP16", 22: "GP17", 23: "GND", 24: "GP18", 25: "GP19", 26: "GP20", 27: "GP21",
                28: "GND", 29: "GP22", 30: "RUN", 31: "GP26", 32: "GP27", 33: "AGND", 34: "GP28", 35: "ADC_VREF",
                36: "3V3", 37: "3V3_EN", 38: "GND", 39: "VSYS", 40: "VBUS"}            # Raspberry Pi Pico datasheet
-SLOTS = {1: "GND", 2: "5V_LED", 3: "RGB_TO_HALF", 4: "GND",
-         5: "COL0", 6: "COL1", 7: "COL2", 8: "COL3", 9: "COL4", 10: "COL5", 11: "COL6",
-         12: "ROW0", 13: "ROW1", 14: "ROW2", 15: "ROW3", 16: "ROW4", 17: "ROW5",
-         18: "RGB_FROM_HALF", 19: "5V_LED", 20: "GND"}
+SLOTS = {1: "GND", 2: "5V_LED", 3: "RGB_TO_HALF",                                  # the 12-way cable
+         4: "ROW0", 5: "ROW1", 6: "ROW2", 7: "ROW3", 8: "ROW4", 9: "ROW5",
+         10: "RGB_FROM_HALF", 11: "5V_LED", 12: "GND",
+         13: "GND", 14: "COL0", 15: "COL1", 16: "COL2", 17: "COL3", 18: "COL4", 19: "COL5", 20: "COL6"}   # the 8-way
+CABLES = ((1, 12), (13, 8))     # (first slot, ways), back to front
+
+
+def mirror(k):
+    """The slot that slot k meets through a cable fitted flipped: its order reverses within its own cable."""
+    for k0, n in CABLES:
+        if k0 <= k < k0 + n:
+            return 2 * k0 + n - 1 - k
+    raise ValueError(k)
 ROW_GPIO = ["GP0", "GP1", "GP2", "GP3", "GP4", "GP5"]
 COL_GPIO = {"L": ["GP6", "GP7", "GP8", "GP9", "GP10", "GP11", "GP12"],
             "R": ["GP22", "GP21", "GP20", "GP19", "GP18", "GP17", "GP16"]}      # half COL0 (outer) .. COL6 (inner)
@@ -140,20 +150,25 @@ def place_parts(B):
         x = -8.89 if p <= 20 else 8.89
         y = -24.13 + (p - 1) * 2.54 if p <= 20 else 24.13 - (p - 21) * 2.54
         pins[("pico", p)] = B.node((CX + x, CY + y))
-    # cable connectors (Molex PicoBlade 53048, right angle): contacts at the physical slots, slot 1 = the back-most,
-    # in one straight row; the body, and the opening the cable's plug goes into, outward of it
+    # cable connectors (Molex PicoBlade 53048, right angle, a 12-pin and an 8-pin per side): contacts at the physical
+    # slots, slot 1 = the back-most, in one straight row, the 12-pin's first; each body, and the opening the cable's
+    # plug goes into, outward of it
     for side, sx in (("L", -1), ("R", 1)):
-        fp = B.fp["J" + side]
-        pads = sorted((p for p in fp.Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
-        ok(len(pads) == 20, f"cable connector {side}: 20 contacts")
+        fps = sorted((f for r, f in B.fp.items() if r.startswith("J" + side)),
+                     key=lambda f: min(p.GetPosition().y for p in f.Pads()))
+        ok([sum(p.GetNumber().isdigit() for p in f.Pads()) for f in fps] == [n for _, n in CABLES],
+           f"cable connectors {side}: a 12-pin behind an 8-pin")
+        pads = sorted((p for f in fps for p in f.Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
         for i, p in enumerate(pads):
             pins[("pb" + side, i + 1)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
         xs = {round(ToMM(p.GetPosition().x), 2) for p in pads}
-        ok(len(xs) == 1, f"cable connector {side}: one straight row")
-        fp.BuildCourtyardCaches()
-        bb = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
-        mid = (ToMM(bb.GetLeft()) + ToMM(bb.GetRight())) / 2
-        ok((mid - xs.pop()) * sx > 0, f"cable connector {side}: its body and opening outward, toward the half")
+        ok(len(xs) == 1, f"cable connectors {side}: one straight row")
+        x_row = xs.pop()
+        for fp in fps:
+            fp.BuildCourtyardCaches()
+            bb = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
+            mid = (ToMM(bb.GetLeft()) + ToMM(bb.GetRight())) / 2
+            ok((mid - x_row) * sx > 0, f"cable connector {fp.GetReference()}: its body and opening outward, toward the half")
     # DIP-14: pin 1 = the square pad; the rest counter-clockwise seen from above
     u = B.fp["U2"]
     pads = [p for p in u.Pads()]
@@ -178,8 +193,9 @@ def place_parts(B):
                        ("R6", (1, 2)), ("R7", ("a", "b")), ("C1", ("+", "-")),
                        ("F1", ("in", "out"))):
         ps = sorted(B.fp[ref].Pads(), key=lambda p: p.GetNumber())
-        for nm, p in zip(names, ps, strict=False):
-            pins[(ref, nm)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)))
+        for nm, p in zip(names, ps, strict=False):                  # a surface-mount part (F1): on its own face
+            lay = pcbnew.F_Cu if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH or p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
+            pins[(ref, nm)] = B.node((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)), lay)
     c2 = list(B.fp["C2"].Pads())
     plus = [p for p in c2 if p.GetShape() in (pcbnew.PAD_SHAPE_RECT, pcbnew.PAD_SHAPE_ROUNDRECT)]
     ok(len(plus) == 1, "C2: polarity marked by one square (+) pad")
@@ -250,12 +266,12 @@ def electrical_variants(pins):
        "unused buffers 3/4: inputs grounded, outputs disabled (OE high)")
     ok(g(("R4", 1)) == g(("U2", 2)) and g(("R4", 2)) == g(("pico", 3)), "100k pull-down holds the buffer input low before the Pico boots")
     ok(g(("R3", "a")) == g(("U2", 3)) and g(("R3", "b")) == g(("pbL", 3)), "data: buffer -> 330 ohm -> left cable slot 3")
-    ok(g(("pbL", 18)) == g(("R5", "a")) and g(("R5", "b")) == g(("U2", 5)) and g(("R6", 1)) == g(("U2", 5))
-       and g(("R6", 2)) == g(("pico", 3)), "chain return: left slot 18 -> 220 ohm -> buffer 2 input, 100k pull-down")
+    ok(g(("pbL", 10)) == g(("R5", "a")) and g(("R5", "b")) == g(("U2", 5)) and g(("R6", 1)) == g(("U2", 5))
+       and g(("R6", 2)) == g(("pico", 3)), "chain return: left slot 10 -> 220 ohm -> buffer 2 input, 100k pull-down")
     ok(g(("U2", 6)) == g(("R7", "a")) and g(("R7", "b")) == g(("pbR", 3)), "buffer 2 -> 330 ohm -> right cable slot 3")
-    ok(g(("pbL", 18)) != g(("pbR", 3)), "the hop is re-driven, not wired straight through")
-    others = [k for k, v in pins.items() if v == g(("pbR", 18)) and k != ("pbR", 18)]
-    ok(not others, "right slot 18 (end of chain) left open")
+    ok(g(("pbL", 10)) != g(("pbR", 3)), "the hop is re-driven, not wired straight through")
+    others = [k for k, v in pins.items() if v == g(("pbR", 10)) and k != ("pbR", 10)]
+    ok(not others, "right slot 10 (end of chain) left open")
     # with the group empty, which Pico pins see anything new? GP13 only sees R4/U2 pads -> unloaded
     gp13 = [k for k, v in pins.items() if v == g(("pico", 17)) and k[0] not in ("pico",)]
     ok(set(k[0] for k in gp13) <= {"U2", "R4"}, f"GP13 reaches only the optional parts ({sorted(set(k[0] for k in gp13))}) - "
@@ -294,13 +310,12 @@ def silk_truth(B, pins):
         if got != want[txt]:
             bad.append(f"'{txt}' sits on {best} = {got}")
     ok(not bad and n >= 10, f"{n} header labels name the net of the pin they sit on" + (f": {bad}" if bad else ""))
-    # the cable connectors' "1" marks and L/R
+    # the cable connectors' "1" marks (one level with each connector's pin 1: slots 1 and 13) and L/R
     for side, sx, nm in (("L", -1, "lhs"), ("R", 1, "rhs")):
-        ones = [(x, y) for t, x, y in texts if t == "1" and (x - CX) * sx > 0]
-        s1 = B.cu.items  # noqa
-        fp = B.fp["J" + side]
-        y1 = min(ToMM(p.GetPosition().y) for p in fp.Pads())
-        ok(ones and abs(ones[0][1] - y1) < 1.0, f"cable connector {side}: the '1' mark is level with slot 1")
+        ones = sorted(y for t, x, y in texts if t == "1" and (x - CX) * sx > 0)
+        firsts = sorted(min(ToMM(p.GetPosition().y) for p in f.Pads()) for r, f in B.fp.items() if r.startswith("J" + side))
+        ok(len(ones) == len(firsts) == 2 and all(abs(a - b) < 1.0 for a, b in zip(ones, firsts, strict=True)),
+           f"cable connectors {side}: a '1' mark level with each one's first slot")
         lr = [(x, y) for t, x, y in texts if t == nm]
         ok(lr and (lr[0][0] - CX) * sx > 0, f"'{nm}' printed beside the {'left' if sx < 0 else 'right'} connector")
 
@@ -341,8 +356,8 @@ def assemble(pins, cable_flip=None, right_conn_reversed=False):
             # controller contact at lateral position lat (slot lat+1, back first)
             c_slot = lat + 1
             if right_conn_reversed and side == "R":
-                c_slot = 20 - lat
-            h_lat = 19 - lat if cable_flip == side else lat          # a flipped cable reverses the order
+                c_slot = mirror(lat + 1)
+            h_lat = mirror(lat + 1) - 1 if cable_flip == side else lat    # a flipped cable reverses its order
             cn = pins[("pb" + side, c_slot)]
             link(("C", cn), (side, hc[h_lat]))
         for r in range(6):
@@ -415,15 +430,16 @@ def run_scan(pins, qmk=QMK_V2, cable_flip=None, right_conn_reversed=False, quiet
 
 
 def flipped_cable_safety(pins):
-    """A type A cable fitted with one end flipped to make contact reverses the slot order: controller slot k
-    meets half slot 21-k. Classify what meets what (both ends: either end can be the flipped one)."""
-    print("\n== cable fitted flipped (slot k meets slot 21-k)")
+    """A cable fitted with one end flipped to make contact reverses its slot order: controller slot k meets half
+    slot 13-k on the 12-way cable, 33-k on the 8-way one. Classify what meets what (both ends: either end can be the
+    flipped one)."""
+    print("\n== cable fitted flipped (slot k meets slot 13-k / 33-k)")
     # controller side drives: GND, 5V rail, RGB_TO (buffer via 330 ohm), ROW (GPIO: low when selected, weak
     # pull-up otherwise in QMK's default), COL (GPIO input + pull-up), RGB_FROM (just a wire to the other half)
     # half side: GND, 5V, RGB_TO (LED input), RGB_FROM (LED output, push-pull 5 V), ROW/COL (switch matrix)
     bad, info = [], []
     for k, cf in SLOTS.items():
-        hf = SLOTS[21 - k]
+        hf = SLOTS[mirror(k)]
         if "5V_LED" in (cf, hf) and cf != hf:
             bad.append(f"slot {k}: controller {cf} meets half {hf} (5 V on a non-5 V line)")
         if hf == "RGB_FROM_HALF" and (cf.startswith("ROW") or cf.startswith("COL")):
@@ -433,8 +449,10 @@ def flipped_cable_safety(pins):
         if cf == "RGB_TO_HALF" and hf != "RGB_FROM_HALF":
             info.append(f"slot {k}: buffer (via 330 ohm) meets half {hf}")
         if cf == "GND" and hf.startswith("ROW"):
-            info.append(f"slot {k}: GND meets {hf} (fine with QMK's default unselect; never set MATRIX_UNSELECT_DRIVE_HIGH)")
-    ok(not bad, "flipped cable: 5 V only meets 5 V, GND only meets GND/inputs, the two RGB data lines meet each "
+            bad.append(f"slot {k}: GND meets {hf} (a row QMK drives high would short)")
+        if cf == "GND" and hf.startswith("COL"):
+            info.append(f"slot {k}: GND meets {hf} (a column is only ever an input with its pull-up)")
+    ok(not bad, "flipped cable: 5 V only meets 5 V, GND only meets GND/column inputs, the two RGB data lines meet each "
        "other (through 330 ohm), the LED output never drives a GPIO" + (f": {bad}" if bad else ""))
     for s_ in info:
         print("  info  " + s_)
@@ -452,7 +470,7 @@ def negative_controls(pins):
     r1, _ = run_scan(pins, qmk=q, quiet=True)
     ok(len(r1["single"]) > 0, "two column pins swapped in the firmware is caught")
     r2, _ = run_scan(pins, right_conn_reversed=True, quiet=True)
-    ok(len(r2["single"]) > 0, "right connector numbered by pad instead of by slot (not turned 180 deg) is caught")
+    ok(len(r2["single"]) > 0, "right connectors numbered by pad instead of by slot (not turned 180 deg) is caught")
     # diodes reversed
     edges, keys, diodes = assemble(pins)
     scan = scanner(pins, edges, keys, [(c_, a) for a, c_ in diodes], QMK_V2)
@@ -465,8 +483,8 @@ def negative_controls(pins):
     ok(not quiet_compare(p2), "an injected short (GP3-GP4) is caught by the netlist compare")
     # cut track: give one cable contact its own island
     p3 = dict(pins)
-    p3[("pbL", 8)] = ("cut", 1)
-    ok(not quiet_compare(p3), "a cut track (left slot 8, COL3) is caught by the netlist compare")
+    p3[("pbL", 17)] = ("cut", 1)
+    ok(not quiet_compare(p3), "a cut track (left slot 17, COL3) is caught by the netlist compare")
     r4, _ = run_scan(p3, quiet=True)
     ok(len(r4["single"]) > 0, "... and by the scan (that column's keys go dead)")
 

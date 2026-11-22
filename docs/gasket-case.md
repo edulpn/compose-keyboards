@@ -7,9 +7,9 @@ The rev 2 case: a one-piece tub, plates that float on foam pads, bevelled frames
 | command | what it does |
 |---|---|
 | `gasket-case` | builds the printable parts into `out/<layout>/rev2/print/` (`compose/case/gasket.py`) |
-| `gasket-checks` | fit, gasket, assembly, jumper and printability checks |
+| `gasket-checks` | fit, gasket, assembly, cable and printability checks |
 | `gasket-sections` | cross-section drawings |
-| `gasket-render` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the jumpers as `flex-sim` settles them |
+| `gasket-render` | renders, including assembly views with the real boards (their Gerbers as textures), the parts of a hotswap RGB build and the PicoBlade connectors at both ends of each cable (the cables themselves are not drawn) |
 
 ## Angles and bridge
 
@@ -65,20 +65,20 @@ The pairs are found by scanning the plate edge for every spot where a slice fits
 ## Middle bay
 
 - The controller sits on four floor posts (M3 inserts), clamped by its four M3 standoffs; there are 24 mm under the board.
-- The cover drops onto the standoffs and takes four M3 × 6 screws. It comes off without touching the jumpers.
-- The bay is open from wall to wall below the plates' inner edges, so each jumper climbs out of its half's connector, crosses the gap and drops straight into the controller's connector ([flex jumpers](flex-jumper.md)).
+- The cover drops onto the standoffs and takes four M3 × 6 screws. It comes off without touching the cables.
+- The bay is open from wall to wall below the plates' inner edges. Each 150 mm cable leaves its half's connector, which faces down, crosses to its connector on the controller, which faces it across the gap, and leaves its slack in the bay below the cover ([controller rev 2](controller-rev2.md#cable-connectors-and-slot-order)).
 
 
 ## What `gasket-checks` verifies
 
 The layout is checked first, before anything is built round it: keycaps at least 0.5 mm apart, and the half's inner edge straight along the whole centre section (a layout whose inner edge is too short for it stops here). Every other check runs on the generated solids, for the layout as built:
 
-- **overlaps:** none between parts that mustn't touch: tub, plates, frames, cover, the controller board and the parts on both its faces, the Pico stack, standoffs, the real underside parts of every half-board variant, the jumpers, the pads;
+- **overlaps:** none between parts that mustn't touch: tub, plates, frames, cover, the controller board and the parts on both its faces, the Pico stack, standoffs, the real underside parts of every half-board variant, the mated cable plugs, the pads;
 - **clearances** between plate and tub, plate and frame, cover and frames, board and tub, Pico and cover;
 - **pad gap:** the same at every pad, top and bottom, measured on the solids along the plate normal;
 - **assembly paths:** plates and frames drop in along the plate normal; the controller and the cover drop straight down ([how the parts fit together](case-geometry.md));
 - **hardware:** thread engagement of the cover screws and the standoffs, the Pico's gap, the header plugs under the cover;
-- **jumpers:** the bent shape solved from the case, clear of the plate (by the gasket's travel), the half board, the cover, the standoffs and the Pico;
+- **cables:** room for each mated plug and its cable's first bend at both ends (8 mm out of the controller's openings, 12 mm below the half's connectors), clear of the case, plates, frames, cover, the half boards and their parts, the standoffs and the Pico; the cable between them is flexible and not modelled;
 - **printability:** every part sliced in print orientation, each layer resting on the one below. Each part's size on the bed is printed, and the tub's has to be the one the layout's page quotes.
 
 The figures each of these returns are on the layout's page ([Compose58's](../layouts/compose58/rev2.md#the-case)).

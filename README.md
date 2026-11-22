@@ -23,14 +23,13 @@ Each layout has its own pages: status, sizes, parts and check results.
   - **[The gasket-mount case](docs/gasket-case.md):** how the plates float on foam pads, what prints how, what is checked.
   - **[Controller rev 2](docs/controller-rev2.md):** the shared controller board standard for every layout.
   - **[Rev 2 half boards](docs/half-boards-rev2.md):** the reversible board in its four variants, per-key RGB, firmware, the copper simulation.
-  - **[Flex jumpers](docs/flex-jumper.md):** the flex PCB between a half and the controller, how to order it, how it is simulated.
 - **[How the parts fit together](docs/case-geometry.md):** the case geometry that keeps every part insertable.
 
 ## What the platform does
 
 - **One-piece tented, splayed cases.** Splay, tent and tilt are parameters.
 - **Reversible half PCBs.** One board serves both halves, in hotswap or solder-in versions, with or without per-key RGB (experimental), with QMK firmware generated alongside.
-- **A shared controller standard** ([rev 2](docs/controller-rev2.md)): socketed Raspberry Pi Pico, fixed jumper connectors with a reversal-safe pinout (custom flex jumpers take up each layout's angles), optional RGB, I2C/OLED, Qwiic and AUX.
+- **A shared controller standard** ([rev 2](docs/controller-rev2.md)): socketed Raspberry Pi Pico, a 12-pin and an 8-pin PicoBlade connector per half with a reversal-safe pinout (ready-made cables take up each layout's angles), optional RGB, I2C/OLED, Qwiic and AUX.
 - **Gasket mount:** plates float on pads cut from ordinary foam weatherstrip tape. The squeeze is set by geometry, not screw torque.
 - **Verified, not just drawn.** Every design ships with its checks:
   - fit and clearance between all parts;
@@ -38,8 +37,7 @@ Each layout has its own pages: status, sizes, parts and check results.
   - printability, by slicing each part in its print orientation;
   - board DRC;
   - copper-level matrix and netlist simulation;
-  - ngspice simulation of the controller;
-  - the flex jumpers bent as elastic strips: fit, insertion and copper fatigue.
+  - ngspice simulation of the controller and its cables.
 
 ## Getting the files
 

@@ -198,7 +198,7 @@ def power_paths():
         for (key, _), r in zip(loads, each, strict=False):
             best[key] = min(best.get(key, math.inf), r)
         return max(best.values())
-    pico, conn, fuse = (lambda r: r.startswith("U1")), (lambda r: r in ("JL", "JR")), (lambda r: r == "F1")
+    pico, conn, fuse = (lambda r: r.startswith("U1")), (lambda r: r[:2] in ("JL", "JR")), (lambda r: r == "F1")
     return {"VBUS": worst("VBUS", pico, fuse), "+5V_LED": worst("+5V_LED", fuse, conn), "GND": worst("GND", pico, conn)}
 
 
@@ -252,7 +252,7 @@ WS = dict(VIH_K=0.7, VIL_K=0.3, CIN=10e-12, T0H=(0.25e-6, 0.40e-6), T1H=(0.65e-6
 #   SK6812 MINI-E (rev 04, the part the rev 2 halves take): T0H 0.2-0.4 us, T1H 0.58-1.0 us
 QMK = dict(T0H=0.35e-6, T1H=0.90e-6, TBIT=1.25e-6, SELECT=0.25e-6, IO_DELAY=30e-6)
 #   QMK ws2812 timing defaults (350 / 900 / 1250 ns), waitInputPinDelay ~ 1/4 us on RP2040, MATRIX_IO_DELAY 30 us
-RF = (0.48, 1.10)            # ohm, MF-RHT050 (Bourns MF-RHT data sheet): Rmin, R1max (after a trip); hold 0.5 A, trip 0.92 A
+RF = (0.15, 0.70)            # ohm, MF-NSMF050-2 (Bourns MF-NSMF data sheet): Rmin, R1max (after a trip); hold 0.5 A, trip 1.0 A
 CABLE_R = 0.25               # ohm per conductor of the USB cable: USB 2.0 allows 125 mV in VBUS and 125 mV in GND at 0.5 A
 I_USB, I_REST = 0.5, 0.06    # A: what USB gives a device in all; the Pico, an OLED and a pointing device
 I_LED_MAX = I_USB - I_REST   # A, what is left for the LEDs
@@ -260,7 +260,7 @@ LED_CAPS = 42                # 100 nF capacitors on the two halves: 84 LEDs, one
 HALF_TRACE = (0.03, 0.20)    # m, slot 3 to the first LED on a half board (sim-half-rev2 holds the routed boards to it)
 CBL = dict(Z0=(100.0, 250.0), TD_PER_M=5.5e-9, R_PER_M=0.67, C_PER_M=(40e-12, 70e-12), CM_PER_M=(15e-12, 40e-12),
            LEN=(0.10, 0.20), CONTACT_R=0.02)
-#   the cables: 20-pin Molex PicoBlade, premade, 150 mm, loose wires at 1.25 mm (no plane), so Z0 / C / mutual C over
+#   the cables: Molex PicoBlade, a 12-way and an 8-way per half, premade, 150 mm, loose wires at 1.25 mm (no plane), so Z0 / C / mutual C over
 #   a wide band; their gauge isn't given, so the thinnest wire PicoBlade's crimps take, 32 AWG: 0.56 ohm/m, +20 % for
 #   temperature. Up to 20 mohm per mated contact (PicoBlade's limit), one at each end. Length swept 100 / 200 mm.
 LEN_TXT = f"{CBL['LEN'][0] * 1e3:.0f}/{CBL['LEN'][1] * 1e3:.0f} mm"
@@ -643,7 +643,7 @@ def sim_power(facts):
     # E1: hot-plug inrush
     rep("\n**E1 hot-plug.** Host port: 5.0 V regulator behind 0.1 ohm / 5 uH (it can't react in microseconds) "
         "with the 120 uF the USB 2.0 spec requires per port; 2 m cable 0.25 ohm / 2 uH. Pico: Schottky into ~10 uF on VSYS "
-        f"+ 30 mA. RGB rail: MF-RHT050 ({RF[0]}-{RF[1]} ohm cold), C2 (ESR 0.3 ohm), {LED_CAPS} x 100 nF at the LEDs behind the "
+        f"+ 30 mA. RGB rail: MF-NSMF050-2 ({RF[0]}-{RF[1]} ohm cold), C2 (ESR 0.3 ohm), {LED_CAPS} x 100 nF at the LEDs behind the "
         "cables (84 LEDs, a capacitor per two: the most the halves carry). USB 2.0 sizes the host bulk for a device of <= 10 uF so that its VBUS droops < 330 mV for the other "
         "devices on it; the USB-IF inrush test allows 50 uC in the first 100 us.\n")
     rows = []
@@ -711,7 +711,7 @@ RREF vbus 0 44
     i_white, i_q, n_led = 36e-3, 0.7e-3, 84
     cap = int(255 * (I_LED_MAX - n_led * i_q) / (n_led * i_white))
     r_wire = CBL["LEN"][1] * CBL["R_PER_M"] + 2 * CBL["CONTACT_R"]                # one wire, contacts at both ends
-    r_ffc = r_wire / 2 + r_wire / 3                                                  # 5 V on two wires, GND on three
+    r_ffc = r_wire / 2 + r_wire / 3                                     # 5 V on two wires, GND on three (both cables)
 
     def rail(i_led, rf):
         """(V across a cable connector's 5 V and GND terminals, V at the far LED) for a total LED current."""
@@ -722,7 +722,7 @@ RREF vbus 0 44
     rep(f"\n**E2 LED rail at load.** At the device: the 4.75 V host minimum less the USB cable, {CABLE_R} ohm in VBUS and {CABLE_R} "
         f"ohm in GND (the 125 mV each that USB 2.0 allows at 0.5 A), x total current. Then the routed VBUS path, the polyfuse "
         f"({RF[1]} ohm after a trip, {RF[0]} ohm new), the routed +5V_LED and GND paths. Each half takes half the LED current through "
-        f"its own cable (2 x 5V and 3 x GND wires in parallel, {CBL['LEN'][1] * 1e3:.0f} mm, {CBL['R_PER_M']:.2f} ohm/m, "
+        f"its own cables (2 x 5V and 3 x GND wires in parallel, {CBL['LEN'][1] * 1e3:.0f} mm, {CBL['R_PER_M']:.2f} ohm/m, "
         f"{CBL['CONTACT_R'] * 1e3:.0f} mohm per contact at each end) and "
         f"its board (rail + return 0.15 ohm, which sim-half-rev2 holds the rev 2 halves to). The Pico and its modules take "
         f"{I_REST * 1e3:.0f} mA, so the LEDs have {I_LED_MAX * 1e3:.0f} mA of USB's {I_USB * 1e3:.0f}.\n")
@@ -852,14 +852,13 @@ CC col 0 {c_col}
     c_col_min = RP["CIN"] + Lc * 1e3 * PCBZ["C_PER_MM"][0] + CBL["LEN"][0] * CBL["C_PER_M"][0] + 0.08e3 * PCBZ["C_PER_MM"][0]
     c_row_min = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (CBL["LEN"][0] * CBL["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
     cases = []
-    # cable neighbours from the slot table: COL6 (11) | ROW0 (12) and ROW5 (17) | RGB data back (18);
-    # the data to the half (3) sits between 5 V and GND
+    # cable neighbours from the slot table (12-way cable): RGB data to the half (3) | ROW0 (4) and ROW5 (9) | RGB data
+    # back (10); the 8-way cable's columns sit between GND (13) and the cable's end, beside nothing that switches
     for lf in CBL["LEN"]:
         cm = lf * CBL["CM_PER_M"][1]
-        cvc = RP["CIN"] + Lc * 1e3 * PCBZ["C_PER_MM"][0] + lf * CBL["C_PER_M"][0] + 0.08e3 * PCBZ["C_PER_MM"][0]
         cvr = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (lf * CBL["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
-        cases.append((f"cable {lf * 1e3:.0f} mm: ROW0 (12) -> COL6 (11)", "gpio", "col", cm, cvc))
-        cases.append((f"cable {lf * 1e3:.0f} mm: LED data back (18) -> idle ROW5 (17)", "led", "row", cm, cvr))
+        cases.append((f"cable {lf * 1e3:.0f} mm: RGB data to the half (3) -> idle ROW0 (4)", "rgb", "row", cm, cvr))
+        cases.append((f"cable {lf * 1e3:.0f} mm: LED data back (10) -> idle ROW5 (9)", "led", "row", cm, cvr))
     for (a, b), (L, gap) in pairs.items():
         for agg, vic in ((a, b), (b, a)):
             if agg in agg_nets and vic in vic_nets and agg != vic and not (agg in rows_n and vic in rows_n):
@@ -933,8 +932,8 @@ def main():
     rep("# Compose controller rev 2 - circuit simulation (ngspice)\n")
     rep("Models: RP2040 (VIH 2.0 / VIL 0.8 V, pull-ups 50-80k, 4 mA drive <= 170 ohm, abs max 3.8 V), "
         "74HCT125 (VIH 2.0 V, VOH 3.84 V at -6 mA), WS2812B and SK6812 MINI-E (VIH 0.7 VDD, VIL 0.3 VDD; T0H 250-400, T1H 650-950 ns, the windows both accept), "
-        "1N4148 (SPICE model), MF-RHT050 (0.5 A hold, 0.92 A trip, 0.48-1.10 ohm), QMK defaults (WS2812 350/900/1250 ns, "
-        "MATRIX_IO_DELAY 30 us). Cables, 20-pin PicoBlade (loose wires at 1.25 mm, 32 AWG at worst): Z0 100-250 ohm, "
+        "1N4148 (SPICE model), MF-NSMF050-2 (0.5 A hold, 1.0 A trip, 0.15-0.70 ohm), QMK defaults (WS2812 350/900/1250 ns, "
+        "MATRIX_IO_DELAY 30 us). Cables, 12-way + 8-way PicoBlade (loose wires at 1.25 mm, 32 AWG at worst): Z0 100-250 ohm, "
         f"5.5 ns/m, 0.67 ohm/m + 20 mohm per contact, 40-70 pF/m, 15-40 pF/m mutual, {LEN_TXT}.")
     sim_rgb_first(facts)
     sim_rgb_hop(facts)

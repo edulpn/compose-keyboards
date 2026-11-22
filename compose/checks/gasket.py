@@ -59,7 +59,7 @@ def dist(a, b):
 # ---------------------------------------------------------------- the controller as placed (board frame -> P)
 H_TOP = {"U1": 8.5, "JL": CS.PB_H, "JR": CS.PB_H, "J4": 8.5, "J6": 8.5, "J5": 4.3}
 PLUG_TOP = {"J4": CS.TOP_PLUG_H, "J6": CS.TOP_PLUG_H, "J5": 10.0}
-H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": CS.BOTTOM_PARTS_H, "R": 3.0}
+H_BOT = {"U2": 5.0, "C1": 6.0, "C2": 12.5, "F1": 1.0, "R": 3.0}
 
 
 _CS = {}
@@ -155,10 +155,11 @@ def half_parts_local():
 
 
 def cable_plugs():
-    """Where the 20-pin PicoBlade cables are rigid, both sides, as {"ctrl plugs": world solid, "half plugs": world
-    solid}: at the controller, past each connector's opening, the mated plug and its cable's first bend (PB_PLUG_OUT
-    by the body's length and height); at each half, under the connector's body, the mated plug and the cable's first
-    bend (HALF_PB_PLUG_DROP). Between them the cable runs free with its slack in the bay (150 mm), not modelled."""
+    """Where the PicoBlade cables (a 12-way and an 8-way per side) are rigid, both sides, as {"ctrl plugs": world
+    solid, "half plugs": world solid}: at the controller, past the connectors' openings, the mated plugs and their
+    cables' first bends (PB_PLUG_OUT by the two bodies' length and height); at each half, under the connectors' bodies,
+    the mated plugs and the cables' first bends (HALF_PB_PLUG_DROP). Between them the cables run free with their slack
+    in the bay (150 mm), not modelled."""
     from compose.pcb import rev2_half as H2
     bt = CT.board_top
     ctrl = []

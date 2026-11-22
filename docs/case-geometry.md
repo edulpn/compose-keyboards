@@ -14,9 +14,10 @@ Each half has an interface plane: the plane through its inner edge, perpendicula
 Assembly order:
 
 1. Controller board onto its posts, clamped by its standoffs, then the Pico.
-2. Each half board onto its plate, its jumper plugged in first.
-3. Plates, with their boards, onto the pads.
-4. Frames, then their screws from under the case.
-5. Jumpers into the controller, then the cover.
+2. Each half board onto its plate, its two cables plugged into it first (the connectors face down, under the board).
+3. The cables into the controller.
+4. Plates, with their boards, onto the pads, the cables' slack folded into the bay.
+5. Frames, then their screws from under the case.
+6. The cover.
 
 `python3 -m compose gasket-checks` sweeps each part along its real install direction (plates and frames along the plate normal, the controller and the cover straight down) and fails on any contact with what is already in place.

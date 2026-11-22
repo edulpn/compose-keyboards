@@ -10,31 +10,31 @@ Independent of the net names the boards were built with:
      from pad nets:
        switch      contacts at the MX pin positions (solder) or the Kailh socket's nominal tabs (hotswap)
        diode       cathode = the band end (the square pad), anode = the other
-       connector   pins at the physical slots: slot 1 = the back-most pin
+       connectors  pins at the physical slots: slot 1 = the back-most pin (the 12-pin's 1-12, the 8-pin's 13-20)
        MINI-E      what each of its four leads carries is read from the copper under the part's own lead
                    positions (5 V, GND, the chain's data in and out) and compared with where the SK6812 MINI-E
                    has VDD, DOUT, VSS and DIN, seen from its pad side (MINI_E_PADSIDE, from two published
                    footprints, not from the board plan's LED_PINS)
   3. Per board: each key is a switch between its column's slot and its diode, the diode's cathode on its row's
-     slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 18 on
-     the fitted face, every LED and capacitor across slot 2/19 (5 V) and 1/4/20 (GND), the unfitted face's
-     copies harmless; plain boards: slot 3 wired straight to slot 18 and nothing else on 1-4 / 18-20.
-  4. The cables: 20-way PicoBlade, slot k at the half meeting slot k at the controller (both connectors number
-     their slots by physical position; the cable keeps the order).
+     slot (COL2ROW); unused slots touch nothing; RGB boards: one unbroken chain slot 3 -> 29 LEDs -> slot 10 on
+     the fitted face, every LED and capacitor across slot 2/11 (5 V) and 1/12/13 (GND), the unfitted face's
+     copies harmless; plain boards: slot 3 wired straight to slot 10 and nothing else on 1-3 / 10-13.
+  4. The cables: a 12-way and an 8-way PicoBlade, slot k at the half meeting slot k at the controller (both ends
+     number their slots by physical position; the cables keep the order).
   5. End to end: the controller rev 2 copper, the two cables and the two real halves; the QMK COL2ROW scan
      with the rev 2 pin config reads every key alone at its keymap position, 1000 random chords exactly, and no
      ghosting.
   6. Negative controls: a cut column track, a diode fitted backwards and a reversed cable (or a half's connector
      fitted turned round) are caught.
   7. RGB boards: the 5 V rail's resistance, read from its copper as a resistor network (1 oz copper, as
-     board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 19 to the
+     board_facts() in compose/sim/controller_spice.py): from the fitted connector's slots 2 and 11 to the
      farthest fitted LED. A rail the layout pre-routes on that board (layouts/<layout>/preroute.py) is held to
      RAIL_R_MAX, the figure the power simulation assumes; an autorouted one is reported. Negative control: the
      same copper read at the signal width is over the limit. The return is read as well: all the GND copper of
      both faces (pour, pads, stubs, vias) as a resistor sheet (compose/sim/sheet.py), from each fitted LED's GND
-     pad to the fitted connector's slots 1, 4 and 20. The worst rail and the worst return together are held to
+     pad to the fitted connectors' slots 1, 12 and 13. The worst rail and the worst return together are held to
      RAIL_R_MAX. Negative control: without the pour no LED has a return. The LED data run in and out of the
-     half (slot 3 to the first LED, the last LED to slot 18) is held to the lengths the controller's circuit
+     half (slot 3 to the first LED, the last LED to slot 10) is held to the lengths the controller's circuit
      simulation sweeps.
  10. RGB boards: LED data tracks beside matrix tracks (compose/sim/coupling.py, the method the controller's
      circuit simulation reads its own board with). With every data net of the fitted chain switching together,
@@ -91,8 +91,11 @@ RAIL_R_MAX = 0.15                                           # ohm, what compose/
                                                             #   to the farthest LED. The rail is read as a network of
                                                             #   tracks (Half.rail), the return through the GND pour as a
                                                             #   sheet (Half.ground); the worst of each, added, is held to it
+CONN = ("J1", "J2")                                         # the cable connectors: 12-pin (slots 1-12), 8-pin (13-20)
+ROW0, COL0 = 4, 14                                          # the slots of ROW0 and COL0
+MATRIX = list(range(ROW0, ROW0 + 6)) + list(range(COL0, COL0 + 7))
 DATA_IN_MAX, DATA_OUT_MAX = 200.0, 300.0                    # mm of track on the LED data run into a half (slot 3 to the first
-                                                            #   LED) and out of it (the last LED to slot 18), both faces'
+                                                            #   LED) and out of it (the last LED to slot 10), both faces'
                                                             #   LED copies included: what compose/sim/controller_spice.py
                                                             #   sweeps (A: HALF_TRACE; B: the left half's return trace)
 XTALK_DIP_MAX = 0.7                                         # V an idle column or row may move with the half's LED data: it
@@ -137,30 +140,29 @@ class Half:
         return self.cu.node_at(K(local_xy), layer if layer is not None else self.bottom)
 
     def slots(self):
-        """Fitted connector (the bottom face's): slot -> group. Slot 1 = the back-most contact (smallest KiCad
-        y on either face: flipping the board over mirrors x only)."""
-        pads = [p for p in self.fp["J1"].Pads() if p.GetNumber().isdigit()]     # through-hole: one part, both halves
+        """Fitted connectors (the bottom face's): slot -> group. Slot 1 = the back-most contact (smallest KiCad
+        y on either face: flipping the board over mirrors x only), the 12-pin's first."""
+        pads = [p for r in CONN for p in self.fp[r].Pads() if p.GetNumber().isdigit()]   # through-hole: both halves
         pads.sort(key=lambda p: p.GetPosition().y)
         return {k + 1: self.cu.node_at((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)), self.bottom)
                 for k, p in enumerate(pads)}
 
     def connector_pad(self):
         """Centre (KiCad mm) of the fitted connector's slot 5 pad."""
-        pads = sorted((p for p in self.fp["J1"].Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
+        pads = sorted((p for r in CONN for p in self.fp[r].Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
         return (ToMM(pads[4].GetPosition().x), ToMM(pads[4].GetPosition().y))
 
     def connector_gap(self):
-        """(distance, part) from the connector's pins to the nearest other pad on the fitted face."""
+        """(distance, part) from the connectors' pins to the nearest other pad on the fitted face."""
         from shapely.geometry import Polygon as SP_
-        ref = "J1"
 
         def poly(p):
             o = p.GetEffectivePolygon().Outline(0)
             return SP_([(ToMM(o.CPoint(i).x), ToMM(o.CPoint(i).y)) for i in range(o.PointCount())])
-        mine = [poly(p) for p in self.fp[ref].Pads() if p.IsOnLayer(self.bottom)]
+        mine = [poly(p) for r in CONN for p in self.fp[r].Pads() if p.IsOnLayer(self.bottom)]
         best = (1e9, None)
         for r, f in self.fp.items():
-            if r.startswith("J1"):
+            if r in CONN:
                 continue
             for p in f.Pads():
                 if p.IsOnLayer(self.bottom):
@@ -269,16 +271,16 @@ class Half:
 
     def crosstalk(self, shadow=False):
         """LED data tracks beside matrix tracks (compose.sim.coupling). Aggressors: every data net of the fitted
-        chain (slot 3, each LED's output, slot 18), all switching XTALK_SWING together. Victims: the column and
+        chain (slot 3, each LED's output, slot 10), all switching XTALK_SWING together. Victims: the column and
         row slots' copper, each at its own lowest capacitance (the pin and its track on this board; the cable
         and the controller add more). Returns (worst dip in volts, its slot, mm of it beside LED data, pF across).
         shadow: also lay a data track the whole way beside each victim at 0.2 mm (negative control)."""
         sl = self.slots()
-        data = {g for led in self.leds() for g in (led[1], led[3])} | {sl[3], sl[18]}
+        data = {g for led in self.leds() for g in (led[1], led[3])} | {sl[3], sl[10]}
         data.discard(None)
         agg = [seg for g in data for seg in self.tracks_of(g)[0]]
         worst = (0.0, None, 0.0, 0.0)
-        for k in range(5, 18):
+        for k in MATRIX:
             mine = self.tracks_of(sl[k])[0]
             if sl[k] is None or sl[k] in data or not mine:
                 continue
@@ -304,7 +306,6 @@ class Half:
         GND contacts, that LED's place in the chain from 1, the far LED's rise per ampere of total current when
         every LED draws the same). pour: False leaves the pour out (negative control)."""
         face = "B" if self.side == "L" else "F"
-        ref = "J1"                                                   # through-hole: both faces
         name = {F: "F", B: "B"}
         gnd = self.slots()[1]
         if gnd is None:
@@ -312,7 +313,7 @@ class Half:
         mine = [(s, name[lay], lab) for i, (s, lay, lab) in enumerate(self.cu.items) if self.cu.find(i) == gnd]
         areas = [(s, f) for s, f, lab in mine if lab != "track" and (pour or lab != "zone")]
         segs, vias = self.tracks_of(gnd)
-        sinks = [(s, f) for s, f, lab in mine if f == face and lab.startswith(ref + ".")]
+        sinks = [(s, f) for s, f, lab in mine if f == face and lab.split(".")[0] in CONN]
         loads = [(affine_transform(H.led_pads(L.keys[i], face)["3"], [1, 0, 0, -1, OX, OY]), face) for i in self.s.led_order]
         alone, same = SH.Sheet(areas, vias, segs, via_drill=PR.VIA_DRILL, board_t=PR.PCB_T).solve(sinks, loads)
         worst = max(range(len(alone)), key=lambda i: alone[i])
@@ -320,9 +321,9 @@ class Half:
 
     def data_runs(self):
         """The LED data run into and out of the half: {slot: (mm of track, vias)} for the copper groups of the
-        fitted connector's slots 3 and 18 (each reaches the LED copies of both faces)."""
+        fitted connector's slots 3 and 10 (each reaches the LED copies of both faces)."""
         sl, out = self.slots(), {}
-        for k in (3, 18):
+        for k in (3, 10):
             segs, vias = self.tracks_of(sl[k])
             out[k] = (sum(float(np.hypot(b[0] - a[0], b[1] - a[1])) for a, b, w, f in segs), len(vias))
         return out
@@ -353,11 +354,10 @@ class Half:
     def rail(self, width=None):
         """The 5 V rail as a resistor network (compose.pcb.preroute.rail_resistance): every track and via in
         the copper group of the fitted connector's slot 2, whatever its net is called. Returns (worst resistance
-        from slots 2 + 19 to a fitted LED's 5 V pad, that LED's place in the chain, the far LED's drop per ampere
+        from slots 2 + 11 to a fitted LED's 5 V pad, that LED's place in the chain, the far LED's drop per ampere
         of total current when every LED draws the same). width: read the tracks at that width instead."""
         face = "B" if self.side == "L" else "F"
-        ref = "J1"                                                   # through-hole: both faces
-        cp = sorted((p for p in self.fp[ref].Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
+        cp = sorted((p for r in CONN for p in self.fp[r].Pads() if p.GetNumber().isdigit()), key=lambda p: p.GetPosition().y)
         xy = lambda p: (ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
         vdd = self.slots()[2]
         name = {F: "F", B: "B"}
@@ -366,18 +366,18 @@ class Half:
         pads = [(s, name[lay]) for i, (s, lay, lab) in enumerate(items)
                 if lab not in ("via", "track", "zone") and self.cu.find(i) == vdd]
         loads = [(K(H.led_pads(L.keys[i], face)["1"].centroid.coords[0]), face) for i in self.s.led_order]
-        worst, far, _, shared = PRE.rail_resistance(segs, vias, pads, [(xy(cp[1]), face), (xy(cp[18]), face)], loads,
+        worst, far, _, shared = PRE.rail_resistance(segs, vias, pads, [(xy(cp[1]), face), (xy(cp[10]), face)], loads,
                                                     PR.VIA_D, PR.VIA_DRILL, board_t=PR.PCB_T, width=width)
         return worst, far, shared
 
 
 def joined_slots(sl, rgb):
-    """Connector slots that share copper and shouldn't: GND 1/4/20 and 5 V 2/19 may, and on a board without LEDs
-    the pass-through 3/18. With LEDs, 3 joined to 18 shorts the chain out."""
+    """Connector slots that share copper and shouldn't: GND 1/12/13 and 5 V 2/11 may, and on a board without LEDs
+    the pass-through 3/10. With LEDs, 3 joined to 10 shorts the chain out."""
     groups = {}
     for k_, g in sl.items():
         groups.setdefault(g, []).append(k_)
-    allowed = [{1, 4, 20}, {2, 19}] + ([] if rgb else [{3, 18}])
+    allowed = [{1, 12, 13}, {2, 11}] + ([] if rgb else [{3, 10}])
     return [v for v in groups.values() if len(v) > 1 and set(v) not in allowed]
 
 
@@ -423,27 +423,27 @@ def board_checks(h):
     ok(h.joint_gap(at=h.connector_pad())[0] < JOINT_GAP, "negative control: a joint put on a pin of the cable connector is found")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
-    col = {c: sl[5 + c] for c in range(7)}
-    row = {r: sl[12 + r] for r in range(6)}
+    col = {c: sl[COL0 + c] for c in range(7)}
+    row = {r: sl[ROW0 + r] for r in range(6)}
     bad = []
     for i, r, c, sa, sb, an, cath in keys:
         if sb != col[c] and sa != col[c]:
-            bad.append(f"key {i}: no contact on COL{c} (slot {5 + c})")
+            bad.append(f"key {i}: no contact on COL{c} (slot {COL0 + c})")
         other = sa if sb == col[c] else sb
         if other != an:
             bad.append(f"key {i}: switch not wired to its diode's anode")
         if cath != row[r]:
-            bad.append(f"key {i}: diode cathode not on ROW{r} (slot {12 + r})")
+            bad.append(f"key {i}: diode cathode not on ROW{r} (slot {ROW0 + r})")
     ok(not bad, "every key: column slot -> switch -> diode anode, cathode -> row slot" + (f" ({bad[:3]})" if bad else ""))
     if h.variant == "hotswap":                                   # a tab 2.1 mm further out is past its pad's end
         off = (KAILH_TAB1[0] + 2.1, KAILH_TAB1[1])
         bare = sum(h.at(SW.fp2local(ks.k, *(mirror(off) if h.side == "R" else off))) is None for ks in h.s.keys)
         ok(bare >= len(keys) // 2, f"negative control: a socket tab just off its pad is caught ({bare} of {len(keys)} "
                                    f"land on bare board; the tab test isn't trivially true)")
-    used = {5 + c for c in {k.col for k in L.keys}} | {12 + r for r in {k.row for k in L.keys}}
-    spare = [k for k in range(5, 18) if k not in used]
+    used = {COL0 + c for c in {k.col for k in L.keys}} | {ROW0 + r for r in {k.row for k in L.keys}}
+    spare = [k for k in MATRIX if k not in used]
     shared = joined_slots(sl, h.rgb)
-    ok(not shared, f"no two connector slots joined except GND 1/4/20, 5 V 2/19{' and the pass-through 3/18' if not h.rgb else ''}"
+    ok(not shared, f"no two connector slots joined except GND 1/12/13, 5 V 2/11{' and the pass-through 3/10' if not h.rgb else ''}"
        + (f" ({shared})" if shared else ""))
     anods = {k[5] for k in keys}
     live = {sl[k_] for k_ in used}
@@ -451,14 +451,14 @@ def board_checks(h):
         ok(sl[k_] not in anods and sl[k_] not in live,
            f"spare slot {k_} ({CC.SLOTS[k_]}) touches nothing of the matrix")
     if not h.rgb:
-        ok(sl[3] == sl[18], "no LEDs: slot 3 (RGB in) wired straight to slot 18 (RGB back)")
+        ok(sl[3] == sl[10], "no LEDs: slot 3 (RGB in) wired straight to slot 10 (RGB back)")
         mat = live | anods
-        ok(not ({sl[1], sl[2], sl[4], sl[19], sl[20]} & mat), "GND / 5 V slots don't touch the matrix")
+        ok(not ({sl[1], sl[2], sl[11], sl[12], sl[13]} & mat), "GND / 5 V slots don't touch the matrix")
         return
     leds = h.leds()
     ok(all(None not in l_ for l_ in leds), f"every fitted LED pad is on copper ({len(leds)} LEDs)")
     gnd, vdd = sl[1], sl[2]
-    ok(sl[4] == gnd and sl[20] == gnd and sl[19] == vdd and gnd != vdd, "GND on slots 1/4/20, 5 V on 2/19, apart")
+    ok(sl[12] == gnd and sl[13] == gnd and sl[11] == vdd and gnd != vdd, "GND on slots 1/12/13, 5 V on 2/11, apart")
     ok(all(l_[0] == vdd and l_[2] == gnd for l_ in leds), "every LED: VDD on 5 V, GND on GND")
     cur, chain = sl[3], 0
     for vd, do, gn, di in leds:
@@ -466,8 +466,8 @@ def board_checks(h):
             break
         chain += 1
         cur = do
-    ok(chain == len(leds) and cur == sl[18],
-       f"one chain: slot 3 -> DIN ... DOUT -> slot 18 through all {len(leds)} LEDs (unbroken for {chain})")
+    ok(chain == len(leds) and cur == sl[10],
+       f"one chain: slot 3 -> DIN ... DOUT -> slot 10 through all {len(leds)} LEDs (unbroken for {chain})")
     douts = [l_[1] for l_ in leds]
     ok(len(set(douts)) == len(douts), "no two LED outputs on one line")
     ok(not ({l_[1] for l_ in leds} | {l_[3] for l_ in leds}) & (live | anods | {gnd, vdd}),
@@ -485,15 +485,15 @@ def board_checks(h):
        "negative control: the LEDs' pads read on the other face aren't their 5 V and GND")
     ok(not all(set(c_) == {vdd, gnd} for c_ in h.caps(other)),
        "negative control: the capacitors' pads read on the other face aren't across 5 V / GND")
-    ok(bool(joined_slots({**sl, 18: sl[3]}, True)), "negative control: slot 3 joined to slot 18 on a board with LEDs is caught")
+    ok(bool(joined_slots({**sl, 10: sl[3]}, True)), "negative control: slot 3 joined to slot 10 on a board with LEDs is caught")
     worst, far, shared = h.rail()
-    msg = (f"5 V rail, slots 2 + 19 to the farthest LED (chain position {far + 1}): {worst * 1e3:.0f} mohm of copper "
+    msg = (f"5 V rail, slots 2 + 11 to the farthest LED (chain position {far + 1}): {worst * 1e3:.0f} mohm of copper "
            f"(with every LED drawing the same, the far LED drops {shared * 1e3:.0f} mV per ampere of the half's total)")
     name = next(n for n, v in H.BOARDS.items() if v == (h.variant, h.rgb))
     laid = H.laid(name)[1]
     back, at, rise = h.ground()
     rmsg = (f"return through the GND copper (pour, pads, stubs and vias of both faces as a resistor sheet, {SH.GRID} mm grid), "
-            f"the fitted LEDs' GND pads to slots 1 + 4 + 20: {back * 1e3:.0f} mohm at the worst LED (chain position {at}; with "
+            f"the fitted LEDs' GND pads to slots 1 + 12 + 13: {back * 1e3:.0f} mohm at the worst LED (chain position {at}; with "
             f"every LED drawing the same, the far LED rises {rise * 1e3:.0f} mV per ampere of the half's total)")
     if laid is not None and "+5V" in laid.nets():
         ok(worst <= RAIL_R_MAX, f"{msg}; limit {RAIL_R_MAX * 1e3:.0f} mohm with its return, read next")
@@ -508,10 +508,10 @@ def board_checks(h):
         ok(np.isfinite(back), rmsg)
     ok(np.isinf(h.ground(pour=False)[0]), "negative control: with the pour left out, an LED's GND pad has no return")
     runs = h.data_runs()
-    ok(runs[3][0] <= DATA_IN_MAX and runs[18][0] <= DATA_OUT_MAX,
+    ok(runs[3][0] <= DATA_IN_MAX and runs[10][0] <= DATA_OUT_MAX,
        f"LED data run, both faces' LED copies included: slot 3 to the first LED {runs[3][0]:.0f} mm of track and {runs[3][1]} vias "
-       f"(the controller's circuit simulation sweeps to {DATA_IN_MAX:.0f} mm), the last LED to slot 18 {runs[18][0]:.0f} mm and "
-       f"{runs[18][1]} vias (to {DATA_OUT_MAX:.0f} mm)")
+       f"(the controller's circuit simulation sweeps to {DATA_IN_MAX:.0f} mm), the last LED to slot 10 {runs[10][0]:.0f} mm and "
+       f"{runs[10][1]} vias (to {DATA_OUT_MAX:.0f} mm)")
     dip, k, run, cm = h.crosstalk()
     ok(dip <= XTALK_DIP_MAX, f"LED data beside the matrix: with every data net of the chain switching {XTALK_SWING} V together, the "
                              f"worst column or row moves {dip:.2f} V (slot {k}: {run:.0f} mm beside LED data, {cm:.2f} pF across); "
@@ -522,8 +522,9 @@ def board_checks(h):
 
 # ---------------------------------------------------------------- the cables
 class Cable:
-    """A 20-way PicoBlade cable on one side: {half slot: controller slot}. Both connectors number their slots by
-    physical position (slot 1 at the back) and the cable keeps the order, so slot k meets slot k."""
+    """One side's two PicoBlade cables (12-way and 8-way) as one map: {half slot: controller slot}. Both ends
+    number their slots by physical position (slot 1 at the back) and the cables keep the order, so slot k meets
+    slot k."""
 
     def __init__(self, n=20):
         self.map = {k: k for k in range(1, n + 1)}
@@ -541,11 +542,11 @@ def assemble(pins, halves, cables, cable_rev=None, cut=None, diode_flip=None):
         sl = h.slots()
         for hk, ck in cables[side].map.items():
             if cable_rev == side:
-                ck = 21 - ck
+                ck = CC.mirror(ck)
             if sl[hk] is not None:
                 link(("C", pins[("pb" + side, ck)]), (side, sl[hk]))
         for i, r, c, sa, sb, an, cath in h.keys():
-            colside = sb if sb == sl[5 + c] else sa
+            colside = sb if sb == sl[COL0 + c] else sa
             other = sa if colside == sb else sb
             if cut == (side, i):
                 colside = ("cut", side, i)
@@ -643,7 +644,7 @@ def main():
                                    f"the right's, each at its key's matrix position")
             ok(got != chain["RL"], "negative control: the right half's LEDs listed first is caught")
         cables = {s_: Cable() for s_ in ("L", "R")}
-        print(f"\n== {name}: QMK COL2ROW scan, controller rev 2 + two 20-way cables + both halves")
+        print(f"\n== {name}: QMK COL2ROW scan, controller rev 2 + a 12-way and an 8-way cable per side + both halves")
         run(pins, halves, cables)
         k0 = halves["L"].s.keys[7]
         s_, _ = run(pins, halves, cables, quiet=True, cut=("L", k0.i))

@@ -101,7 +101,7 @@ def main():
     md = [f"# {PR.BOARD_NAME} rev 2: what to order\n",
           "Every zip here was checked against its routed board when this folder was made, and that board's DRC",
           "report shows 0 errors and 0 unconnected. Order the controller and one of the four half boards; the",
-          "two 20-pin PicoBlade cables that join them come from elsewhere. Parts: see the BOM in",
+          "PicoBlade cables that join them (a 12-pin and an 8-pin per half) come from elsewhere. Parts: see the BOM in",
           f"layouts/{PR.LAYOUT}/rev2.md and docs/controller-rev2.md.\n",
           "| zip | per keyboard | JLCPCB |", "|---|---|---|"]
     md += [f"| `{s}_JLCPCB.zip` | {q} | {n} |" for s, q, n in rows]
