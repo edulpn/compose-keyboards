@@ -386,8 +386,8 @@ def check_layout(fps):
             for q in pth(fp):
                 must(Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}")
         for sx in (-1, 1):                                     # the mated plugs and their cables, past the openings
-            plug = box(*sorted((sx * (PB_ROW_X + PB_BODY_OUT), sx * (PB_ROW_X + PB_BODY_OUT + PB_PLUG_OUT))),
-                       PB_Y0 - PB_L / 2, PB_Y0 + PB_L / 2)
+            px0, px1 = sorted((sx * (PB_ROW_X + PB_BODY_OUT), sx * (PB_ROW_X + PB_BODY_OUT + PB_PLUG_OUT)))
+            plug = box(px0, PB_Y0 - PB_L / 2, px1, PB_Y0 + PB_L / 2)
             must(not keep.intersects(plug), f"standoff at {x, y} in a cable plug's way")
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
 
