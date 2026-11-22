@@ -24,9 +24,11 @@ PB_L = sum((n - 1) * PB_PITCH + 2 * PB_END for n in PB_PARTS) + PB_SPACE   # bot
 PB_Y0 = 1.45                               # centre of the row (y): its courtyards sit 0.45 mm clear of the narrowing
                                            #   (CLIP_Y) behind and of the front standoffs' keep-outs in front
 PB_BODY_IN, PB_BODY_OUT = 1.05, 4.45       # body from the pin row toward the Pico / outward to its opening (KiCad's fab
-                                           #   outline; the courtyard is 0.5 mm more each way)
+                                           #   outline)
+PB_CRT = 0.5                               # the courtyard past the body, each way
 PB_H = 3.6                                 # body height above the board
-PB_PLUG_OUT = 8.0                          # the mated plug (~3 mm past the opening) and its cable's first bend: kept clear
+PB_PLUG_OUT = 7.5                          # past the courtyard: the mated plug (~3 mm past the opening) and its cable's
+                                           #   first bend, kept clear
 # the halves' connectors (Molex PicoBlade 53047-1210 and -0810, vertical, through hole, on each half's bottom face)
 HALF_PB_UNDER = 4.3                        # body height under the half board
 HALF_PB_PLUG_DROP = 12.0                   # the mated plug and its cable's first bend, under the body: kept clear

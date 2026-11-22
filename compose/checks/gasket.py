@@ -164,7 +164,8 @@ def cable_plugs():
     bt = CT.board_top
     ctrl = []
     for sx in (-1, 1):
-        x0, x1 = sorted((sx * (CS.PB_ROW_X + CS.PB_BODY_OUT), sx * (CS.PB_ROW_X + CS.PB_BODY_OUT + CS.PB_PLUG_OUT)))
+        xo = CS.PB_ROW_X + CS.PB_BODY_OUT + CS.PB_CRT
+        x0, x1 = sorted((sx * xo, sx * (xo + CS.PB_PLUG_OUT)))
         ys = [CT.to_P(0.0, y)[1] for y in (CS.PB_Y0 - CS.PB_L / 2, CS.PB_Y0 + CS.PB_L / 2)]
         ctrl.append(big_box(x0, x1, min(ys), max(ys), bt, bt + CS.PB_H))
     z0 = -PR.PCB_T - CS.HALF_PB_UNDER

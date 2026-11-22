@@ -78,7 +78,7 @@ The layout is checked first, before anything is built round it: keycaps at least
 - **pad gap:** the same at every pad, top and bottom, measured on the solids along the plate normal;
 - **assembly paths:** plates and frames drop in along the plate normal; the controller and the cover drop straight down ([how the parts fit together](case-geometry.md));
 - **hardware:** thread engagement of the cover screws and the standoffs, the Pico's gap, the header plugs under the cover;
-- **cables:** room for each mated plug and its cable's first bend at both ends (8 mm out of the controller's openings, 12 mm below the half's connectors), clear of the case, plates, frames, cover, the half boards and their parts, the standoffs and the Pico; the cable between them is flexible and not modelled;
+- **cables:** room for each mated plug and its cable's first bend at both ends (7.5 mm past the controller connectors' courtyards, 12 mm below the half's connectors), clear of the case, plates, frames, cover, the half boards and their parts, the standoffs and the Pico; the cable between them is flexible and not modelled;
 - **printability:** every part sliced in print orientation, each layer resting on the one below. Each part's size on the bed is printed, and the tub's has to be the one the layout's page quotes.
 
 The figures each of these returns are on the layout's page ([Compose58's](../layouts/compose58/rev2.md#the-case)).

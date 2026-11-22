@@ -55,7 +55,7 @@ ROUTER = "2.5.0"                           # the Freerouting version this board 
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
 from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
-                         PB_PITCH, PB_END, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_L, PB_PLUG_OUT,
+                         PB_PITCH, PB_END, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_CRT, PB_L, PB_PLUG_OUT,
                          pb_bodies, slot_off)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
@@ -386,7 +386,8 @@ def check_layout(fps):
             for q in pth(fp):
                 must(Point(q).distance(Point(x, y)) >= CS.BOSS_KEEP, f"{ref} lead within the post at {x, y}")
         for sx in (-1, 1):                                     # the mated plugs and their cables, past the openings
-            px0, px1 = sorted((sx * (PB_ROW_X + PB_BODY_OUT), sx * (PB_ROW_X + PB_BODY_OUT + PB_PLUG_OUT)))
+            xo = PB_ROW_X + PB_BODY_OUT + PB_CRT                   # from the courtyard out
+            px0, px1 = sorted((sx * xo, sx * (xo + PB_PLUG_OUT)))
             plug = box(px0, PB_Y0 - PB_L / 2, px1, PB_Y0 + PB_L / 2)
             must(not keep.intersects(plug), f"standoff at {x, y} in a cable plug's way")
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
@@ -443,7 +444,7 @@ def art(b):
     # pin 1 (slots 1 and 13), all just outside the openings (the strip between the Pico's socket and the bodies is too
     # narrow): seen while plugging in
     for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside
-        x_out = PB_ROW_X + PB_BODY_OUT + 1.7                         # 1.2 mm past the courtyard
+        x_out = PB_ROW_X + PB_BODY_OUT + PB_CRT + 1.2                # 1.2 mm past the courtyard
         L(s, sx * x_out, PB_Y0, angle=90 * sx)
         for k0, _, _, _ in pb_bodies():
             L("1", sx * x_out, PB_Y0 + slot_off(k0))
