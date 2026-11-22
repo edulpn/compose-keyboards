@@ -5,15 +5,15 @@ Compose controller rev 2: the shared controller board for all Compose split layo
 
 Interface (the standard; see docs/controller-rev2.md):
   - Raspberry Pi Pico footprint (socketed on 2x 1x20 female headers, 8.5 mm), USB end = back (-y here).
-  - Per side two 1.25 mm cable connectors end to end (Molex PicoBlade 53048-1210 behind a 53048-0810, right angle,
+  - Per side two 1.25 mm cable connectors end to end (Molex PicoBlade 53048-0810 behind a 53048-1210, right angle,
     through hole), top face, along the side edges with their openings outward, at fixed positions (rev2_std: PB_*),
     so the board doesn't depend on any layout's angles: each layout's cables take them up. Their 20 contacts are
     slots by physical position, back -> front, the same on both sides:
-        12-pin  1 GND, 2 5V_LED, 3 RGB data to the half, 4-9 ROW0-5, 10 RGB data back from the half, 11 5V_LED, 12 GND
-        8-pin   13 GND, 14-20 COL0-6
-    Reversal-safe: a 12-way cable fitted flipped (slot k meets 13-k) puts 5 V on 5 V, GND on GND, the two RGB data
-    lines on each other (through the 330 ohm) and rows on rows; an 8-way one (k meets 33-k) GND on COL6 and columns
-    on columns - nothing is damaged, keys just scramble. The two cables differ in size, so they can't be swapped.
+        8-pin   1 GND, 2-8 COL0-6
+        12-pin  9 GND, 10 5V_LED, 11 RGB data to the half, 12-17 ROW0-5, 18 RGB data back from the half, 19 5V_LED, 20 GND
+    Reversal-safe: an 8-way cable fitted flipped (slot k meets 9-k) puts GND on COL6 and columns on columns; a 12-way
+    one (k meets 29-k) 5 V on 5 V, GND on GND, the two RGB data lines on each other (through the 330 ohm) and rows
+    on rows - nothing is damaged, keys just scramble. The two cables differ in size, so they can't be swapped.
     (the right connectors are turned 180 deg, so their pad numbers run the other way; nets follow the slot).
     The halves join through a 12-way and an 8-way PicoBlade cable each (150 mm): a reversed cable (or a half's
     connector fitted turned round) is the flipped case above, and turning the half's connector 180 deg puts it right.
@@ -77,15 +77,15 @@ POWER_W = 0.4
 
 
 def slot_nets(side):
-    """Net for each cable slot 1..20 (slot 1 at the back), same order on both sides: the 12-pin's slots 1-12, the
-    8-pin's 13-20."""
-    s = {1: "GND", 2: "+5V_LED", 11: "+5V_LED", 12: "GND", 13: "GND"}
-    for i, g in enumerate(ROWS):
-        s[4 + i] = f"GP{g}"
+    """Net for each cable slot 1..20 (slot 1 at the back), same order on both sides: the 8-pin's slots 1-8, the
+    12-pin's 9-20."""
+    s = {1: "GND", 9: "GND", 10: "+5V_LED", 19: "+5V_LED", 20: "GND"}
     for i, g in enumerate(COLS[side]):
-        s[14 + i] = f"GP{g}"
-    s[3] = "RGB_L_IN" if side == "L" else "RGB_R_IN"      # data into the half: between 5 V (AC ground) and ROW0
-    s[10] = "RGB_L_RET" if side == "L" else None           # data back from the left half (right: end of the chain)
+        s[2 + i] = f"GP{g}"
+    for i, g in enumerate(ROWS):
+        s[12 + i] = f"GP{g}"
+    s[11] = "RGB_L_IN" if side == "L" else "RGB_R_IN"     # data into the half: between 5 V (AC ground) and ROW0
+    s[18] = "RGB_L_RET" if side == "L" else None           # data back from the left half (right: end of the chain)
     return s
 
 
@@ -162,7 +162,7 @@ def outline_poly():
 
 
 def pb_fps(b, side, net):
-    """The side's two Molex PicoBlade 53048 (right angle, 1.25 mm: a 12-pin behind an 8-pin), KiCad's footprints,
+    """The side's two Molex PicoBlade 53048 (right angle, 1.25 mm: an 8-pin behind a 12-pin), KiCad's footprints,
     along the side edge with their openings outward: slot k at y = PB_Y0 + slot_off(k), slot 1 at the back. Which end
     pin 1 goes to follows from each footprint: its body (the courtyard) has to lie outward of the pin row."""
     sx = -1 if side == "L" else 1
@@ -441,7 +441,7 @@ def art(b):
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
     # cable connectors: the side name along the pin row, centred on it, and "1" level with each connector's
-    # pin 1 (slots 1 and 13), all just outside the openings (the strip between the Pico's socket and the bodies is too
+    # pin 1 (slots 1 and 9), all just outside the openings (the strip between the Pico's socket and the bodies is too
     # narrow): seen while plugging in
     for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside
         x_out = PB_ROW_X + PB_BODY_OUT + PB_CRT + 1.2                # 1.2 mm past the courtyard

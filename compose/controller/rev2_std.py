@@ -9,13 +9,13 @@ Y_BACK, Y_FRONT = -26.0, 30.0              # board edges (56 mm); back edge at t
 CORNER_R = 2.0
 PCB_T = 1.6
 PICO_X, PICO_Y = 8.89, 24.13               # socket rows at x = +-8.89, pins 1/20 at y = -+24.13
-# cable connectors: on each side a Molex PicoBlade 53048-1210 and a 53048-0810 (1.25 mm, 12 and 8 pos, right angle,
+# cable connectors: on each side a Molex PicoBlade 53048-0810 and a 53048-1210 (1.25 mm, 8 and 12 pos, right angle,
 # through hole), top face, end to end along the side edge with their openings outward, at fixed positions: each
 # layout's two PicoBlade cables per half (a 12-way and an 8-way, so they can't be swapped) take up its angles. The
-# 20 contacts are numbered as slots by physical position, slot 1 at the back: the 12-pin holds slots 1-12, the
-# 8-pin slots 13-20. Body sizes from KiCad's footprints (fab layer: 1.5 mm past the end pins; courtyard 0.5 mm more).
+# 20 contacts are numbered as slots by physical position, slot 1 at the back: the 8-pin holds slots 1-8, the
+# 12-pin slots 9-20 (the columns behind the rows, as the half boards were first routed with). Body sizes from KiCad's footprints (fab layer: 1.5 mm past the end pins; courtyard 0.5 mm more).
 PB_PITCH = 1.25
-PB_PARTS = (12, 8)                         # pins per connector, back to front
+PB_PARTS = (8, 12)                         # pins per connector, back to front
 PB_N = sum(PB_PARTS)                       # slots
 PB_END = 1.5                               # body past its end pins, along the row
 PB_SPACE = 1.1                             # between the two bodies: their courtyards just clear each other

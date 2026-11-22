@@ -43,22 +43,22 @@ The shared controller board for every Compose split layout: one board, one conne
 **Silkscreen:**
 
 - The half boards' art font (DejaVu Sans). The ∘ ring and "Compose" title stand up the left strip beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
-- Every label sits against what it names: `lhs` / `rhs` just outside each side's cable connectors, with a "1" level with each connector's pin 1 (slots 1 and 13); pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
+- Every label sits against what it names: `lhs` / `rhs` just outside each side's cable connectors, with a "1" level with each connector's pin 1 (slots 1 and 9); pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
 
 ## Cable connectors and slot order
 
-- **Connectors:** on each side a Molex PicoBlade 53048-1210 (12 positions) behind a 53048-0810 (8 positions), 1.25 mm pitch, right angle, through-hole, end to end on the top face along the side edge, openings outward. KiCad's own footprints; the build compares each body outline with the sizes the case uses and prints both. Pin rows 12.8 mm either side of the Pico centre, the row centred 1.45 mm forward of it: far enough in that the mated plugs clear the half boards (0.6 mm), and clear of the Pico's sockets. The two connectors fill the strip between the board's narrowing at the back and the front standoffs, 0.45 mm to spare at each end.
+- **Connectors:** on each side a Molex PicoBlade 53048-0810 (8 positions) behind a 53048-1210 (12 positions), 1.25 mm pitch, right angle, through-hole, end to end on the top face along the side edge, openings outward. KiCad's own footprints; the build compares each body outline with the sizes the case uses and prints both. Pin rows 12.8 mm either side of the Pico centre, the row centred 1.45 mm forward of it: far enough in that the mated plugs clear the half boards (0.6 mm), and clear of the Pico's sockets. The two connectors fill the strip between the board's narrowing at the back and the front standoffs, 0.45 mm to spare at each end.
 - **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout's half boards put their connectors level with these rows; the cables take up the angles.
-- **Cables:** ready-made PicoBlade cables (Molex 51021 housings at both ends, sold as "MX1.25" too), a 12-pin and an 8-pin per half, 150 mm; anything from 100 to 200 mm is inside what the simulation covers, down to 32 AWG wire. Different sizes, so the two cables of a half can't be swapped. On a half board the connectors are a PicoBlade 53047-1210 and 53047-0810 (vertical, through-hole) on the bottom face ([rev 2 half boards](half-boards-rev2.md#cable-connectors)).
-- **Slot order:** the 20 contacts are numbered as slots by physical position, slot 1 the back-most pin: the 12-pin holds slots 1–12, the 8-pin 13–20. Both sides use the same physical order, so the right connectors are turned 180° and their pad numbers run backwards.
+- **Cables:** ready-made PicoBlade cables (Molex 51021 housings at both ends, sold as "MX1.25" too), an 8-pin and a 12-pin per half, 150 mm; anything from 100 to 200 mm is inside what the simulation covers, down to 32 AWG wire. Different sizes, so the two cables of a half can't be swapped. On a half board the connectors are a PicoBlade 53047-0810 and 53047-1210 (vertical, through-hole) on the bottom face ([rev 2 half boards](half-boards-rev2.md#cable-connectors)).
+- **Slot order:** the 20 contacts are numbered as slots by physical position, slot 1 the back-most pin: the 8-pin holds slots 1–8, the 12-pin 9–20. The columns sit behind the rows, as they did in the single-connector plan the half boards were first routed with. Both sides use the same physical order, so the right connectors are turned 180° and their pad numbers run backwards.
 - **Which way round:** the right-angle connectors only sit one way on their footprints, opening outward. A cable crimped the other way round reverses its own slots at the half (harmless, below), and turning the half's connector round puts it right.
 
-| slot | 1 | 2 | 3 | 4–9 | 10 | 11 | 12 | 13 | 14–20 |
+| slot | 1 | 2–8 | 9 | 10 | 11 | 12–17 | 18 | 19 | 20 |
 |---|---|---|---|---|---|---|---|---|---|
-| line | GND | 5 V LED | RGB data to the half | ROW0–5 | RGB data back | 5 V LED | GND | GND | COL0–6 |
-| cable | 12-pin | | | | | | | 8-pin | |
+| line | GND | COL0–6 | GND | 5 V LED | RGB data to the half | ROW0–5 | RGB data back | 5 V LED | GND |
+| cable | 8-pin | | 12-pin | | | | | | |
 
-**Reversal-safe:** should a 12-pin cable meet the half the other way round (slot k on 13 − k), 5 V lands on 5 V, GND on GND, the two RGB data lines on each other through the 330 Ω and the rows on each other; an 8-pin one (k on 33 − k) puts GND on COL6 and the columns on each other. Nothing is damaged, keys just scramble. A column is only ever an input with its pull-up (`COL2ROW`), so GND on it is harmless whatever the firmware's unselect setting.
+**Reversal-safe:** should an 8-pin cable meet the half the other way round (slot k on 9 − k), GND lands on COL6 and the columns on each other; a 12-pin one (k on 29 − k) puts 5 V on 5 V, GND on GND, the two RGB data lines on each other through the 330 Ω and the rows on each other. Nothing is damaged, keys just scramble. A column is only ever an input with its pull-up (`COL2ROW`), so GND on it is harmless whatever the firmware's unselect setting.
 
 ## Pins
 
@@ -102,16 +102,16 @@ Outlined "RGB" on the bottom silkscreen. Leave it empty for no RGB: firmware RGB
 The whole RGB group sits in the box under the Pico on the bottom face. F1 is the board's one surface-mount part besides the Qwiic connector: a 1206 with hand-soldering pads. A radial polyfuse doesn't fit any more: the strip behind the right cable connectors, where it stood, is taken by the two connectors.
 
 - **Firmware:** `RGB_MATRIX_MAXIMUM_BRIGHTNESS 32`. 84 LEDs at full white stay under 440 mA: the fuse holds 0.5 A, and USB gives 0.5 A in total, of which 60 mA are kept for the Pico and its modules.
-- **Rev 2 halves:** DIN from slot 3 to the first LED, the last DOUT back on slot 10; a pass-through link when a half has no LEDs; one 100 nF per 2–4 LEDs rather than per LED (hot-plug inrush).
+- **Rev 2 halves:** DIN from slot 11 to the first LED, the last DOUT back on slot 18; a pass-through link when a half has no LEDs; one 100 nF per 2–4 LEDs rather than per LED (hot-plug inrush).
 
 ## BOM
 
 | ref | part | qty |
 |---|---|---|
 | U1 | Raspberry Pi Pico / Pico W / Pico 2 (W) or pin-compatible, on 2 × 1×20 female headers (8.5 mm) | 1 |
-| JL1, JR1 | Molex PicoBlade 53048-1210, 12 pos, 1.25 mm, right angle | 2 |
-| JL2, JR2 | Molex PicoBlade 53048-0810, 8 pos, 1.25 mm, right angle | 2 |
-| — | PicoBlade (MX1.25) cables, 150 mm (100–200 mm works), ready-made, both ends female: 12-pin and 8-pin; each half board takes a PicoBlade 53047-1210 and 53047-0810 vertical connector at the other end | 2 + 2 |
+| JL1, JR1 | Molex PicoBlade 53048-0810, 8 pos, 1.25 mm, right angle | 2 |
+| JL2, JR2 | Molex PicoBlade 53048-1210, 12 pos, 1.25 mm, right angle | 2 |
+| — | PicoBlade (MX1.25) cables, 150 mm (100–200 mm works), ready-made, both ends female: 8-pin and 12-pin; each half board takes a PicoBlade 53047-0810 and 53047-1210 vertical connector at the other end | 2 + 2 |
 | J4 | 1×4 2.54 mm header (OLED / I2C) | 1 |
 | J6 | 1×6 2.54 mm header (AUX) | 1 |
 | J5 | JST BM04B-SRSS-TB (Qwiic, top entry) | 1 |
@@ -129,7 +129,7 @@ Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controll
 
 | what | result |
 |---|---|
-| netlist | rebuilt from the routed copper, it matches an independent pin-level spec (Pico, the cable connectors' slots, a 12-pin behind an 8-pin in one row with the bodies outward, DIP pin 1 and its pin order as seen from the face the chip sits on, polarised C2, headers, Qwiic); silkscreen pin labels match the copper |
+| netlist | rebuilt from the routed copper, it matches an independent pin-level spec (Pico, the cable connectors' slots, an 8-pin behind a 12-pin in one row with the bodies outward, DIP pin 1 and its pin order as seen from the face the chip sits on, polarised C2, headers, Qwiic); silkscreen pin labels match the copper |
 | optional RGB group | behaves correctly fitted and empty |
 | key scan | QMK COL2ROW through model cables (slot k to slot k) into model halves: all 84 keys, 1000 random chords, no ghosting (including across the shared rows); a cable reversed is harmless |
 | negative controls | swapped firmware pin, unrotated right connector, reversed diodes, injected short, cut track: all caught |

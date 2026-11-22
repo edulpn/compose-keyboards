@@ -257,7 +257,7 @@ CABLE_R = 0.25               # ohm per conductor of the USB cable: USB 2.0 allow
 I_USB, I_REST = 0.5, 0.06    # A: what USB gives a device in all; the Pico, an OLED and a pointing device
 I_LED_MAX = I_USB - I_REST   # A, what is left for the LEDs
 LED_CAPS = 42                # 100 nF capacitors on the two halves: 84 LEDs, one per two (halves carry one per 2 to 4)
-HALF_TRACE = (0.03, 0.20)    # m, slot 3 to the first LED on a half board (sim-half-rev2 holds the routed boards to it)
+HALF_TRACE = (0.03, 0.20)    # m, slot 11 to the first LED on a half board (sim-half-rev2 holds the routed boards to it)
 CBL = dict(Z0=(100.0, 250.0), TD_PER_M=5.5e-9, R_PER_M=0.67, C_PER_M=(40e-12, 70e-12), CM_PER_M=(15e-12, 40e-12),
            LEN=(0.10, 0.20), CONTACT_R=0.02)
 #   the cables: Molex PicoBlade, a 12-way and an 8-way per half, premade, 150 mm, loose wires at 1.25 mm (no plane), so Z0 / C / mutual C over
@@ -852,13 +852,13 @@ CC col 0 {c_col}
     c_col_min = RP["CIN"] + Lc * 1e3 * PCBZ["C_PER_MM"][0] + CBL["LEN"][0] * CBL["C_PER_M"][0] + 0.08e3 * PCBZ["C_PER_MM"][0]
     c_row_min = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (CBL["LEN"][0] * CBL["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
     cases = []
-    # cable neighbours from the slot table (12-way cable): RGB data to the half (3) | ROW0 (4) and ROW5 (9) | RGB data
-    # back (10); the 8-way cable's columns sit between GND (13) and the cable's end, beside nothing that switches
+    # cable neighbours from the slot table (12-way cable): RGB data to the half (11) | ROW0 (12) and ROW5 (17) | RGB
+    # data back (18); the 8-way cable's columns sit between GND (1) and the cable's end, beside nothing that switches
     for lf in CBL["LEN"]:
         cm = lf * CBL["CM_PER_M"][1]
         cvr = RP["CIN"] + Lr * 1e3 * PCBZ["C_PER_MM"][0] + 2 * (lf * CBL["C_PER_M"][0] + 0.12e3 * PCBZ["C_PER_MM"][0])
-        cases.append((f"cable {lf * 1e3:.0f} mm: RGB data to the half (3) -> idle ROW0 (4)", "rgb", "row", cm, cvr))
-        cases.append((f"cable {lf * 1e3:.0f} mm: LED data back (10) -> idle ROW5 (9)", "led", "row", cm, cvr))
+        cases.append((f"cable {lf * 1e3:.0f} mm: RGB data to the half (11) -> idle ROW0 (12)", "rgb", "row", cm, cvr))
+        cases.append((f"cable {lf * 1e3:.0f} mm: LED data back (18) -> idle ROW5 (17)", "led", "row", cm, cvr))
     for (a, b), (L, gap) in pairs.items():
         for agg, vic in ((a, b), (b, a)):
             if agg in agg_nets and vic in vic_nets and agg != vic and not (agg in rows_n and vic in rows_n):

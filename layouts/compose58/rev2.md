@@ -7,9 +7,9 @@
 | | rev 2 |
 |---|---|
 | **Case** | one-piece tub, gasket-mounted plates, bevelled frames, lift-off middle cover |
-| **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, a 12-pin and an 8-pin PicoBlade cable per half) |
+| **Controller** | the shared [controller rev 2](../../docs/controller-rev2.md) (socketed Pico, an 8-pin and a 12-pin PicoBlade cable per half) |
 | **Half boards** | one reversible board for both halves, in four variants: hotswap or solder, with or without per-key RGB |
-| **Cables** | ready-made PicoBlade (MX1.25) cables, a 12-pin and an 8-pin per half, 150 mm |
+| **Cables** | ready-made PicoBlade (MX1.25) cables, an 8-pin and a 12-pin per half, 150 mm |
 | **Angles** | splay 14°, tent 6°, tilt 0° |
 | **Hardware** | M3 screws and heat-set inserts; M2 for board to plate |
 
@@ -78,7 +78,7 @@ What [`preroute.py`](preroute.py) lays before the autorouter runs: ROW4 (the thu
 
 | | |
 |---|---|
-| 5 V rail, RGB boards | a 0.5 mm trunk along every key row, between each switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back, so both faces keep room for what has to cross a row. The rows are tied into a mesh by a 1 mm spine down the outer edge and a 0.8 mm one down the inner edge; slot 2 feeds the top row, slot 11 the second row and the inner spine. `sim-half-rev2` reads its resistance from the routed copper: from the connector to the farthest LED, 81 mΩ as the left half and 76 mΩ as the right on the solder RGB board, 82 and 77 mΩ on the hotswap RGB board. It reads the return too, through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 12 and 13: 14 and 12 mΩ on the solder RGB board, 31 and 27 mΩ on the hotswap RGB board. The worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half; the most is 113 mΩ (hotswap RGB, left half). All of these figures include 20 % for temperature and plating tolerance. |
+| 5 V rail, RGB boards | a 0.5 mm trunk along every key row, between each switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back, so both faces keep room for what has to cross a row. The rows are tied into a mesh by a 1 mm spine down the outer edge and a 0.8 mm one down the inner edge; slot 10 feeds the top row, slot 19 the second row and the inner spine. `sim-half-rev2` reads its resistance from the routed copper: from the connector to the farthest LED, 81 mΩ as the left half and 76 mΩ as the right on the solder RGB board, 82 and 77 mΩ on the hotswap RGB board. It reads the return too, through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 9 and 20: 14 and 12 mΩ on the solder RGB board, 31 and 27 mΩ on the hotswap RGB board. The worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half; the most is 113 mΩ (hotswap RGB, left half). All of these figures include 20 % for temperature and plating tolerance. |
 | D nets, hotswap RGB board | each key's socket pad on either face to its diode. The sockets' pads sit on both faces, so every key needs two links across the board (D and its column), and with the rail laid as well the autorouter didn't finish the board. Each D net runs from the pad beside the diode straight to the diode on that pad's face, and on over the top of the switch to a via above the other pad. The columns, the rows and the LED data are left to the autorouter (Freerouting 2.5.0, see [Routing](../../docs/building.md#routing)). |
 
 ### Checked
@@ -100,8 +100,8 @@ What `sim-half-rev2` checks, and how: [the half boards page](../../docs/half-boa
 | half board (one of the four above) | 1 |
 | Kailh MX hotswap sockets (hotswap boards) | 29 |
 | 1N4148 diodes, DO-35 | 29 |
-| Molex PicoBlade 53047-1210 (12 pos, vertical) and 53047-0810 (8 pos, vertical) | 1 + 1 |
-| PicoBlade (MX1.25) cables, 150 mm, ready-made, female at both ends: 12-pin and 8-pin | 1 + 1 |
+| Molex PicoBlade 53047-0810 (8 pos, vertical) and 53047-1210 (12 pos, vertical) | 1 + 1 |
+| PicoBlade (MX1.25) cables, 150 mm, ready-made, female at both ends: 8-pin and 12-pin | 1 + 1 |
 | M2 × 4 screws + M2 heat-set inserts (board to plate; 2.4 mm of thread in the insert) | 4 + 4 |
 | *RGB boards:* SK6812 MINI-E | 29 |
 | *RGB boards:* 100 nF 1206 capacitors | 10 |

@@ -38,24 +38,24 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 
 ## Cable connectors
 
-- **Connectors:** a Molex PicoBlade 53047-1210 (12 positions) behind a 53047-0810 (8 positions), 1.25 mm pitch, vertical, through-hole, end to end along the inner edge on the face away from the switches, openings facing down into the bay. KiCad's own footprints; the build compares each body outline with the sizes the case checks use and prints both.
+- **Connectors:** a Molex PicoBlade 53047-0810 (8 positions) behind a 53047-1210 (12 positions), 1.25 mm pitch, vertical, through-hole, end to end along the inner edge on the face away from the switches, openings facing down into the bay. KiCad's own footprints; the build compares each body outline with the sizes the case checks use and prints both.
 - **Where:** their pins are level with the controller's (`conn_row_y_P()` in `compose/pcb/rev2_half.py` reads the row from the controller standard, and each slot sits at the controller's spacing), so the cables run straight across and new angles need no hand-tuning. The bodies sit at least 1.0 mm in from the board edge, and the pins and bodies 0.6 mm from every other part on either face (they're through-hole, and hand-soldered); `sim-half-rev2` checks the gap on the routed copper. If their spot is taken they slide along the row. A body runs 2.05 mm to one side of its pins and 1.15 mm to the other; on the right half (fitted from the other face) it's the other way round, so the placement keeps 2.05 mm clear on both sides.
-- **Slot order:** the [controller rev 2](controller-rev2.md#cable-connectors-and-slot-order) order by physical position: the back-most pin is slot 1, on both halves. The 12-pin holds slots 1–12, the 8-pin 13–20.
+- **Slot order:** the [controller rev 2](controller-rev2.md#cable-connectors-and-slot-order) order by physical position: the back-most pin is slot 1, on both halves. The 8-pin holds slots 1–8, the 12-pin 9–20.
 - **Which way round:** PicoBlade cables come crimped either way round, and the board can't tell which you have. Before soldering a connector, plug its cable into the controller and turn the half's connector so that the wire on the controller's pin 1 (marked "1") lands on the half's pin 1 (marked "1" too). Fitted the other way, that cable's slots meet in reverse: harmless (the pinout is [reversal-safe](controller-rev2.md#cable-connectors-and-slot-order)), but that half's keys scramble; turning the connector round puts it right.
 - **Plug the cables in first:** the connectors are under the board, so the cables go in before the board goes onto its plate.
 
 | slots | signal |
 |---|---|
-| 1, 12, 13 | GND |
-| 2, 11 | 5 V |
-| 3 | RGB data in |
-| 4–9 | ROW0–ROW5 |
-| 10 | RGB data out |
-| 14–20 | COL0–COL6 |
+| 1, 9, 20 | GND |
+| 2–8 | COL0–COL6 |
+| 10, 19 | 5 V |
+| 11 | RGB data in |
+| 12–17 | ROW0–ROW5 |
+| 18 | RGB data out |
 
-A layout uses the columns and rows it has (Compose58 leaves COL6 and ROW5 spare). The plain boards wire slot 3 straight to slot 10, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
+A layout uses the columns and rows it has (Compose58 leaves COL6 and ROW5 spare). The plain boards wire slot 11 straight to slot 18, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
 
-The cables: a ready-made 12-pin and 8-pin PicoBlade cable, 150 mm (see the [controller's BOM](controller-rev2.md#bom)).
+The cables: a ready-made 8-pin and 12-pin PicoBlade cable, 150 mm (see the [controller's BOM](controller-rev2.md#bom)).
 
 ## RGB boards
 
@@ -67,8 +67,8 @@ The cables: a ready-made 12-pin and 8-pin PicoBlade cable, 150 mm (see the [cont
 | light | comes out on the near side of each key ("south-facing"): MX switches have their LED window opposite their pins, and the pins point away from you. Any MX switch with an LED window works; sockets and LEDs never share a side. |
 | chain | one per half, in the order the placement gives it (Compose58: up the outer column, down the next and so on, then the inner key and the thumb arc from the inside out) |
 | capacitors | 100 nF 1206 beside every third LED (10 per half on Compose58) |
-| power | 5 V from slots 2/11, GND from slots 1/12/13 |
-| 5 V rail | autorouted, unless the layout lays it out by hand (`layouts/<name>/preroute.py`, see [Routing](building.md#routing)). `sim-half-rev2` reads its resistance from the routed copper, from the connector to the farthest LED, and the return's through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 12 and 13. For a rail laid by hand, the worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half. The figures include 20 % for temperature and plating tolerance. |
+| power | 5 V from slots 10/19, GND from slots 1/9/20 |
+| 5 V rail | autorouted, unless the layout lays it out by hand (`layouts/<name>/preroute.py`, see [Routing](building.md#routing)). `sim-half-rev2` reads its resistance from the routed copper, from the connector to the farthest LED, and the return's through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 9 and 20. For a rail laid by hand, the worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half. The figures include 20 % for temperature and plating tolerance. |
 | GND | a copper pour on both faces, stitched with vias. Every SMD GND pad (LEDs, capacitors, connector) has its own via on a short stub, placed before routing, so the pour reaches it on both faces whatever the tracks do around it. (With every pad doubled for both halves, GND as tracks didn't fit on two layers.) |
 
 ## Firmware
@@ -97,7 +97,7 @@ Past the cap each LED can draw up to 36 mA (2.1 A for Compose58's 58); the contr
 - spare slots stay unconnected;
 - a diode's solder joint at least 0.45 mm from the pad of every other net on its face;
 - no copper of any net within 2.15 mm of an M2 hole's centre, on either face (under the screw's head and the plate's insert);
-- RGB boards: one unbroken LED chain from slot 3 to slot 10, with every LED and capacitor across 5 V and GND;
+- RGB boards: one unbroken LED chain from slot 11 to slot 18, with every LED and capacitor across 5 V and GND;
 - RGB boards: the 5 V rail and the return through the GND pour, each read from the copper, within 150 mΩ together;
 - RGB boards: the LED data run into the half and out of it within the lengths the controller's circuit simulation sweeps (200 and 300 mm of track);
 - RGB boards: LED data tracks beside column and row tracks move no column or row more than 0.7 V, with every data net switching at once;

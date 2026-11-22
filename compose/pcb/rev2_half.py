@@ -1,7 +1,7 @@
 """
 Rev 2 half boards (controller rev 2 standard):  python3 -m compose half-rev2 OUT [board ...]
 
-  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 10)
+  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 11 -> slot 18)
   half_rev2_hotswap_rgb / half_rev2_solder_rgb   an SK6812 MINI-E under every switch, chained, 100 nF per 3 LEDs
   --plan       the placement drawing only          --preroute   the layout's pre-routed copper laid, checked against
                                                                 the plan and drawn (neither needs KiCad)
@@ -14,13 +14,13 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
   - Outline: the plate outline less PCB_INSET (inside the gasket pads). No case screws go through it: the
     board hangs from the plate on four M2 screws into heat-set inserts in the plate (posts solved here).
   - Matrix: the layout's (row, col), COL2ROW, a through-hole diode per key in the same spot at every key.
-  - Cable connectors: Molex PicoBlade 53047-1210 behind a 53047-0810 (1.25 mm, vertical, through hole), end to end
+  - Cable connectors: Molex PicoBlade 53047-0810 behind a 53047-1210 (1.25 mm, vertical, through hole), end to end
     along the inner edge, fitted from the face away from the switches (one footprint each serves both halves), their
     pins on the bridge-frame line of the controller's connector row and level with its slots, so the 12-way and
     8-way PicoBlade cables run straight across. Pins get their nets by physical position: the back-most pin is slot
     1, as on the controller (the cables keep the order; a reversed one, or a connector fitted turned round, is the
     controller's flipped case, put right by turning it 180 deg).
-  - Slots: 12-pin 1 GND, 2 5V, 3 RGB in, 4-9 ROW0-5, 10 RGB out, 11 5V, 12 GND; 8-pin 13 GND, 14-20 COL0-6.
+  - Slots: 8-pin 1 GND, 2-8 COL0-6; 12-pin 9 GND, 10 5V, 11 RGB in, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
@@ -77,9 +77,9 @@ PB_EDGE = 1.0                        # body to the board's inner edge, at least
 PB_GAP = 0.6                         # the connector (body and pins) to any other part, both faces (it's through-hole):
                                      #   hand-soldered, so as far as the diodes' pads keep
 PB_PAD = (1.3, 0.8)                  # pin pad for the plan's copper checks: across the row x along it
-SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 10: "RGB_OUT", 11: "+5V", 12: "GND", 13: "GND"}
-SLOT_NET.update({4 + r: f"ROW{r}" for r in range(6)})
-SLOT_NET.update({14 + c: f"COL{c}" for c in range(7)})
+SLOT_NET = {1: "GND", 9: "GND", 10: "+5V", 11: "RGB_IN", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
+SLOT_NET.update({2 + c: f"COL{c}" for c in range(7)})
+SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
 POST_SEARCH = 18.0
 M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part (the plan), and no copper on either face
                                      #   (a rule area: no tracks, vias or pour). The screw's head bears on one face and
@@ -675,7 +675,7 @@ def build(name):
         PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 0.8))), lay, 1.0,
                 mirror=mir)                                       # past the back body's end, by slot 1
         PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[k2 - 1]) - n * (PB_ACROSS + 0.9))), lay, 1.0,
-                mirror=mir)                                       # inboard of the front one's pin 1 (slot 13)
+                mirror=mir)                                       # inboard of the front one's pin 1 (slot 9)
         PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir, angle=90)
     # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
     pre = PRE.hook("half_rev2")
@@ -1007,10 +1007,10 @@ def laid(name):
 
 
 def rail_points(s, face):
-    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 2 and 11, every LED's
+    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 10 and 19, every LED's
     5 V pad. Plate-local points for Field.resistance."""
     slot = {v: k for k, v in slot_of_pad_xy(s).items()}
-    return ([(slot[2], face), (slot[11], face)],
+    return ([(slot[10], face), (slot[19], face)],
             [(led_pads(L.keys[i], face)["1"].centroid.coords[0], face) for i in s.led_order])
 
 
@@ -1045,7 +1045,7 @@ def preroute_report(out, which=None):
         if "+5V" in f.nets():
             for face, half in (("B", PR.HALF_NAMES[0]), ("F", PR.HALF_NAMES[1])):
                 feeds, loads = rail_points(s, face)
-                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 2 + 11 to the "
+                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 10 + 19 to the "
                       f"farthest LED ({f.resistance('+5V', feeds, loads, width=PR.TRACE_W) * 1e3:.0f} at the signal width)")
         draw_laid(f, os.path.join(out, "pcb", f"{name}_preroute.png"))
     return bad
