@@ -28,7 +28,7 @@ The shared controller board for every Compose split layout: one board, one conne
 | size | 43 × 56 mm, Pico centred, USB at the back. Behind the cable connectors it narrows to 33.2 mm (\|x\| ≤ 16.6) to clear the plates' inner gasket seats. |
 | standard | outline, holes, heights and keep-outs live in `compose/controller/rev2_std.py`; cases read them from there |
 | top face | only the Pico sockets, the four cable connectors and the front connector row |
-| bottom face | every passive and the optional RGB buffer (through-hole, soldered from the top, except the 1206 polyfuse), so nothing is limited by the Pico's 8.5 mm socket height; the rev 2 case leaves 24 mm under the board |
+| bottom face | every passive and the optional RGB buffer (through-hole, soldered from the top, except the 1206 polyfuse), so nothing is limited by the Pico's 8.5 mm socket height; the rev 2 case leaves 16.5 mm under the board |
 | parts | all through-hole except the Qwiic connector and the polyfuse |
 
 **Placement checks** (asserted on every build): courtyards inside the board and apart on each face; no part's body over a through-hole pin or solder joint from the other face (the pad's copper against the courtyard, so a bottom part's top-side joint can't lift a top connector); top connectors clear of the Pico; standoffs and posts clear of everything; no standoff in the way of a cable's plug.
@@ -42,7 +42,7 @@ The shared controller board for every Compose split layout: one board, one conne
 
 **Silkscreen:**
 
-- The half boards' art font (DejaVu Sans). The ∘ ring and "Compose" title stand up the left strip beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
+- The half boards' art font (DejaVu Sans). The ∘ ring, "Compose" and the board's name sit stacked in the narrowed strip behind the left cable connector, beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
 - Every label sits against what it names: `lhs` / `rhs` just outside each side's cable connectors, with a "1" level with each connector's pin 1 (slots 1 and 9); pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector.
 
 ## Cable connectors and slot order
@@ -133,10 +133,10 @@ Copper level: `compose/sim/controller_copper.py`. ngspice: `compose/sim/controll
 | optional RGB group | behaves correctly fitted and empty |
 | key scan | QMK COL2ROW through model cables (slot k to slot k) into model halves: all 84 keys, 1000 random chords, no ghosting (including across the shared rows); a cable reversed is harmless |
 | negative controls | swapped firmware pin, unrotated right connector, reversed diodes, injected short, cut track: all caught |
-| RGB data (192 corners: drive strengths, jumper 20–100 mm and 100–180 Ω, half-board trace 30–200 mm, LED rail down to 4.3 V) | clean single edges at the LED; '0' 339–364 ns and '1' 889–914 ns (250–400 / 650–950 allowed: the windows both the WS2812B and the SK6812 MINI-E accept); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
-| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 6.1 mA. Wired straight through it failed half the corners (0.96 V overshoot). |
+| RGB data (192 corners: drive strengths, cable 100–200 mm and 100–180 Ω, half-board trace 30–200 mm, LED rail down to 4.3 V) | clean single edges at the LED; '0' 337–366 ns and '1' 887–916 ns (250–400 / 650–950 allowed: the windows both the WS2812B and the SK6812 MINI-E accept); overshoot ≤ 0.3 V. Without the buffer, 3.3 V data passes in only 8 of 24 corners. |
+| chain hop (96 corners) | re-driven by gate 2: in spec everywhere, input clamp current ≤ 6.9 mA. Wired straight through it failed half the corners (0.96 V overshoot). |
 | I2C | 400 kHz with up to 60 pF of bus on the board's pull-ups, 100 kHz to 100 pF; modules with their own 2.2–10 k pull-ups stay in spec |
-| power | at USB's lowest voltage (4.75 V at the port, 4.5 V at the device after the cable) the far LED stays ≥ 3.87 V at 440 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and the thinnest flex copper (1/3 oz, 100 mm). That is the average: the brightness cap is a PWM duty, and at a current peak (about 21 of 84 LEDs on at once, 0.82 A) the far LED dips to 3.64 V with a new fuse and 3.13 V after a trip, for under 0.1 ms at a time. The 74HCT125 then runs from 3.96 V, under the 4.5 V its data sheet starts at (warning; 4.21 V from a 5.0 V host). Hot-plug dip with RGB fitted is 1.3× a USB spec-limit device, with a 100 nF capacitor per two LEDs on the halves (warning). |
-| matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 53 ns (QMK samples at ~250 ns) and recovers in 3.3 µs (QMK waits 30 µs); worst jumper/board crosstalk leaves idle lines ≥ 2.75 V (limit 2.0 V) |
+| power | at USB's lowest voltage (4.75 V at the port, 4.5 V at the device after the cable) the far LED stays ≥ 4.08 V at 440 mA (the LEDs' minimum is 3.7 V), even with a tripped-and-recovered fuse and 200 mm cables of 32 AWG wire. That is the average: the brightness cap is a PWM duty, and at a current peak (about 21 of 84 LEDs on at once, 0.82 A) the far LED dips to 3.97 V with a new fuse and 3.52 V after a trip, for under 0.1 ms at a time. At 440 mA the 74HCT125 runs from 4.14 V, under the 4.5 V its data sheet starts at (warning; 4.39 V from a 5.0 V host). Hot-plug dip with RGB fitted is 1.5× a USB spec-limit device, with a 100 nF capacitor per two LEDs on the halves (warning). |
+| matrix timing | a pressed key reads 0.47 V (VIL 0.8 V), settles in 64 ns (QMK samples at ~250 ns) and recovers in 4.0 µs (QMK waits 30 µs); the worst cable or board crosstalk leaves idle columns ≥ 3.22 V (limit 2.0 V) and idle rows ≥ 2.39 V (limit 1.6 V) |
 | PS/2 stick | fine from 3.3 V; a 5 V stick with its own pull-ups would exceed the RP2040's 3.8 V limit (warning) |
-| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/compose58/rev2.md#the-half-boards)); through the real flex jumper's copper; its 27.6 mm is inside the 20–100 mm the circuit simulation covers |
+| with real halves | `sim-half-rev2` scans this board's copper end to end with the Compose58 rev 2 half boards (see [rev 2](../layouts/compose58/rev2.md#the-half-boards)), through model 8-way and 12-way cables; the 150 mm cables are inside the 100–200 mm the circuit simulation covers |

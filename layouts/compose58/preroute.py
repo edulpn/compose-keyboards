@@ -24,12 +24,12 @@ Everything is placed from the plan (key frames, the connector's slots, the diode
 two such points goes through Field.route, which steps round whatever the plan put in the way.
 
   ROUTER  the boards routed with Freerouting 2.5.0 instead of the default 2.1.0: all four. It gives the same
-          board on every run. With ROW4 laid here it finishes the plain boards as they are put to it. The RGB
-          boards, with their rails (and on the hotswap board its D nets) laid, it finishes when the job is put
-          to it another way (the seed, see route() in compose/pcb/toolbox.py): the one named here is the first
-          that came out clean at 14 degrees of splay and 6 of tent (at 10 and 12 the solder RGB board needed
-          none and the hotswap RGB board seed 8). A change to a board's plan or to the copper laid here can
-          need another: the build goes on to the next seeds by itself and says which one was clean.
+          board on every run. With ROW4 and ROW5 laid here it finishes the plain boards as they are put to it.
+          The RGB boards, with their rails (and on the hotswap board its D nets) laid, it finishes when the job
+          is put to it another way (the seed, see route() in compose/pcb/toolbox.py): the one named here is the
+          first that came out clean with the 8-pin and 12-pin cable connectors. A change to a board's plan or to
+          the copper laid here can need another: the build goes on to the next seeds by itself and says which
+          one was clean.
 """
 import math
 import numpy as np
@@ -38,7 +38,7 @@ from compose import params as PR
 from compose.pcb import rev2_half as H
 
 ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_solder_rgb": ("2.5.0", 3),
-          "half_rev2_hotswap_rgb": ("2.5.0", 10)}
+          "half_rev2_hotswap_rgb": ("2.5.0", 13)}
 
 ROW = "ROW4"
 ROW_W = 0.25                 # signal width

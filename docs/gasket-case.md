@@ -64,7 +64,7 @@ The pairs are found by scanning the plate edge for every spot where a slice fits
 
 ## Middle bay
 
-- The controller sits on four floor posts (M3 inserts), clamped by its four M3 standoffs; there are 24 mm under the board.
+- The controller sits on four floor posts (M3 inserts), clamped by its four M3 standoffs; there are 16.5 mm under the board, to the case floor.
 - The cover drops onto the standoffs and takes four M3 × 6 screws. It comes off without touching the cables.
 - The bay is open from wall to wall below the plates' inner edges. Each 150 mm cable leaves its half's connector, which faces down, crosses to its connector on the controller, which faces it across the gap, and leaves its slack in the bay below the cover ([controller rev 2](controller-rev2.md#cable-connectors-and-slot-order)).
 

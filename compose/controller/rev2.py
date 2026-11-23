@@ -50,8 +50,9 @@ from compose.pcb import lettering as LT
 
 V, MM, DEG = PK.V, PK.MM, PK.DEG
 NAME = "controller_rev2"
-ROUTER = "2.5.0"                           # the Freerouting version this board is routed with: 2.5.0 gives the
-#                                            same board on every run (2.1.0 where it isn't installed)
+ROUTER = ("2.5.0", 1)                      # the Freerouting version this board is routed with: 2.5.0 gives the
+#                                            same board on every run (2.1.0 where it isn't installed); seed 1, the
+#                                            first that came out clean (see route() in compose/pcb/toolbox.py)
 CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y down = toward the front)
 from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
@@ -393,32 +394,40 @@ def check_layout(fps):
     return {r: [round(v, 2) for v in g.bounds] + (["B"] if r in bottom else []) for r, g in boxes.items()}
 
 
-TITLE_Y0, TITLE_Y1 = -18.9, -12.2         # title window up the left strip: between the back standoff's keep-out
-                                           #   and the cable connector's back end
+TITLE_X0, TITLE_X1 = -(CLIP_X - 0.6), -11.1   # title window: the narrowed strip behind the left cable connector,
+TITLE_Y0, TITLE_Y1 = -18.9, -14.2              #   0.6 mm in from the edge, 0.95 mm clear of the Pico socket's outline,
+                                               #   between the back standoff's keep-out and the connector's courtyard
 
 
 def art(b):
     rec = []
     L = lambda *a, **k: label(b, *a, records=rec, **k)
-    # title: the composition ring + "Compose", standing up the left strip beside the Pico's
+    # title: the composition ring, "Compose" and the board's name, stacked in the left strip beside the Pico's
     # back half (the back is narrowed there for the plates' inner seats), behind the cable connector
-    x_mid = -(10.5 + CLIP_X) / 2
+    x_mid = (TITLE_X0 + TITLE_X1) / 2
 
     def title(xm):
-        g = unary_union([
-            LT.ring_logo(0.0, 0.0, 1.0),
-            LT.fit(LT.text_shape("Compose", PR.ART_TITLE_FONT), 1.35, -1.0, 7.0, 2.0, "left")[0],
-            LT.fit(LT.text_shape(f"controller · rev 2 · {PR.HANDLE}", PR.ART_TEXT_FONT), -1.0, -2.25, 10.0, 0.85)[0]])
-        g = rotate(g, 90, origin=(0, 0))                        # reads bottom -> top along the strip
+        lines, y = [], 0.0
+        for g in (LT.ring_logo(0.0, 0.0, 1.0), LT.text_shape("Compose", PR.ART_TITLE_FONT, 2.0),
+                  LT.text_shape("controller", PR.ART_TEXT_FONT, 1.4),
+                  LT.text_shape(f"rev 2 · {PR.HANDLE}", PR.ART_TEXT_FONT, 1.4)):
+            bx0, _, bx1, by1 = g.bounds
+            g = translate(g, -(bx0 + bx1) / 2, y - by1)          # centred, each line under the one before
+            lines.append(g)
+            y = g.bounds[1] - 0.4
+        g = unary_union(lines)
         bx0, by0, bx1, by1 = g.bounds
-        k = min(1.0, (TITLE_Y1 - TITLE_Y0) / (by1 - by0))       # scaled down to fit the window if needed
-        g = scale(g, k, k, origin=((bx0 + bx1) / 2, (by0 + by1) / 2))
+        k = min(1.0, (TITLE_X1 - TITLE_X0) / (bx1 - bx0), (TITLE_Y1 - TITLE_Y0) / (by1 - by0))   # scaled to fit
+        g = scale(g, k, k, origin=(0, 0))
         bx0, by0, bx1, by1 = g.bounds
-        return translate(g, xm - (bx0 + bx1) / 2, -((TITLE_Y0 + TITLE_Y1) / 2) - (by0 + by1) / 2)
-    PK.add_poly(b, title(x_mid), pcbnew.F_SilkS, CX, CY)
-    rec.append(dict(text="Compose", x=round(x_mid, 2), y=round((TITLE_Y0 + TITLE_Y1) / 2, 2)))
+        dx, dy = xm - (bx0 + bx1) / 2, -((TITLE_Y0 + TITLE_Y1) / 2) - (by0 + by1) / 2
+        word = scale(lines[1], k, k, origin=(0, 0)).centroid                  # where "Compose" is, for the record
+        return translate(g, dx, dy), (word.x + dx, -(word.y + dy))
+    g, (wx, wy) = title(x_mid)
+    PK.add_poly(b, g, pcbnew.F_SilkS, CX, CY)
+    rec.append(dict(text="Compose", x=round(wx, 2), y=round(wy, 2)))
     # bottom face (it faces the case floor): the same title, mirrored so it reads from below
-    PK.add_poly(b, LT.mirror_about(title(x_mid), x_mid), pcbnew.B_SilkS, CX, CY)
+    PK.add_poly(b, LT.mirror_about(g, x_mid), pcbnew.B_SilkS, CX, CY)
     # cover standoffs
     for x, y in COVER_HOLES:
         silk_circle(b, x, y, 2.2)
