@@ -655,17 +655,41 @@ def export(board_path, name, layers=None, drill=True, rename=None):
 
 def make(name, builder, passes=60, attempts=10):
     """Route from a fresh board until DRC is clean. Freerouting 2.1 is randomized, so every attempt differs; a
-    version that isn't gets another seed each attempt (see route())."""
+    version that isn't gets another seed each attempt (see route()). The attempt that came closest is kept in
+    PCB_OUT/failed/ (board, DRC report, router job and session), and its DRC report's problems are printed when no
+    attempt is clean: they say which nets the router couldn't finish."""
+    keep = os.path.join(PCB_OUT, "failed")
+    best = None
     for attempt in range(1, attempts + 1):
         err, unc = _make_once(name, builder(), passes, attempt)
         if err == 0 and unc == 0:
+            for f in pathlib.Path(keep).glob(name + "[._]*"):
+                f.unlink()
             version, seed = _ROUTED.get(name, (ROUTER, 0))
             if attempt > 1 and ROUTERS[version]["seeds"]:
                 print(f"  {name}: clean with seed {seed}. Name it for this board in the layout's ROUTER "
                       f"(({version!r}, {seed})) and it routes in one attempt")
             return err, unc
+        if best is None or err + unc < best[0]:
+            best = (err + unc, attempt, _ROUTED.get(name, (ROUTER, 0)))
+            os.makedirs(keep, exist_ok=True)
+            for ext in (".kicad_pcb", "_drc.txt", ".dsn", ".ses", ".kicad_dru"):
+                if os.path.exists(os.path.join(PCB_OUT, name + ext)):
+                    shutil.copy(os.path.join(PCB_OUT, name + ext), os.path.join(keep, name + ext))
+            _report_failed(os.path.join(keep, name + "_drc.txt"), name, attempt, best[2])
         print(f"  {name}: attempt {attempt} not clean, rerouting")
     raise RuntimeError(f"{name}: no clean route after {attempts} attempts")
+
+
+def _report_failed(rep, name, attempt, routed):
+    """Print what a DRC report found wrong (not the library-path notes), one line per problem with the items it
+    names: the nets an unclean route left unfinished."""
+    print(f"  {name}: closest yet, attempt {attempt} ({routed[0]}, seed {routed[1]}); kept in failed/. Its DRC:")
+    for b in re.split(r"\n(?=\[)", pathlib.Path(rep).read_text()):
+        if not b.startswith("[") or b.startswith("[lib_footprint_issues]"):
+            continue
+        items = re.findall(r"@\(([\d.]+) mm, ([\d.]+) mm\): ([^\n]*)", b)
+        print(f"    {b.split(']')[0][1:]}: " + " | ".join(f"({x}, {y}) {d}" for x, y, d in items))
 
 
 def _make_once(name, board, passes, attempt=1):

@@ -286,6 +286,14 @@ jobs:
       - if: steps.route.outputs.routed == 'true' || steps.reuse.outputs.clean == 'true'
         uses: actions/upload-artifact@v7
         with: { name: "board-${{ matrix.layout }}-${{ matrix.board }}-s${{ matrix.shard }}", path: "o2/pcb/${{ matrix.board }}*", retention-days: 7 }
+      # no clean route: the attempt that came closest (board, DRC report, router job), to see which nets were left
+      - if: always() && steps.route.outcome != 'skipped' && steps.route.outputs.routed != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: "failed-${{ matrix.layout }}-${{ matrix.board }}-s${{ matrix.shard }}"
+          path: "o2/pcb/failed/${{ matrix.board }}*"
+          retention-days: 7
+          if-no-files-found: ignore
       - if: always()
         uses: actions/upload-artifact@v7
         with:
