@@ -380,10 +380,9 @@ def _place():
 
 
 def conn_label_xy(s):
-    """Where the lhs / rhs label goes: inboard of the connector's body, 3 mm in front of the middle of its row (clear
-    of the front connector's "1"), 1.55 mm in from the body (further in, it meets the outline of the switch beside
-    the row)."""
-    return np.array(s.conn.c) - np.array(s.conn.n) * (-PB_BODY[2] + 1.55) - np.array(s.conn.u) * 3.0
+    """Where the lhs / rhs label goes: behind the back connector, past its "1" (beside the row, the switches' outlines,
+    the front "1" and the hotswap sockets' pads leave no room for it on every board)."""
+    return np.array(s.conn.pads[0]) + np.array(s.conn.u) * (PB_END + 4.0)
 
 
 def conn_marks(s):
@@ -680,7 +679,7 @@ def build(name):
     for face, nm, lay, mir in (("B", lhs, pcbnew.B_SilkS, True), ("F", rhs, pcbnew.F_SilkS, False)):
         for m in conn_marks(s):                                   # each connector's pin 1
             PK.text(b, "1", K(m), lay, 1.0, mirror=mir)
-        PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir, angle=90)
+        PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir)
     # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
     pre = PRE.hook("half_rev2")
     if pre:
@@ -716,13 +715,16 @@ def _clear_switch_silk(b):
                 fp.Delete(g)                        # Delete, not Remove: see kicad.remove_dangling
 
 
+CONN_REFS = ("J1", "J2")              # the cable connectors
 FANOUT_R = (0.9, 2.6, 0.1)           # via centre distance from its pad's centre: min, max, step (mm)
 
 
 def gnd_fanout(b):
     """Before routing (RGB boards): every SMD GND pad gets its own via on a short stub, so it reaches the GND
     pours on both faces whatever the router does around it. Without this, the pour couldn't reach ~30 pads
-    (mostly LED GND pads boxed in by the tracks round the LED cutouts). Each via takes the closest spot
+    (mostly LED GND pads boxed in by the tracks round the LED cutouts). So do the cable connectors' GND pins
+    (through hole, a stub on the back, else the front): the pins are too close together for the pour to pass
+    between them, and with tracks along the row on both faces it reached none of them on some routes. Each via takes the closest spot
     clear of every other pad, hole, art, edge and via, and of any copper already laid (pre-routed nets); the
     stub runs on the pad's own face."""
     pcbnew, PK = _pc()
@@ -756,7 +758,7 @@ def gnd_fanout(b):
                         sh = sh.envelope                              #   these pads bigger; keep to their box
                     isg = p.GetNetCode() == gnd.GetNetCode()
                     obst[f].append((sh, isg))
-                    if isg and p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD:
+                    if isg and (p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD or fp.GetReference() in CONN_REFS):
                         gpads.append((fp.GetReference(), p.GetNumber(), f, lay, sh))
     for d in b.GetDrawings():                                    # exposed-copper art
         f = lay_of.get(d.GetLayer())
@@ -787,8 +789,10 @@ def gnd_fanout(b):
     inner = inner.buffer(-edge_clr)                                         #   cutouts 0.45 mm in (kicad.route)
     allp = {f: uu([s for s, _ in obst[f]]) for f in obst}
     other = {f: uu([s for s, g in obst[f] if not g]) for f in obst}
-    vias, n, missed = [], 0, []
-    for ref, num, f, lay, pad in sorted(gpads):
+    vias, n, missed, done = [], 0, [], set()
+    for ref, num, f, lay, pad in sorted(gpads, key=lambda g: (g[0], g[1], g[2] != "B")):   # a pin: the back first
+        if (ref, num) in done:
+            continue
         c = pad.centroid
         best = None
         r = FANOUT_R[0]
@@ -810,8 +814,10 @@ def gnd_fanout(b):
                 break
             r += FANOUT_R[2]
         if best is None:
-            missed.append(f"{ref}.{num}")
+            if ref not in CONN_REFS or f == "F":
+                missed.append(f"{ref}.{num}")
             continue
+        done.add((ref, num))
         vias.append(best)
         t = pcbnew.PCB_TRACK(b)
         t.SetStart(pcbnew.VECTOR2I(MM(c.x), MM(c.y)))
@@ -828,7 +834,7 @@ def gnd_fanout(b):
         v.SetNet(gnd)
         b.Add(v)
         n += 1
-    print(f"  GND fanout: {n} of {len(gpads)} GND pads given a via" + (f"; no room at {', '.join(missed)}" if missed else ""))
+    print(f"  GND fanout: {n} of {len({(g[0], g[1]) for g in gpads})} GND pads given a via" + (f"; no room at {', '.join(missed)}" if missed else ""))
 
 
 GND_POUR_CLEAR = 0.3
