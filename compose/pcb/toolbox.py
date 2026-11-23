@@ -663,6 +663,10 @@ def make(name, builder, passes=60, attempts=10):
     for attempt in range(1, attempts + 1):
         err, unc = _make_once(name, builder(), passes, attempt)
         if err == 0 and unc == 0:
+            rep = os.path.join(PCB_OUT, name + "_drc.txt")
+            if drc_counts(rep)[1]:
+                print(f"  {name}: clean, with warnings:")
+                _print_drc(rep)
             for f in pathlib.Path(keep).glob(name + "[._]*"):
                 f.unlink()
             version, seed = _ROUTED.get(name, (ROUTER, 0))
@@ -676,15 +680,15 @@ def make(name, builder, passes=60, attempts=10):
             for ext in (".kicad_pcb", "_drc.txt", ".dsn", ".ses", ".kicad_dru"):
                 if os.path.exists(os.path.join(PCB_OUT, name + ext)):
                     shutil.copy(os.path.join(PCB_OUT, name + ext), os.path.join(keep, name + ext))
-            _report_failed(os.path.join(keep, name + "_drc.txt"), name, attempt, best[2])
+            print(f"  {name}: closest yet, attempt {attempt} ({best[2][0]}, seed {best[2][1]}); kept in failed/. Its DRC:")
+            _print_drc(os.path.join(keep, name + "_drc.txt"))
         print(f"  {name}: attempt {attempt} not clean, rerouting")
     raise RuntimeError(f"{name}: no clean route after {attempts} attempts")
 
 
-def _report_failed(rep, name, attempt, routed):
-    """Print what a DRC report found wrong (not the library-path notes), one line per problem with the items it
-    names: the nets an unclean route left unfinished."""
-    print(f"  {name}: closest yet, attempt {attempt} ({routed[0]}, seed {routed[1]}); kept in failed/. Its DRC:")
+def _print_drc(rep):
+    """Print what a DRC report found (not the library-path notes), one line per problem with the items it names:
+    after an unclean route, the nets it left unfinished."""
     for b in re.split(r"\n(?=\[)", pathlib.Path(rep).read_text()):
         if not b.startswith("[") or b.startswith("[lib_footprint_issues]"):
             continue
