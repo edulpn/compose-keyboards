@@ -66,7 +66,7 @@ How they work: [rev 2 half boards](../../docs/half-boards-rev2.md).
 
 | | |
 |---|---|
-| keys | 29 per half; COL6 and ROW5 of the connectors are spare |
+| keys | 29 per half; COL6 of the connectors is spare. The inner key (beside the inner column) is on ROW5 and COL5, so it joins the inner column and its row leaves from the connector's front end, beside it. |
 | LEDs, capacitors (RGB boards) | 29 and 10 per half; 0.13 A per half at the brightness cap, about 1 A without it |
 | connectors | their pins level with the controller's, the row centred 1.45 mm forward of its Pico centre |
 | routing | Freerouting 2.5.0 on all four boards; the hotswap RGB board with seed 8 ([Routing](../../docs/building.md#routing)) |
@@ -74,7 +74,7 @@ How they work: [rev 2 half boards](../../docs/half-boards-rev2.md).
 
 ### Laid out by hand
 
-What [`preroute.py`](preroute.py) lays before the autorouter runs: ROW4 (the thumb row) on all four boards, and:
+What [`preroute.py`](preroute.py) lays before the autorouter runs: ROW4 (the thumb row) and ROW5 (the inner key's row, beside ROW4 down the inner edge) on all four boards, and:
 
 | | |
 |---|---|

@@ -53,7 +53,7 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 | 12–17 | ROW0–ROW5 |
 | 18 | RGB data out |
 
-A layout uses the columns and rows it has (Compose58 leaves COL6 and ROW5 spare). The plain boards wire slot 11 straight to slot 18, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
+A layout uses the columns and rows it has (Compose58 leaves COL6 spare, and puts only its inner key on ROW5). The plain boards wire slot 11 straight to slot 18, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
 
 The cables: a ready-made 8-pin and 12-pin PicoBlade cable, 150 mm (see the [controller's BOM](controller-rev2.md#bom)).
 

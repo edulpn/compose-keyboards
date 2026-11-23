@@ -5,6 +5,9 @@ Optional: delete this file, or set COMPOSE_PREROUTE=0, and the autorouter routes
   ROW4   the thumb row, on all four boards: the one net Freerouting 2.5 can't finish. From its connector slot
          it runs under the connector's cable side, down the inner edge and along the front of the thumb keys,
          on the back copper, with a short spur up to each diode.
+  ROW5   the inner key's row (the key beside the inner column: ROW5 and COL5 in the matrix, so its column
+         link is the short one from the inner column), on all four boards: beside ROW4 down the inner edge,
+         on its cable side, then along the front of the key to its diode.
   +5V    the LED rail, on both RGB boards: a 0.5 mm trunk along every key row, in the gap between each
          switch's centre hole and its LED cutout, with a spur to each LED and capacitor (a via where the pad is
          on the back). Under a key the trunk is on the front copper; it crosses each column gap on the back,
@@ -30,6 +33,7 @@ two such points goes through Field.route, which steps round whatever the plan pu
 """
 import math
 import numpy as np
+from shapely.geometry import LineString
 from compose import params as PR
 from compose.pcb import rev2_half as H
 
@@ -38,6 +42,7 @@ ROUTER = {"half_rev2_hotswap": "2.5.0", "half_rev2_solder": "2.5.0", "half_rev2_
 
 ROW = "ROW4"
 ROW_W = 0.25                 # signal width
+PAIR = 0.55                  # ROW5 beside ROW4, centre to centre
 ROW_FY = 10.5                # the thumb-row track under each thumb key: footprint y (in front of its LED and its
                              #   GND vias)
 RAIL = "+5V"
@@ -81,8 +86,8 @@ def half_rev2(f, s):
 def row4(f, s, slot):
     L = H.fp2local
     n = np.array(s.conn.n)
-    keys = [ks for ks in s.keys if ks.row == 4]
-    inner = max(keys, key=lambda ks: ks.k.x)                       # the key beside the inner column
+    keys = [ks for ks in s.keys if not ks.k.grid]                 # the thumb arc and the inner key
+    inner = max(keys, key=lambda ks: ks.k.x)                       # the key beside the inner column (on ROW5)
     thumbs = sorted((ks for ks in keys if ks is not inner), key=lambda ks: -ks.k.x)
     side = max((ks for ks in s.keys if ks.row < 4 and ks.cathode[0] > ks.k.x), key=lambda ks: (ks.cathode[0], -ks.row))
     # connector: from its pin to a via under the body on the bridge side, then down the back face under the rest of
@@ -95,9 +100,18 @@ def row4(f, s, slot):
     k = inner.k
     down = [via, (via[0], side.cathode[1] - 1.6), L(k, -9.3, -16.3), L(k, -9.3, ROW_FY - 0.6)]
     f.through(ROW, "B", down, ROW_W)
-    # the inner key's diode, along the front of the key
+    # the inner key's row (ROW5, the slot in front): the same way beside ROW4, on its cable side, then along the
+    # front of the key to its diode, while ROW4 turns the other way for the thumbs
+    row = f"ROW{inner.row}"
+    p = slot[12 + inner.row]
+    d = np.array(down[1]) - np.array(down[0])
+    beside = LineString(down).offset_curve(PAIR if d[0] * n[1] - d[1] * n[0] > 0 else -PAIR)    # on the n side
+    pts = [tuple(c) for c in beside.coords]
+    via5 = tuple(p + n * (UNDER + PAIR + 0.2))                     # its pin to a via on the front copper (on the back,
+    f.via(row, via5)                                              #   ROW4 is in the way), past ROW4's line
+    f.track(row, "F", [p, via5], ROW_W)
     cx, cy = _fp(k, inner.cathode)
-    f.through(ROW, "B", [down[-1], L(k, cx, ROW_FY - 0.6), inner.cathode], ROW_W)
+    f.through(row, "B", [via5, tuple(p + n * (UNDER + PAIR))] + pts[1:] + [L(k, cx, ROW_FY - 0.6), inner.cathode], ROW_W)
     # the thumb keys, inner one first: round the first one's diode, then along the front of each
     at = down[-1]
     for i, ks in enumerate(thumbs):
@@ -149,7 +163,8 @@ def rail(f, s, slot):
     n = np.array(s.conn.n)
     px, py = H.LED_PAD_X, H.LED_AT[1] - H.LED_PAD_Y               # the LEDs' 5 V pads: +px on F, -px on B
     capx, capy = H.CAP_AT[0], H.CAP_AT[1] - 1.475                 # the capacitors' 5 V pads: +capx on B, -capx on F
-    last = max((ks for ks in s.keys if ks.row == 4), key=lambda ks: ks.k.x)       # the key beside the inner column:
+    prow = lambda ks: ks.row if ks.k.grid else 4                  # the row a key sits in (the inner key, on ROW5: the thumbs')
+    last = max((ks for ks in s.keys if prow(ks) == 4), key=lambda ks: ks.k.x)     # the key beside the inner column:
     cap = lambda ks: ks.i in s.caps                                               #   nothing joins its far end
     xr = lambda ks: CAP_VIA_X if cap(ks) else px if ks is last else TRUNK_X
     end = lambda ks, sg: L(ks.k, xr(ks) if sg > 0 else -(CAP_VIA_X if cap(ks) else TRUNK_X), TRUNK_FY)
@@ -169,7 +184,7 @@ def rail(f, s, slot):
             f.track(RAIL, "F", [L(k, -capx, TRUNK_FY), L(k, -capx, capy)], SPUR_W)
             via(end(ks, 1))
             f.track(RAIL, "B", [end(ks, 1), L(k, capx, capy)], SPUR_W)
-    rows = {r: sorted((ks for ks in s.keys if ks.row == r), key=lambda ks: ks.k.x) for r in range(5)}
+    rows = {r: sorted((ks for ks in s.keys if prow(ks) == r), key=lambda ks: ks.k.x) for r in range(5)}
     inner = rows[4].pop()                                         # the key beside the inner column
     thumbs = rows[4]
     for r in range(5):                                            # along each row, across the column gaps

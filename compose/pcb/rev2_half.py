@@ -370,7 +370,7 @@ def _place():
     s.cuts, s.holes, s.socks = cuts, holes, socks
     pl = conn_label_xy(s)
     s.extra_keep = [s.conn.body.buffer(1.0), ledcut_u.buffer(0.6), ledpads_u.buffer(0.4), caps_u.buffer(0.4),
-                    Point(*pl).buffer(2.6)]
+                    Point(*pl).buffer(2.6)] + [Point(*m).buffer(1.0) for m in conn_marks(s)]   # labels: no hex lattice
     s.extra_keep += [Point(ks.cathode).buffer(3.2) for ks in s.keys]           # the diodes' 'K' marks
     # the fields art.free_area reads
     s.conn_body = s.conn.body
@@ -380,9 +380,17 @@ def _place():
 
 
 def conn_label_xy(s):
-    """Where the lhs / rhs label goes: inboard of the connector's body, level with the middle of its row (1.6 mm in
-    from the body: further in, it meets the silkscreen outline of the switch beside the row)."""
-    return np.array(s.conn.c) - np.array(s.conn.n) * (-PB_BODY[2] + 1.6)
+    """Where the lhs / rhs label goes: inboard of the connector's body, 3 mm in front of the middle of its row (clear
+    of the front connector's "1"), 1.55 mm in from the body (further in, it meets the outline of the switch beside
+    the row)."""
+    return np.array(s.conn.c) - np.array(s.conn.n) * (-PB_BODY[2] + 1.55) - np.array(s.conn.u) * 3.0
+
+
+def conn_marks(s):
+    """Where the two "1" marks go: past the back connector's end by slot 1, and inboard of the front one's pin 1."""
+    u, n = np.array(s.conn.u), np.array(s.conn.n)
+    return [tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 1.0)),
+            tuple(float(t) for t in np.array(s.conn.pads[pb_bodies()[1][0] - 1]) - n * (PB_ACROSS + 0.9))]
 
 
 def slot_of_pad_xy(s):
@@ -396,8 +404,8 @@ def slot_of_pad_xy(s):
 def slot_net(sl, rgb):
     """The net on connector slot sl of a board with or without LEDs (None: nothing)."""
     nm = SLOT_NET[sl]
-    if nm in ("COL6", "ROW5"):
-        return None                                               # the matrix's spare line: unused here
+    if nm[:3] in ("COL", "ROW") and nm not in {f"COL{k.col}" for k in L.keys} | {f"ROW{k.row}" for k in L.keys}:
+        return None                                               # a matrix line the layout doesn't use
     if not rgb and nm in ("RGB_IN", "RGB_OUT"):
         return "RGB_PASS"                                         # no LEDs: data straight back
     if not rgb and nm in ("+5V", "GND"):
@@ -452,9 +460,8 @@ def field(s, keepouts=()):
     u, n = np.array(s.conn.u), np.array(s.conn.n)
     quad = lambda c, a, b: Polygon([tuple(np.array(c) + n * i * a / 2 + u * j * b / 2) for i, j in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
     slot = slot_of_pad_xy(s)
-    for face in ("B", "F"):                                       # through-hole: the same pad on both faces
-        for p in s.conn.pads:
-            f.pad(face, quad(p, *PB_PAD), slot_net(slot[p], s.rgb), f"J{1 if slot[p] <= PB_PARTS[0] else 2}.slot{slot[p]}")
+    for p in s.conn.pads:                                         # through-hole: one pad on both faces
+        f.pad("FB", quad(p, *PB_PAD), slot_net(slot[p], s.rgb), f"J{1 if slot[p] <= PB_PARTS[0] else 2}.slot{slot[p]}")
     for x, y in s.posts:
         f.hole(Point(x, y).buffer(PR.M2_CLEAR / 2))
         f.keepout(Point(x, y).buffer(M2_KEEP))                    # under the screw's head and the plate's insert
@@ -669,15 +676,10 @@ def build(name):
     from compose.pcb import art as pcb_art
     art = pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else ""))
     PK.add_art_half(b, art, PK.OX, PK.OY)
-    u, n = np.array(s.conn.u), np.array(s.conn.n)
     lhs, rhs = PR.HALF_NAMES
-    k2 = pb_bodies()[1][0]                                        # the front connector's pin 1
     for face, nm, lay, mir in (("B", lhs, pcbnew.B_SilkS, True), ("F", rhs, pcbnew.F_SilkS, False)):
-        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 2.0))), lay, 1.0,
-                mirror=mir)                                       # past the back body's end (and the footprint's
-                                                                  #   own silkscreen there), by slot 1
-        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[k2 - 1]) - n * (PB_ACROSS + 0.9))), lay, 1.0,
-                mirror=mir)                                       # inboard of the front one's pin 1 (slot 9)
+        for m in conn_marks(s):                                   # each connector's pin 1
+            PK.text(b, "1", K(m), lay, 1.0, mirror=mir)
         PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir, angle=90)
     # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
     pre = PRE.hook("half_rev2")
