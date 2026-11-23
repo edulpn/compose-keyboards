@@ -50,15 +50,15 @@ The shared controller board for every Compose split layout: one board, one conne
 - **Connectors:** on each side a Molex PicoBlade 53048-0810 (8 positions) behind a 53048-1210 (12 positions), 1.25 mm pitch, right angle, through-hole, end to end on the top face along the side edge, openings outward. KiCad's own footprints; the build compares each body outline with the sizes the case uses and prints both. Pin rows 12.8 mm either side of the Pico centre, the row centred 1.45 mm forward of it: far enough in that the mated plugs clear the half boards (0.6 mm), and clear of the Pico's sockets. The two connectors fill the strip between the board's narrowing at the back and the front standoffs, 0.45 mm to spare at each end.
 - **Fixed by the standard:** these positions are in `compose/controller/rev2_std.py` and no layout changes them. A layout's half boards put their connectors level with these rows; the cables take up the angles.
 - **Cables:** ready-made PicoBlade cables (Molex 51021 housings at both ends, sold as "MX1.25" too), an 8-pin and a 12-pin per half, 150 mm; anything from 100 to 200 mm is inside what the simulation covers, down to 32 AWG wire. Different sizes, so the two cables of a half can't be swapped. On a half board the connectors are a PicoBlade 53047-0810 and 53047-1210 (vertical, through-hole) on the bottom face ([rev 2 half boards](half-boards-rev2.md#cable-connectors)).
-- **Slot order:** the 20 contacts are numbered as slots by physical position, slot 1 the back-most pin: the 8-pin holds slots 1–8, the 12-pin 9–20. The columns sit behind the rows, as they did in the single-connector plan the half boards were first routed with. Both sides use the same physical order, so the right connectors are turned 180° and their pad numbers run backwards.
+- **Slot order:** the 20 contacts are numbered as slots by physical position, slot 1 the back-most pin: the 8-pin holds slots 1–8, the 12-pin 9–20. The columns sit behind the rows, as they did in the single-connector plan the half boards were first routed with, and run from the front of the 8-pin: COL0 (the outer column) in slot 8, next to the 12-pin, and COL6 (spare on most layouts) in slot 2, at the back. On a half board the back end of the row is the most crowded spot, beside the top row's inner key: the column that ends there is the inner one, and the outer columns leave from the front end, toward the gap below the top row. Both sides use the same physical order, so the right connectors are turned 180° and their pad numbers run backwards.
 - **Which way round:** the right-angle connectors only sit one way on their footprints, opening outward. A cable crimped the other way round reverses its own slots at the half (harmless, below), and turning the half's connector round puts it right.
 
 | slot | 1 | 2–8 | 9 | 10 | 11 | 12–17 | 18 | 19 | 20 |
 |---|---|---|---|---|---|---|---|---|---|
-| line | GND | COL0–6 | GND | 5 V LED | RGB data to the half | ROW0–5 | RGB data back | 5 V LED | GND |
+| line | GND | COL6–0 | GND | 5 V LED | RGB data to the half | ROW0–5 | RGB data back | 5 V LED | GND |
 | cable | 8-pin | | 12-pin | | | | | | |
 
-**Reversal-safe:** should an 8-pin cable meet the half the other way round (slot k on 9 − k), GND lands on COL6 and the columns on each other; a 12-pin one (k on 29 − k) puts 5 V on 5 V, GND on GND, the two RGB data lines on each other through the 330 Ω and the rows on each other. Nothing is damaged, keys just scramble. A column is only ever an input with its pull-up (`COL2ROW`), so GND on it is harmless whatever the firmware's unselect setting.
+**Reversal-safe:** should an 8-pin cable meet the half the other way round (slot k on 9 − k), GND lands on COL0 and the columns on each other; a 12-pin one (k on 29 − k) puts 5 V on 5 V, GND on GND, the two RGB data lines on each other through the 330 Ω and the rows on each other. Nothing is damaged, keys just scramble. A column is only ever an input with its pull-up (`COL2ROW`), so GND on it is harmless whatever the firmware's unselect setting.
 
 ## Pins
 
@@ -68,8 +68,8 @@ QMK `keyboard.json`, also written to `out/controller/pcb/controller_rev2_qmk.jso
 |---|---|
 | matrix | 6 × 14, `COL2ROW` |
 | rows | GP0–5, shared by both halves |
-| left columns COL0–6 | GP6–12 |
-| right columns COL0–6 | GP22, 21, 20, 19, 18, 17, 16 (COL0 = the outer pinky column on both halves), so the matrix columns left to right are GP6–12, GP16–22 |
+| left columns COL0–6 | GP12, 11, 10, 9, 8, 7, 6 |
+| right columns COL0–6 | GP16–22 (COL0 = the outer pinky column on both halves; on each side the column pins run in the order of their slots, so the tracks to the connector don't cross), so the matrix columns left to right are GP12–6, GP22–16 |
 | RGB data | GP13 (`ws2812` vendor driver); chain controller → left half → controller → right half |
 | I2C1 | SDA GP14, SCL GP15, 4.7 kΩ pull-ups to 3.3 V |
 | AUX header | GP26, GP27, GP28 (ADC), 3.3 V, 5 V (VBUS), GND |

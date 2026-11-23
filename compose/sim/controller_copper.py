@@ -52,7 +52,7 @@ PICO_PINOUT = {1: "GP0", 2: "GP1", 3: "GND", 4: "GP2", 5: "GP3", 6: "GP4", 7: "G
                20: "GP15", 21: "GP16", 22: "GP17", 23: "GND", 24: "GP18", 25: "GP19", 26: "GP20", 27: "GP21",
                28: "GND", 29: "GP22", 30: "RUN", 31: "GP26", 32: "GP27", 33: "AGND", 34: "GP28", 35: "ADC_VREF",
                36: "3V3", 37: "3V3_EN", 38: "GND", 39: "VSYS", 40: "VBUS"}            # Raspberry Pi Pico datasheet
-SLOTS = {1: "GND", 2: "COL0", 3: "COL1", 4: "COL2", 5: "COL3", 6: "COL4", 7: "COL5", 8: "COL6",   # the 8-way cable
+SLOTS = {1: "GND", 2: "COL6", 3: "COL5", 4: "COL4", 5: "COL3", 6: "COL2", 7: "COL1", 8: "COL0",   # the 8-way cable
          9: "GND", 10: "5V_LED", 11: "RGB_TO_HALF",                                     # the 12-way
          12: "ROW0", 13: "ROW1", 14: "ROW2", 15: "ROW3", 16: "ROW4", 17: "ROW5",
          18: "RGB_FROM_HALF", 19: "5V_LED", 20: "GND"}
@@ -66,8 +66,8 @@ def mirror(k):
             return 2 * k0 + n - 1 - k
     raise ValueError(k)
 ROW_GPIO = ["GP0", "GP1", "GP2", "GP3", "GP4", "GP5"]
-COL_GPIO = {"L": ["GP6", "GP7", "GP8", "GP9", "GP10", "GP11", "GP12"],
-            "R": ["GP22", "GP21", "GP20", "GP19", "GP18", "GP17", "GP16"]}      # half COL0 (outer) .. COL6 (inner)
+COL_GPIO = {"L": ["GP12", "GP11", "GP10", "GP9", "GP8", "GP7", "GP6"],
+            "R": ["GP16", "GP17", "GP18", "GP19", "GP20", "GP21", "GP22"]}      # half COL0 (outer) .. COL6 (inner)
 QMK_V2 = {"matrix_pins": {"rows": ROW_GPIO, "cols": COL_GPIO["L"] + COL_GPIO["R"][::-1]},
           "diode_direction": "COL2ROW", "ws2812": {"driver": "vendor", "pin": "GP13"},
           "i2c": {"driver": "I2CD1", "sda": "GP14", "scl": "GP15"}}

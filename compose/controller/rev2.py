@@ -9,16 +9,16 @@ Interface (the standard; see docs/controller-rev2.md):
     through hole), top face, along the side edges with their openings outward, at fixed positions (rev2_std: PB_*),
     so the board doesn't depend on any layout's angles: each layout's cables take them up. Their 20 contacts are
     slots by physical position, back -> front, the same on both sides:
-        8-pin   1 GND, 2-8 COL0-6
+        8-pin   1 GND, 2-8 COL6-0 (COL0 at the front, next to the 12-pin)
         12-pin  9 GND, 10 5V_LED, 11 RGB data to the half, 12-17 ROW0-5, 18 RGB data back from the half, 19 5V_LED, 20 GND
-    Reversal-safe: an 8-way cable fitted flipped (slot k meets 9-k) puts GND on COL6 and columns on columns; a 12-way
+    Reversal-safe: an 8-way cable fitted flipped (slot k meets 9-k) puts GND on COL0 and columns on columns; a 12-way
     one (k meets 29-k) 5 V on 5 V, GND on GND, the two RGB data lines on each other (through the 330 ohm) and rows
     on rows - nothing is damaged, keys just scramble. The two cables differ in size, so they can't be swapped.
     (the right connectors are turned 180 deg, so their pad numbers run the other way; nets follow the slot).
     The halves join through a 12-way and an 8-way PicoBlade cable each (150 mm): a reversed cable (or a half's
     connector fitted turned round) is the flipped case above, and turning the half's connector 180 deg puts it right.
   - Matrix: 6 rows shared by both halves (GP0-5), 7 columns per half
-    (left GP6-12, right GP22, 21, 20, 19, 18, 17, 16 = COL0-6). QMK: 6 x 14.
+    (left GP12-6, right GP16-22 = COL0-6: each side's column pins in the order of their slots). QMK: 6 x 14.
   - I2C1 on GP14 (SDA) / GP15 (SCL), 4.7k pull-ups to 3.3 V: 4-pin OLED-style header + Qwiic.
     Consecutive pins, so a PS/2 pointing stick also works there (QMK RP2040 PS/2 driver; 5 V from AUX).
   - AUX header: GP26, GP27, GP28 (ADC pins), 3.3 V, 5 V (VBUS), GND.
@@ -56,7 +56,7 @@ CX, CY = 100.0, 100.0                      # Pico centre in KiCad coordinates (y
 from compose.controller.rev2_std import (Y_FRONT, PICO_X, PICO_Y, STANDOFF_HOLES,
                          M_CLEAR, STANDOFF_KEEP, CLIP_X, POST_R,
                          PB_PITCH, PB_END, PB_ROW_X, PB_Y0, PB_BODY_IN, PB_BODY_OUT, PB_CRT, PB_L, PB_PLUG_OUT,
-                         pb_bodies, slot_off)
+                         pb_bodies, slot_off, col_slot)
 COVER_HOLES = STANDOFF_HOLES
 BOTTOM = ("U2", "C1", "C2", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "F1")
 LABEL_EM = PR.ART_MIN_TEXT_EM              # same font and minimum size as the half boards
@@ -69,7 +69,7 @@ PICO_GND = (3, 8, 13, 18, 23, 28, 33, 38)
 PICO_PWR = {36: "+3V3", 40: "VBUS"}
 
 ROWS = [0, 1, 2, 3, 4, 5]
-COLS = {"L": [6, 7, 8, 9, 10, 11, 12], "R": [22, 21, 20, 19, 18, 17, 16]}
+COLS = {"L": [12, 11, 10, 9, 8, 7, 6], "R": [16, 17, 18, 19, 20, 21, 22]}
 RGB_GPIO, SDA, SCL = 13, 14, 15
 AUX = [26, 27, 28]
 POWER_NETS = ("GND", "VBUS", "+5V_LED", "+3V3")
@@ -81,7 +81,7 @@ def slot_nets(side):
     12-pin's 9-20."""
     s = {1: "GND", 9: "GND", 10: "+5V_LED", 19: "+5V_LED", 20: "GND"}
     for i, g in enumerate(COLS[side]):
-        s[2 + i] = f"GP{g}"
+        s[col_slot(i)] = f"GP{g}"
     for i, g in enumerate(ROWS):
         s[12 + i] = f"GP{g}"
     s[11] = "RGB_L_IN" if side == "L" else "RGB_R_IN"     # data into the half: between 5 V (AC ground) and ROW0

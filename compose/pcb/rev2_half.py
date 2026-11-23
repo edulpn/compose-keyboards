@@ -20,7 +20,7 @@ are fitted. Through-hole parts (diodes, solder-in switches) serve both.
     8-way PicoBlade cables run straight across. Pins get their nets by physical position: the back-most pin is slot
     1, as on the controller (the cables keep the order; a reversed one, or a connector fitted turned round, is the
     controller's flipped case, put right by turning it 180 deg).
-  - Slots: 8-pin 1 GND, 2-8 COL0-6; 12-pin 9 GND, 10 5V, 11 RGB in, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
+  - Slots: 8-pin 1 GND, 2-8 COL6-0; 12-pin 9 GND, 10 5V, 11 RGB in, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
@@ -65,7 +65,7 @@ LED_PINS = {"1": (1, -1), "2": (1, 1), "3": (-1, 1), "4": (-1, -1)}   # VDD, DOU
 CAP_EVERY = 3                        # 100 nF (1206) per this many LEDs (hot-plug inrush, see the controller sim)
 CAP_AT = (5.6, 5.05)                 # footprint coords, upright (pads along y) beside the LED, inside the switch
                                      #   cell, so the row gaps stay free for the diodes
-from compose.controller.rev2_std import PB_N, PB_END, PB_L, PB_PARTS, pb_bodies, slot_off   # noqa: E402
+from compose.controller.rev2_std import PB_N, PB_END, PB_L, PB_PARTS, pb_bodies, slot_off, col_slot   # noqa: E402
 PB_LIB = "Connector_Molex"
 PB_ACROSS = 2.05                     # the body across the row, either way: KiCad's fab outline runs 2.05 mm to one
                                      #   side of the pins and 1.15 to the other, and the right half's part (fitted
@@ -78,7 +78,7 @@ PB_GAP = 0.6                         # the connector (body and pins) to any othe
                                      #   hand-soldered, so as far as the diodes' pads keep
 PB_PAD = (1.3, 0.8)                  # pin pad for the plan's copper checks: across the row x along it
 SLOT_NET = {1: "GND", 9: "GND", 10: "+5V", 11: "RGB_IN", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
-SLOT_NET.update({2 + c: f"COL{c}" for c in range(7)})
+SLOT_NET.update({col_slot(c): f"COL{c}" for c in range(7)})
 SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
 POST_SEARCH = 18.0
 M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part (the plan), and no copper on either face
@@ -380,8 +380,9 @@ def _place():
 
 
 def conn_label_xy(s):
-    """Where the lhs / rhs label goes: inboard of the connector's body, level with the middle of its row."""
-    return np.array(s.conn.c) - np.array(s.conn.n) * (-PB_BODY[2] + 2.0)
+    """Where the lhs / rhs label goes: inboard of the connector's body, level with the middle of its row (1.6 mm in
+    from the body: further in, it meets the silkscreen outline of the switch beside the row)."""
+    return np.array(s.conn.c) - np.array(s.conn.n) * (-PB_BODY[2] + 1.6)
 
 
 def slot_of_pad_xy(s):
@@ -672,8 +673,9 @@ def build(name):
     lhs, rhs = PR.HALF_NAMES
     k2 = pb_bodies()[1][0]                                        # the front connector's pin 1
     for face, nm, lay, mir in (("B", lhs, pcbnew.B_SilkS, True), ("F", rhs, pcbnew.F_SilkS, False)):
-        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 0.8))), lay, 1.0,
-                mirror=mir)                                       # past the back body's end, by slot 1
+        PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 2.0))), lay, 1.0,
+                mirror=mir)                                       # past the back body's end (and the footprint's
+                                                                  #   own silkscreen there), by slot 1
         PK.text(b, "1", K(tuple(float(t) for t in np.array(s.conn.pads[k2 - 1]) - n * (PB_ACROSS + 0.9))), lay, 1.0,
                 mirror=mir)                                       # inboard of the front one's pin 1 (slot 9)
         PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir, angle=90)

@@ -70,6 +70,7 @@ from compose.sim.copper import Copper
 from compose.sim import sheet as SH
 from compose.sim import coupling as CP
 from compose.sim import controller_copper as CC
+from compose.controller import rev2_std as STD
 
 ToMM = pcbnew.ToMM
 FAIL = []
@@ -92,8 +93,8 @@ RAIL_R_MAX = 0.15                                           # ohm, what compose/
                                                             #   tracks (Half.rail), the return through the GND pour as a
                                                             #   sheet (Half.ground); the worst of each, added, is held to it
 CONN = ("J1", "J2")                                         # the cable connectors: 8-pin (slots 1-8), 12-pin (9-20)
-ROW0, COL0 = 12, 2                                          # the slots of ROW0 and COL0
-MATRIX = list(range(ROW0, ROW0 + 6)) + list(range(COL0, COL0 + 7))
+ROW0 = 12                                                   # the slot of ROW0; a column's: STD.col_slot(c)
+MATRIX = list(range(ROW0, ROW0 + 6)) + [STD.col_slot(c) for c in range(7)]
 DATA_IN_MAX, DATA_OUT_MAX = 200.0, 300.0                    # mm of track on the LED data run into a half (slot 11 to the first
                                                             #   LED) and out of it (the last LED to slot 18), both faces'
                                                             #   LED copies included: what compose/sim/controller_spice.py
@@ -423,12 +424,12 @@ def board_checks(h):
     ok(h.joint_gap(at=h.connector_pad())[0] < JOINT_GAP, "negative control: a joint put on a pin of the cable connector is found")
     keys = h.keys()
     ok(all(None not in k[3:] for k in keys), f"every switch contact and diode lead is on copper ({len(keys)} keys)")
-    col = {c: sl[COL0 + c] for c in range(7)}
+    col = {c: sl[STD.col_slot(c)] for c in range(7)}
     row = {r: sl[ROW0 + r] for r in range(6)}
     bad = []
     for i, r, c, sa, sb, an, cath in keys:
         if sb != col[c] and sa != col[c]:
-            bad.append(f"key {i}: no contact on COL{c} (slot {COL0 + c})")
+            bad.append(f"key {i}: no contact on COL{c} (slot {STD.col_slot(c)})")
         other = sa if sb == col[c] else sb
         if other != an:
             bad.append(f"key {i}: switch not wired to its diode's anode")
@@ -440,7 +441,7 @@ def board_checks(h):
         bare = sum(h.at(SW.fp2local(ks.k, *(mirror(off) if h.side == "R" else off))) is None for ks in h.s.keys)
         ok(bare >= len(keys) // 2, f"negative control: a socket tab just off its pad is caught ({bare} of {len(keys)} "
                                    f"land on bare board; the tab test isn't trivially true)")
-    used = {COL0 + c for c in {k.col for k in L.keys}} | {ROW0 + r for r in {k.row for k in L.keys}}
+    used = {STD.col_slot(c) for c in {k.col for k in L.keys}} | {ROW0 + r for r in {k.row for k in L.keys}}
     spare = [k for k in MATRIX if k not in used]
     shared = joined_slots(sl, h.rgb)
     ok(not shared, f"no two connector slots joined except GND 1/9/20, 5 V 10/19{' and the pass-through 11/18' if not h.rgb else ''}"
@@ -546,7 +547,7 @@ def assemble(pins, halves, cables, cable_rev=None, cut=None, diode_flip=None):
             if sl[hk] is not None:
                 link(("C", pins[("pb" + side, ck)]), (side, sl[hk]))
         for i, r, c, sa, sb, an, cath in h.keys():
-            colside = sb if sb == sl[COL0 + c] else sa
+            colside = sb if sb == sl[STD.col_slot(c)] else sa
             other = sa if colside == sb else sb
             if cut == (side, i):
                 colside = ("cut", side, i)

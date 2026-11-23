@@ -13,7 +13,8 @@ PICO_X, PICO_Y = 8.89, 24.13               # socket rows at x = +-8.89, pins 1/2
 # through hole), top face, end to end along the side edge with their openings outward, at fixed positions: each
 # layout's two PicoBlade cables per half (a 12-way and an 8-way, so they can't be swapped) take up its angles. The
 # 20 contacts are numbered as slots by physical position, slot 1 at the back: the 8-pin holds slots 1-8, the
-# 12-pin slots 9-20 (the columns behind the rows, as the half boards were first routed with). Body sizes from KiCad's footprints (fab layer: 1.5 mm past the end pins; courtyard 0.5 mm more).
+# 12-pin slots 9-20 (the columns behind the rows, as the half boards were first routed with; COL0 at the front of
+# the 8-pin, see col_slot()). Body sizes from KiCad's footprints (fab layer: 1.5 mm past the end pins; courtyard 0.5 mm more).
 PB_PITCH = 1.25
 PB_PARTS = (8, 12)                         # pins per connector, back to front
 PB_N = sum(PB_PARTS)                       # slots
@@ -71,6 +72,12 @@ def pb_bodies():
         out.append((k, n, y, y + ln))
         y, k = y + ln + PB_SPACE, k + n
     return out
+
+
+def col_slot(c):
+    """The slot of column c (COL0 = the outer column): the 8-pin's slots 2-8 from the front, so COL0 sits next to
+    the 12-pin and the highest column (spare on most layouts) at the back, beside slot 1's GND."""
+    return 8 - c
 
 
 def slot_off(k):

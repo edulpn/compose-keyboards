@@ -40,14 +40,14 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 
 - **Connectors:** a Molex PicoBlade 53047-0810 (8 positions) behind a 53047-1210 (12 positions), 1.25 mm pitch, vertical, through-hole, end to end along the inner edge on the face away from the switches, openings facing down into the bay. KiCad's own footprints; the build compares each body outline with the sizes the case checks use and prints both.
 - **Where:** their pins are level with the controller's (`conn_row_y_P()` in `compose/pcb/rev2_half.py` reads the row from the controller standard, and each slot sits at the controller's spacing), so the cables run straight across and new angles need no hand-tuning. The bodies sit at least 1.0 mm in from the board edge, and the pins and bodies 0.6 mm from every other part on either face (they're through-hole, and hand-soldered); `sim-half-rev2` checks the gap on the routed copper. If their spot is taken they slide along the row. A body runs 2.05 mm to one side of its pins and 1.15 mm to the other; on the right half (fitted from the other face) it's the other way round, so the placement keeps 2.05 mm clear on both sides.
-- **Slot order:** the [controller rev 2](controller-rev2.md#cable-connectors-and-slot-order) order by physical position: the back-most pin is slot 1, on both halves. The 8-pin holds slots 1–8, the 12-pin 9–20.
+- **Slot order:** the [controller rev 2](controller-rev2.md#cable-connectors-and-slot-order) order by physical position: the back-most pin is slot 1, on both halves. The 8-pin holds slots 1–8, the 12-pin 9–20. The columns run from the front of the 8-pin: COL0 in slot 8, COL6 in slot 2.
 - **Which way round:** PicoBlade cables come crimped either way round, and the board can't tell which you have. Before soldering a connector, plug its cable into the controller and turn the half's connector so that the wire on the controller's pin 1 (marked "1") lands on the half's pin 1 (marked "1" too). Fitted the other way, that cable's slots meet in reverse: harmless (the pinout is [reversal-safe](controller-rev2.md#cable-connectors-and-slot-order)), but that half's keys scramble; turning the connector round puts it right.
 - **Plug the cables in first:** the connectors are under the board, so the cables go in before the board goes onto its plate.
 
 | slots | signal |
 |---|---|
 | 1, 9, 20 | GND |
-| 2–8 | COL0–COL6 |
+| 2–8 | COL6–COL0 (COL0 in slot 8) |
 | 10, 19 | 5 V |
 | 11 | RGB data in |
 | 12–17 | ROW0–ROW5 |

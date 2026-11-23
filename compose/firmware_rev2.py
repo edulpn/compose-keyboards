@@ -4,7 +4,7 @@ QMK keyboard definition for rev 2 (controller rev 2):  python3 -m compose firmwa
    outdir/firmware/rgb/keyboard.json    RGB half boards (per-key SK6812 MINI-E, RGB Matrix)
 
 Matrix (controller rev 2 standard, docs/controller-rev2.md): 6 rows x 14 columns, COL2ROW. Rows GP0-5 are shared
-by both halves; columns left COL0-6 = GP6-12, right COL0-6 = GP22-16, so a left key sits at [row, col] and a
+by both halves; columns left COL0-6 = GP12-6, right COL0-6 = GP16-22, so a left key sits at [row, col] and a
 right key at [row, 13 - col] (COL0 is the outer column on both halves).
 LEDs: one chain, controller -> left half (its chain order) -> back through the controller's buffer -> right half.
 """
@@ -18,8 +18,8 @@ from compose.controller.rev2_std import RGB_MAX_BRIGHTNESS      # checked agains
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
 ROWS = [f"GP{g}" for g in range(6)]
-COLS_L = [f"GP{g}" for g in range(6, 13)]
-COLS_R = [f"GP{g}" for g in (22, 21, 20, 19, 18, 17, 16)]
+COLS_L = [f"GP{g}" for g in (12, 11, 10, 9, 8, 7, 6)]
+COLS_R = [f"GP{g}" for g in range(16, 23)]
 RGB_PIN = "GP13"
 
 
