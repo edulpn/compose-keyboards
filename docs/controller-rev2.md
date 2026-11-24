@@ -43,7 +43,7 @@ The shared controller board for every Compose split layout: one board, one conne
 **Silkscreen:**
 
 - The half boards' art font (DejaVu Sans). The ∘ ring, "Compose" and the board's name sit stacked in the narrowed strip behind the left cable connector, beside the Pico (mirrored on the bottom); "RGB" outline and labels are on the bottom silk.
-- Every label sits against what it names: `lhs` / `rhs` just outside each side's cable connectors, centred along the 12-pin, with a "1" level with each connector's pin 1 (slots 1 and 9); pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector. The build stops if any two labels on the top face touch: KiCad's DRC doesn't compare one board graphic with another.
+- Every label sits against what it names: `lhs` / `rhs` just outside each side's cable connectors, centred along the 12-pin, with a "1" level with each connector's first slot (slots 1 and 9: pin 1 on the left side; on the right side, where the connectors are turned to open outward, pin 1 is at the front end and the "1" marks the last pin); pin names standing on each header's outline; "OLED" centred over its header's pin names; "AUX" at the end of its own header row; "Qwiic" right behind its connector. The build stops if any two labels on the top face touch: KiCad's DRC doesn't compare one board graphic with another.
 
 ## Cable connectors and slot order
 
