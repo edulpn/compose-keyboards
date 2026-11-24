@@ -24,8 +24,14 @@ A skipped job of a suite that runs (boards-sim when a half board failed) is the 
 nothing. pictures is listed too, but it checks nothing and so never fails the run: skipped unless a manual run
 asks for it.
 
-Exit 1 when the plan job didn't pass, any suite failed, or any job waited on but pictures failed. The list goes to the job summary as a table, and to the
-log as one line: "N passed, M skipped: ..." (and the failed ones first, when there are any).
+Within a suite that runs, some steps are left out because there's nothing for them to do: a half board's routing
+when the board routed before is reused, the comparisons with the base on a run that isn't a pull request. The job
+listing gives each step's conclusion, and every step named in STEPS that was skipped is listed with its reason, as
+a part skipped. They are reported only: they never fail the run. (Without the listing there are no parts to list.)
+
+Exit 1 when the plan job didn't pass, any suite failed, or any job waited on but pictures failed. The lists go to
+the job summary as tables, and to the log as one line: "N passed, M skipped: ..." (the failed ones first, when
+there are any), then the parts skipped.
 """
 import json
 import os
@@ -34,6 +40,14 @@ import urllib.request
 
 OK = "success"
 BAD = ("failure", "cancelled", "timed_out")
+# The steps of checks.yml that are left out when there's nothing for them to do, by name, and why
+# (test_passed.py checks that each name is still a step there).
+STEPS = {
+    "route the board": "reused the board routed before: nothing its routing reads has changed, and it passes DRC here",
+    "the same outputs as the base? (case STLs, both keyboard.json; reported)": "pull requests only: no base to compare with",
+    "the base's controller, to compare with": "pull requests only: no base to compare with",
+    "the same controller as the base's? (reported)": "pull requests only: no base to compare with",
+}
 
 
 def jobs_of(suite, jobs):
@@ -68,8 +82,8 @@ def needs_jobs(needs):
 
 
 def listed_jobs():
-    """{job name: conclusion} of this run's latest attempt at each job, from the API, or None when it can't say.
-    A job still going (this one) has no conclusion and is left out."""
+    """{job name: (conclusion, [names of its skipped steps])} of this run's latest attempt at each job, from the
+    API, or None when it can't say. A job still going (this one) has no conclusion and is left out."""
     env = os.environ
     if not all(env.get(k) for k in ("GITHUB_TOKEN", "GITHUB_REPOSITORY", "GITHUB_RUN_ID")):
         return None
@@ -82,7 +96,9 @@ def listed_jobs():
                 headers={"Authorization": f"Bearer {env['GITHUB_TOKEN']}", "Accept": "application/vnd.github+json"})
             with urllib.request.urlopen(req, timeout=30) as r:
                 got = json.load(r)["jobs"]
-            out.update({j["name"]: j["conclusion"] for j in got if j.get("conclusion")})
+            out.update({j["name"]: (j["conclusion"], [st["name"] for st in j.get("steps") or []
+                                                      if st.get("conclusion") == "skipped"])
+                        for j in got if j.get("conclusion")})
             if len(got) < 100:
                 return out
             page += 1
@@ -128,25 +144,37 @@ def verdict(needs, jobs, pictures):
     return rows, ok
 
 
-def line(rows):
-    """The log's one line: the failed ones first, then 'N passed, M skipped: the skipped ones (why)'."""
+def parts(skipped):
+    """(job, step, why) for each step named in STEPS that a job skipped; `skipped` is {job name: [step names]}."""
+    return [(j, st, STEPS[st]) for j in sorted(skipped) for st in skipped[j] if st in STEPS]
+
+
+def line(rows, skipped_parts=()):
+    """The log's one line: the failed ones first, then 'N passed, M skipped: the skipped ones (why)', then the
+    parts skipped."""
     by = {k: [r for r in rows if r[1] == k] for k in ("failed", "passed", "skipped")}
     s = "; ".join(f"FAILED {n} ({why})" for n, _, why in by["failed"])
     s += ("; " if s else "") + f"{len(by['passed'])} passed, {len(by['skipped'])} skipped"
     if by["skipped"]:
         s += ": " + "; ".join(f"{n} ({why})" for n, _, why in by["skipped"])
+    if skipped_parts:
+        s += f". {len(skipped_parts)} parts skipped: " + "; ".join(f"{j}: {st} ({why})" for j, st, why in skipped_parts)
     return s
 
 
 def main():
     needs = json.loads(os.environ.get("NEEDS") or "{}")
     listed = listed_jobs()
-    jobs = needs_jobs(needs) if listed is None else listed
+    jobs = needs_jobs(needs) if listed is None else {j: c for j, (c, _) in listed.items()}
     rows, ok = verdict(needs, jobs, os.environ.get("PICTURES") == "true")
+    skipped = parts({j: st for j, (_, st) in (listed or {}).items()})
     with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a") as o:
         o.write("## Suites\n\n| Suite | Result | Jobs, or why |\n|---|---|---|\n"
                 + "".join(f"| {n} | {r} | {why} |\n" for n, r, why in rows))
-    print(line(rows))
+        if skipped:
+            o.write("\n### Parts skipped in the suites that ran (reported only)\n\n| Job | Step | Why |\n|---|---|---|\n"
+                    + "".join(f"| {j} | {st} | {why} |\n" for j, st, why in skipped))
+    print(line(rows, skipped))
     sys.exit(0 if ok else 1)
 
 

@@ -250,6 +250,7 @@ jobs:
               open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(f"**{name}**: the reused board fails DRC here ({err} errors, {unc} unconnected): routing it again\n")
           EOF
       - id: route
+        name: route the board      # passed.py lists it as a part skipped when the board above was reused
         if: steps.reuse.outputs.clean != 'true'
         run: |
           rm -rf "$RUNNER_TEMP/was"; mkdir -p "$RUNNER_TEMP/was"      # the board as it was routed before, to compare with

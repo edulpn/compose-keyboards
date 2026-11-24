@@ -1,6 +1,7 @@
 """Checks passed.py, the checks-passed job's verdict and list: python3 .github/ci/test_passed.py (exit 1 when wrong)."""
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -110,6 +111,27 @@ def main():
     n = needs([("rev2-compose58", None)], ["compose58"], rev2="success", spice="failure")
     rows, ok = P.verdict(n, {"rev2 (compose58)": "success", "spice": "failure"}, pictures=False)
     check("a failed job no suite lists", (results(rows).get("other"), ok), ("failed", False))
+
+    # parts skipped in a suite that ran: the steps STEPS names, with their reasons; any other skipped step is not one
+    skipped = {"half (compose58 half_rev2_solder)": ["route the board", "the same board as the one routed before? (reported)"],
+               "half (compose58 half_rev2_hotswap)": [],
+               "controller": ["the base's controller, to compare with", "the same controller as the base's? (reported)"]}
+    got = P.parts(skipped)
+    check("parts skipped: the steps named, nothing else", [(j, st) for j, st, _ in got],
+          [("controller", "the base's controller, to compare with"),
+           ("controller", "the same controller as the base's? (reported)"),
+           ("half (compose58 half_rev2_solder)", "route the board")])
+    check("a reused board's reason", got[-1][2].startswith("reused the board routed before"), True)
+    rows, ok = P.verdict(needs(ALL58, ["compose58"], ["compose58"], rev2="success", controller="success", spice="success",
+                               half="success", boards_sim="success"), ran58, pictures=False)
+    check("they follow the suites in the log line, and fail nothing",
+          (P.line(rows, got).split(". ")[1].split(":")[0], ok), ("3 parts skipped", True))
+
+    # every step STEPS names is still a step of the workflow, under that exact name
+    wf = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workflows", "checks.yml")).read()
+    names = {m.strip().strip("'\"") for m in re.findall(r"^\s*(?:- )?name: (.+?)(?:\s+#.*)?$", wf, re.M)}
+    missing = sorted(set(P.STEPS) - names)
+    check("every step STEPS names is in checks.yml", missing, [])
 
     sys.exit(1 if bad else 0)
 
