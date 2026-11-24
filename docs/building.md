@@ -84,6 +84,7 @@ python3 -m compose gasket-case        # printable parts
 python3 -m compose gasket-checks      # fit, gasket, assembly, cable and printability checks
 python3 -m compose gasket-sections    # cross-section drawings
 python3 -m compose gasket-render      # renders (assembly views need the routed half boards and controller)
+python3 -m compose docs-pictures      # the docs' pictures under their repository paths, in docs-pictures/ (after gasket-render)
 ```
 
 **Where a run writes.** A command writes to the folder named after it, as in `python3 -m compose gasket-case mine`. With none named, each keyboard has its own (`compose/outputs.py`):
@@ -222,7 +223,7 @@ A pull request runs only the suites its changes can reach:
 - **What runs.** A docs-only change runs nothing, unless a suite reads the page: `gasket-checks` holds the tub's size to the one a layout's `rev2.md` quotes, so a change to that page runs its layout's case suite. A change to one layout's files runs that layout's suites and no other's, and a new layout, having no record, runs its own. The controller belongs to no keyboard, so it is a suite of its own: when it runs, every layout's boards run with it, because the half boards are simulated against its board. A change to the boards alone still builds the controller's board for that simulation and skips its SPICE job. Changes to `requirements.txt`, the `Dockerfile` or `.github/` run everything, and so does a pull request opened before `main` has a record.
 - **Whose changes.** Only the pull request's own changes count, from the commit on `main` it starts from. The record can be older than that commit, since a full run on `main` takes a while: if `main` has since changed something a suite reads, that suite runs to be safe, unless the pull request holds only documents and their pictures (`*.md`, images in an `images` folder). Past three merges behind, the plan says so in a warning: that means `main`'s runs are not saving the record.
 
-The renders (`gasket-render`) are not run by CI, by choice: they need Node and a browser, and they check nothing. `imports.py` covers the names they take from other modules; run them yourself after a change to what they draw.
+The renders (`gasket-render`) are not one of the check suites, by choice: they need Node and a browser, and they check nothing. A manual run of the checks can make the docs' pictures on GitHub's runners as well (`gh workflow run checks.yml --ref <branch> -f pictures=true`): its `pictures` job takes the boards that run routed, runs `gasket-render` and `docs-pictures`, and uploads the pictures as the artifact `pictures-<layout>`, to unzip over the repository's root. `imports.py` covers the names they take from other modules; run them yourself after a change to what they draw.
 
 ## Notes for working on the code
 

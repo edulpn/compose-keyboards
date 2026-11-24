@@ -25,6 +25,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      pictures:
+        description: also make the docs' pictures (artifact pictures-<layout>; unzip it over the repository's root)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -333,6 +338,53 @@ jobs:
       - run: $T deps/boards-$LAYOUT.txt --layout $LAYOUT order-rev2 o2
       - uses: actions/upload-artifact@v7
         with: { name: "deps-boards-${{ matrix.layout }}-sim", path: deps, retention-days: 7 }
+
+  # ---------------------------------------------------------------- the docs' pictures, on a manual run that asks
+  # The renders check nothing, so they are not a suite and no other job waits on this one. It takes the boards this
+  # run routed, renders the assembly (gasket-render) and writes the pictures the docs show under their repository
+  # paths (docs-pictures): the artifact pictures-<layout>, to unzip over the repository's root. renders-<layout>
+  # holds every gasket-render view.
+  pictures:
+    needs: [plan, controller, half]
+    if: github.event_name == 'workflow_dispatch' && inputs.pictures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        layout: ${{ fromJSON(needs.plan.outputs.boards) }}
+    name: pictures (${{ matrix.layout }})
+    env: { CTRL_OUT: o2, LAYOUT: "${{ matrix.layout }}" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { pattern: "board-${{ matrix.layout }}-*", path: boards }
+      - uses: actions/download-artifact@v8
+        with: { name: board-controller-s1, path: boards/board-controller-s1 }
+      - name: one routed copy of every board
+        run: |
+          mkdir -p o2/pcb
+          for b in controller $LAYOUT-half_rev2_hotswap $LAYOUT-half_rev2_solder $LAYOUT-half_rev2_hotswap_rgb \
+                   $LAYOUT-half_rev2_solder_rgb; do
+            d=$(ls -d boards/board-$b-s* 2>/dev/null | sort | head -1)
+            [ -n "$d" ] || { echo "::error::no routed board for $b (see its job's log)"; exit 1; }
+            echo "$b: $d"; cp -r "$d"/. o2/pcb/
+          done
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Node packages and Playwright's Chromium
+        run: |
+          cd compose/render/web
+          bash "$GITHUB_WORKSPACE/.github/actions/setup/limit.sh" 300 "Installing the Node packages (npm)" npm install --no-audit --no-fund
+          bash "$GITHUB_WORKSPACE/.github/actions/setup/limit.sh" 600 "Installing Playwright's Chromium" npx playwright install --with-deps chromium
+      - run: python3 -m compose --layout $LAYOUT gasket-render o2
+      - run: python3 -m compose --layout $LAYOUT docs-pictures o2
+      - uses: actions/upload-artifact@v7
+        with: { name: "pictures-${{ matrix.layout }}", path: o2/docs-pictures, retention-days: 7 }
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with: { name: "renders-${{ matrix.layout }}", path: o2/png, retention-days: 7, if-no-files-found: ignore }
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
   checks-passed:

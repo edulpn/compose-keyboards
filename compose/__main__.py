@@ -29,6 +29,7 @@ COMMANDS = {
     "gasket-checks":    ("compose.checks.gasket",        True, "rev 2 fit, gasket, assembly and printability checks"),
     "gasket-sections":  ("compose.checks.gasket_sections", True, "rev 2 cross-section drawings"),
     "gasket-render":    ("compose.render.gasket",        True, "rev 2 renders"),
+    "docs-pictures":    ("compose.render.docs_pictures", True, "rev 2 doc pictures, under their repository paths (after gasket-render)"),
     "firmware-rev2":    ("compose.firmware_rev2",         True, "rev 2 QMK keyboard.json (plain and RGB)"),
     "sim-half-rev2":    ("compose.sim.half_rev2",         True, "rev 2 half boards + controller rev 2: copper-level simulation"),
     "order-rev2":       ("compose.order_rev2",             True, "rev 2 order folder: every board's JLCPCB zip, checked against its board and its DRC report, + ORDER.md"),
