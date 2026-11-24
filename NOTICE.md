@@ -56,6 +56,10 @@ https://github.com/Biacco42/Ergo42
 https://opensource.org/licenses/mit-license.php
 ```
 
+## Corne (key layout of Compose42)
+
+Compose42 uses the key layout of the Corne (crkbd) by foostan: https://github.com/foostan/crkbd. Only the layout is used: the key positions and angles, read from the switch cutouts of its 3x6 MX plate (`plates/3x6/pcb/plate-top-cherrymx.kicad_pcb`). The case, boards and firmware here are generated from scratch, and none of the Corne's files are copied. The Corne's design files are licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/), © foostan.
+
 ## three.js (renders only)
 
 `compose/render/web/three.module.js`, `compose/render/web/STLLoader.js` and `compose/render/web/BufferGeometryUtils.js` are from three.js (https://github.com/mrdoob/three.js), Copyright 2010-2023 Three.js Authors, MIT License.
