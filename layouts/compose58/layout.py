@@ -27,7 +27,9 @@ def layout():
     for dx, y, rot, h, col, ll, lr in thumbs:
         keys.append(Key((inner + dx) * P, y * P, rot, 1.0, h, 4, col, ll, lr, grid=False, accent=h > 1.0))   # the 1.5u
         #                                                             key is the one in the renders' second colour
-    keys.append(Key((inner + 1.0) * P, -3.35 * P, 0.0, 1.0, 1.0, 4, 1, "[", "]", grid=False))   # extra inner key
+    # extra inner key: on the inner column's matrix line (COL5) and the spare row, ROW5, so its column link is the
+    # short one down from the inner column and its row comes from the connector's front end, beside it
+    keys.append(Key((inner + 1.0) * P, -3.35 * P, 0.0, 1.0, 1.0, 5, 5, "[", "]", grid=False))
 
     kk = {k.label_l: k for k in keys}
     # plate supports: on column boundaries c1|c2 and c3|c4, 3 mm above the

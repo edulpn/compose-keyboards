@@ -6,14 +6,14 @@ Rev 2 electronics as 3D models for the renders, placed from the routed boards an
     1N4148 DO-35 diode        glass body with its cathode band, leads bent down to the holes and through the board
     SK6812 MINI-E             reverse mount: white body through the cutout, four leads on the pads
     100 nF 1206               ceramic body, metal end caps on the pads
-    Molex 200528-0200         housing from the footprint's body outline, flip-lock actuator, the flex slot in the
-                              cable face, 20 tails on the pads, the two side nails
+    Molex PicoBlade 53047-1210 / -0810  vertical housings from the footprints' body outlines, the plugs'
+                              cavities open downward, the pin tails through the board
     M2 screw heads
   controller (bridge frame P, top face):
-    Molex 52610-2072          vertical housing from the footprint's body outline, slider on top, the flex slot,
-                              tails on both pad rows
-Dimensions from the parts' datasheets (Molex 200528 / 52610 drawings, Kailh CPG151101S11, OPSCO SK6812MINI-E,
-DO-35, EIA 1206). Returns {material: [solids]}; the render colours each material.
+    Molex PicoBlade 53048-1210 / -0810  right-angle housings from the footprints' body outlines, the plugs'
+                              cavities open outward, tails on the pads
+Dimensions from the parts' datasheets (Kailh CPG151101S11, OPSCO SK6812MINI-E, DO-35, EIA 1206); the PicoBlade
+housings take their outline from KiCad's footprints and their height from rev2_std. Returns {material: [solids]}; the render colours each material.
 """
 import numpy as np
 import cadquery as cq
@@ -58,7 +58,7 @@ def half_local(board_path):
     s = H2.plan("hotswap", True)
     L = G.LAYOUT
     zb = -PR.PCB_T                                      # the B face (the parts hang below it)
-    out = {k: [] for k in ("hsock", "hmetal", "hdiode", "hband", "hled", "hcap", "hffc", "hact", "hhead")}
+    out = {k: [] for k in ("hsock", "hmetal", "hdiode", "hband", "hled", "hcap", "hpb", "hhead")}
     # ---- hotswap sockets: body between the two tabs, metal tabs on the pads
     for k in L.keys:
         rects = []
@@ -110,42 +110,30 @@ def half_local(board_path):
     # ---- M2 screw heads
     for x, y in s.posts:
         out["hhead"].append(cq.Solid.makeCylinder(PR.M2_HEAD_D / 2, PR.M2_HEAD_H, cq.Vector(x, y, zb - PR.M2_HEAD_H)))
-    # ---- Molex 200528-0200 from the routed board's J1B footprint
+    # ---- Molex PicoBlade 53047 (12 and 8 pin) from the routed board's J1 and J2 footprints: the housings under the
+    #      board, the plugs' cavities open downward, the pins' tails through the board's top face
+    from compose.controller import rev2_std as CS
     b = pcbnew.LoadBoard(board_path)
-    J = next(f for f in b.GetFootprints() if f.GetReference() == "J1B")
     mm = pcbnew.ToMM
     loc = lambda X, Y: (X - PK.OX, PK.OY - Y)
-    pads = [p for p in J.Pads() if p.GetNumber() != "MP"]
-    nails = [p for p in J.Pads() if p.GetNumber() == "MP"]
-    xs = [loc(mm(p.GetPosition().x), mm(p.GetPosition().y)) for p in pads]
-    row_x = float(np.mean([x for x, _ in xs]))
-    y0, y1 = min(y for _, y in xs), max(y for _, y in xs)
-    yc = (y0 + y1) / 2
-    fab = [g.GetBoundingBox() for g in J.GraphicalItems() if g.GetLayer() == pcbnew.B_Fab and g.GetClass() != "MTEXT"
-           and "TEXT" not in g.GetClass()]
-    fx1 = max(mm(bb.GetRight()) for bb in fab) - PK.OX            # cable face (toward the bridge)
-    fx0 = row_x + 0.2                                                # the housing's back, just past the tails
-    H = 1.9
-    half_len = 11.85                                                 # 23.7 mm body between the nail blocks
-    out["hffc"].append(_box(fx0, fx1 - 0.12, yc - half_len, yc + half_len, zb, zb - H))
-    out["hffc"].append(_box(fx0 - 0.35, fx1 - 1.4, yc - 12.65, yc - half_len, zb, zb - H))   # nail blocks
-    out["hffc"].append(_box(fx0 - 0.35, fx1 - 1.4, yc + half_len, yc + 12.65, zb, zb - H))
-    act = _box(fx0 + 0.2, fx1 - 0.25, yc - half_len + 0.3, yc + half_len - 0.3, zb - H + 0.4, zb - H - 0.02)
-    out["hact"].append(act)                                          # flip-lock actuator, the face away from the board
-    slot = _box(fx1 - 3.6, fx1 + 0.1, yc - 10.7, yc + 10.7, zb - 0.85, zb - 1.15)
-    out["hffc"] = [s_.cut(slot) for s_ in out["hffc"]]
-    for (x, y) in xs:                                               # tails: on the pad, up into the housing
-        out["hmetal"].append(_box(x - 0.5, x + 0.35, y - 0.15, y + 0.15, zb, zb - 0.15))
-        out["hmetal"].append(_box(x + 0.2, x + 0.35, y - 0.15, y + 0.15, zb, zb - 0.9))
-    for p in nails:
-        x, y = loc(mm(p.GetPosition().x), mm(p.GetPosition().y))
-        out["hmetal"].append(_box(x - 0.6, x + 0.6, y - 0.9, y + 0.9, zb, zb - 0.2))
-        out["hmetal"].append(_box(x - 0.6, x + 0.6, y - 0.12 * np.sign(y - yc) - 0.1, y - 0.12 * np.sign(y - yc) + 0.1, zb, zb - 1.5))
+    H = CS.HALF_PB_UNDER
+    for ref in ("J1", "J2"):
+        J = next(f for f in b.GetFootprints() if f.GetReference() == ref)
+        fab = [g.GetBoundingBox() for g in J.GraphicalItems() if g.GetLayer() == pcbnew.B_Fab and "TEXT" not in g.GetClass()]
+        (x0, y0), (x1, y1) = loc(min(mm(bb.GetLeft()) for bb in fab), min(mm(bb.GetTop()) for bb in fab)), \
+            loc(max(mm(bb.GetRight()) for bb in fab), max(mm(bb.GetBottom()) for bb in fab))
+        cav = _box(x0 + 0.6, x1 - 0.6, y0 - 0.6, y1 + 0.6, zb - H - 0.1, zb - 1.0)
+        out["hpb"].append(_box(x0, x1, y0, y1, zb, zb - H).cut(cav))
+        for p in J.Pads():
+            if p.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
+                continue
+            x, y = loc(mm(p.GetPosition().x), mm(p.GetPosition().y))
+            out["hmetal"].append(_box(x - 0.16, x + 0.16, y - 0.16, y + 0.16, zb - H + 1.2, 0.9))
     return {k: v for k, v in out.items() if v}
 
 
 def controller_P(board_path):
-    """The controller's two Molex 52610 vertical connectors, bridge frame P: {material: [solids]}."""
+    """The controller's four Molex PicoBlade 53048 right-angle connectors, bridge frame P: {material: [solids]}."""
     import pcbnew
     from compose.case import gasket as C
     from compose.controller import rev2 as CR
@@ -154,21 +142,18 @@ def controller_P(board_path):
     bt = CT.board_top
     mm = pcbnew.ToMM
     b = pcbnew.LoadBoard(board_path)
-    out = {"cffc": [], "cslide": [], "cmetal": []}
+    out = {"cpb": [], "cmetal": []}
     toP = lambda X, Y: CT.to_P(X - CR.CX, Y - CR.CY)
-    for ref in ("JL", "JR"):
+    for ref in ("JL1", "JL2", "JR1", "JR2"):
         J = next(f for f in b.GetFootprints() if f.GetReference() == ref)
         fab = [g.GetBoundingBox() for g in J.GraphicalItems() if g.GetLayer() == pcbnew.F_Fab and "TEXT" not in g.GetClass()]
         X0, X1 = min(mm(bb.GetLeft()) for bb in fab), max(mm(bb.GetRight()) for bb in fab)
         Y0, Y1 = min(mm(bb.GetTop()) for bb in fab), max(mm(bb.GetBottom()) for bb in fab)
-        (px0, py0), (px1, py1) = toP(X0 + 0.05, Y1 - 0.05), toP(X1 - 0.05, Y0 + 0.05)
-        sx = -1.0 if ref == "JL" else 1.0
-        slot_x = sx * CS.VFFC_SLOT_X
-        _, sy = toP(CR.CX, CR.CY + CS.VFFC_Y0)
-        h0, H = CS.VFFC_H - 1.4, CS.VFFC_H
-        slot = _box(slot_x - 0.3, slot_x + 0.3, sy - 10.75, sy + 10.75, bt + H - 4.6, bt + H + 0.1)
-        out["cffc"].append(_box(px0, px1, py0, py1, bt, bt + h0).cut(slot))
-        out["cslide"].append(_box(px0 + 0.1, px1 - 0.1, py0 + 0.6, py1 - 0.6, bt + h0, bt + H).cut(slot))
+        (px0, py0), (px1, py1) = toP(X0, Y1), toP(X1, Y0)
+        sx = -1.0 if ref.startswith("JL") else 1.0
+        xo = px0 if sx < 0 else px1                                    # the opening, outward
+        cav = _box(xo - sx * 3.5, xo + sx * 0.1, py0 + 0.6, py1 - 0.6, bt + 0.6, bt + CS.PB_H - 0.6)
+        out["cpb"].append(_box(px0, px1, py0, py1, bt, bt + CS.PB_H).cut(cav))
         for p in J.Pads():
             X, Y = mm(p.GetPosition().x), mm(p.GetPosition().y)
             x, y = toP(X, Y)
@@ -181,7 +166,7 @@ def controller_parts_P(board_path):
     """Every other part on the controller, bridge frame P, from the routed board's footprints: the Pico (board,
     RP2040, flash, micro-USB, on its male headers in the two female sockets), the OLED/AUX pin headers, the Qwiic
     JST SH, and underneath the 74HCT125 DIP-14, the axial resistors, the ceramic disc and electrolytic capacitors
-    and the standing polyfuse. {material: [solids]}."""
+    and the 1206 polyfuse. {material: [solids]}."""
     import pcbnew
     from compose.case import gasket as C
     from compose.controller import rev2 as CR
@@ -238,12 +223,12 @@ def controller_parts_P(board_path):
             out["celec"].append(cq.Solid.makeCylinder(2.5, 11.0, cq.Vector(mid[0], mid[1], bb - 11.3)))
             for h in P_:
                 out["cmetal"].append(_cyl((*h, bb - 0.3), (*h, bt + 0.8), 0.25))
-        elif ref == "F1":                                       # MF-RHT050 disc, standing
+        elif ref == "F1":                                       # MF-NSMF050-2, 1206 on the bottom face
             a, c = P_[0], P_[-1]
             u = (c - a) / np.linalg.norm(c - a)
-            out["cfuse"].append(_oriented_box(mid, u, 7.4, 3.0, bb - 2.5, bb - 12.5))
-            for h in (a, c):
-                out["cmetal"].append(_cyl((*h, bb - 2.5), (*h, bt + 0.8), 0.3))
+            out["cfuse"].append(_oriented_box(mid, u, 2.2, 1.6, bb - 0.05, bb - 0.85))
+            for e in (-1, 1):
+                out["cmetal"].append(_oriented_box(mid + u * e * 1.35, u, 0.5, 1.65, bb - 0.02, bb - 0.87))
     # the Pico on its male headers: board, RP2040, flash, micro-USB at the back end
     yc = CT.y_pc
     out["chdr"] += [_box(sx * CS.PICO_X - 1.25, sx * CS.PICO_X + 1.25, yc - 25.4, yc + 25.4, bt + 8.5, CT.pico_bot)

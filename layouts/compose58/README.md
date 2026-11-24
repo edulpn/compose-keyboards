@@ -10,7 +10,7 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 
 | Revision | Case | Controller | Status | Files |
 |---|---|---|---|---|
-| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 20-pin flex jumpers, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller, all four half boards and the flex jumper designed and checked; not built yet | — |
+| **[rev 2](rev2.md)** | One-piece, gasket mount (foam weatherstrip pads) | [rev 2](../../docs/controller-rev2.md): Pico + 12-pin and 8-pin PicoBlade cables, optional RGB, I2C/Qwiic/AUX | **In progress.** Case, cover, controller and all four half boards designed and checked; not built yet | — |
 | **rev 1** | One-piece, screwed sandwich mount | rev 1: Pico + 12-pin PicoBlade cables | **Built, and archived.** No longer in this repository | Files: [release `compose58-rev1`](https://github.com/edulpn/compose-keyboards/releases/tag/compose58-rev1). Source, with its build guide: [tag `compose58-rev1-final`](https://github.com/edulpn/compose-keyboards/blob/compose58-rev1-final/layouts/compose58/rev1.md) |
 
 ![the four Compose58 rev 2 half boards](images/rev2_half_boards.png)
@@ -20,15 +20,15 @@ A unibody, tented and splayed keyboard on the [Lily58](https://github.com/kata05
 ## At a glance
 
 - **Keys:** 58. Per half: 6 × 4 column-staggered, a 4-key thumb arc with one 1.5u key, and one extra inner key.
-- **Shape:** one piece. The halves are splayed 10° and tented 12°, with the controller in a bridge between them.
+- **Shape:** one piece. The halves are splayed 14° and tented 6°, with the controller in a bridge between them.
 - **Boards:** one reversible half board for both halves, in hotswap or solder-in versions, with or without per-key RGB, plus the controller.
 - **Firmware:** QMK on the RP2040. `keyboard.json` is generated with the boards.
-- **Printer:** the case is a single print of about 330 × 160 mm.
+- **Printer:** the case is a single print of about 346 × 167 mm.
 
 ## Pages
 
 - **[Rev 2](rev2.md):** what Compose58 gets from the platform's rev 2: its sizes, parts, what is laid out by hand on its boards, and what its checks returned.
-- **[The platform's rev 2 pages](../../docs/rev2.md):** how the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB) and the flex jumpers work, and the design notes and ideas collected along the way.
+- **[The platform's rev 2 pages](../../docs/rev2.md):** how the gasket-mount case, the half boards (hotswap or solder, with or without per-key RGB) and the cables work, and the design notes and ideas collected along the way.
 - **[Controller rev 2](../../docs/controller-rev2.md):** the shared controller rev 2 uses.
 - **[Building from source](../../docs/building.md):** changing angles or parameters and regenerating everything.
 

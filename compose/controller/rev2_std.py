@@ -9,22 +9,34 @@ Y_BACK, Y_FRONT = -26.0, 30.0              # board edges (56 mm); back edge at t
 CORNER_R = 2.0
 PCB_T = 1.6
 PICO_X, PICO_Y = 8.89, 24.13               # socket rows at x = +-8.89, pins 1/20 at y = -+24.13
-# cable connectors: two Molex 52610-2072 (Easy-On, vertical, 20 pos, 1.0 mm, slider latch), top face, square to the
-# side edges at fixed positions, so the controller doesn't depend on any layout's angles (each layout's flex
-# jumpers take those up). The cable slot is 1.4 mm in from the body's contact face (the pin 1 notch side), which
-# faces the Pico; slot order by physical position, slot 1 at the back, as before.
-VFFC_SLOT_X = 14.8                         # |x| of the cable slot (the flex's plane)
-VFFC_Y0 = 2.6                              # connector centre (y): the body's front end keeps the front standoffs' 3.3 mm
-VFFC_L, VFFC_D = 26.6, 3.6                 # body length (along y) and depth (across)
-VFFC_SLOT_IN = 1.4                         # contact face -> slot (the flex's plane)
-VFFC_H = 5.75                              # height, slider latched (7.25 with it open)
-VFFC_INSERT = 4.1                          # flex end inside the connector
-# the halves' connector (Molex 200528, right angle, on each half's bottom face)
-FFC_ENTRY_H = 1.0                          # cable slot height above the face the connector sits on (1.9 mm body; Molex drawing)
+# cable connectors: on each side a Molex PicoBlade 53048-0810 and a 53048-1210 (1.25 mm, 8 and 12 pos, right angle,
+# through hole), top face, end to end along the side edge with their openings outward, at fixed positions: each
+# layout's two PicoBlade cables per half (a 12-way and an 8-way, so they can't be swapped) take up its angles. The
+# 20 contacts are numbered as slots by physical position, slot 1 at the back: the 8-pin holds slots 1-8, the
+# 12-pin slots 9-20 (the columns behind the rows, as the half boards were first routed with; COL0 at the front of
+# the 8-pin, see col_slot()). Body sizes from KiCad's footprints (fab layer: 1.5 mm past the end pins; courtyard 0.5 mm more).
+PB_PITCH = 1.25
+PB_PARTS = (8, 12)                         # pins per connector, back to front
+PB_N = sum(PB_PARTS)                       # slots
+PB_END = 1.5                               # body past its end pins, along the row
+PB_SPACE = 1.1                             # between the two bodies: their courtyards just clear each other
+PB_ROW_X = 12.8                            # |x| of the pin row: the plug zones 0.6 mm clear of the half boards
+PB_L = sum((n - 1) * PB_PITCH + 2 * PB_END for n in PB_PARTS) + PB_SPACE   # both bodies and the space between
+PB_Y0 = 1.45                               # centre of the row (y): its courtyards sit 0.45 mm clear of the narrowing
+                                           #   (CLIP_Y) behind and of the front standoffs' keep-outs in front
+PB_BODY_IN, PB_BODY_OUT = 1.05, 4.45       # body from the pin row toward the Pico / outward to its opening (KiCad's fab
+                                           #   outline)
+PB_CRT = 0.5                               # the courtyard past the body, each way
+PB_H = 3.6                                 # body height above the board
+PB_PLUG_OUT = 7.5                          # past the courtyard: the mated plug (~3 mm past the opening) and its cable's
+                                           #   first bend, kept clear
+# the halves' connectors (Molex PicoBlade 53047-1210 and -0810, vertical, through hole, on each half's bottom face)
+HALF_PB_UNDER = 4.3                        # body height under the half board
+HALF_PB_PLUG_DROP = 12.0                   # the mated plug and its cable's first bend, under the body: kept clear
 CLIP_X, CLIP_Y = 16.6, -14.3               # behind CLIP_Y the board is only 2 x CLIP_X wide (the plates' inner seats)
 # four M3 x 12 male-female hex standoffs screw through the board into M3 heat-set inserts in four case posts,
 # clamping it; the cover drops onto them and takes four M3 x 6 screws (the same screws and inserts as the frames)
-STANDOFF_HOLES = [(-17.75, 19.5), (17.75, 19.5), (-13.7, -22.5), (13.7, -22.5)]   # front pair, back pair
+STANDOFF_HOLES = [(-17.75, 20.5), (17.75, 20.5), (-13.7, -22.5), (13.7, -22.5)]   # front pair, back pair
 M_CLEAR = 3.2                              # M3 clearance
 STANDOFF_AF = 5.5                          # M3 hex standoffs are 5 or 5.5 mm across flats: sized for 5.5
 STANDOFF_THREAD = 6.0                      # male thread length
@@ -38,7 +50,7 @@ BOSS_KEEP = POST_R + 0.4                   # no through-hole lead within this ra
 STACK_ABOVE_BOARD = 8.5 + 2.54 + 1.0       # female socket + Pico male-header spacer + Pico board = Pico top
 LEAD_BELOW = 2.0                           # leads + solder below the board (top-side parts)
 LEAD_ABOVE = 1.5                           # leads + solder on top (underside parts)
-BOTTOM_PARTS_H = 13.5                      # tallest underside part (MF-RHT050 standing) + its leads
+BOTTOM_PARTS_H = 13.5                      # tallest underside part (C2, 11 mm standing) + its leads, rounded up
 TOP_PLUG_H = 12.5                          # mated header plugs above the board (< STANDOFF_L + COVER_BOSS_H)
 
 
@@ -49,6 +61,31 @@ def outline():
     o = box(-W2, Y_BACK, W2, Y_FRONT)
     o = o.difference(box(-W2 - 1, Y_BACK - 1, -CLIP_X, CLIP_Y)).difference(box(CLIP_X, Y_BACK - 1, W2 + 1, CLIP_Y))
     return o.buffer(-CORNER_R).buffer(CORNER_R, resolution=8).buffer(1.0, resolution=8).buffer(-1.0, resolution=8)
+
+
+def pb_bodies():
+    """Each cable connector's body along the row, back first: [(first slot, pins, back end, front end)], the ends as
+    offsets (y) from the row's centre PB_Y0."""
+    out, y, k = [], -PB_L / 2, 1
+    for n in PB_PARTS:
+        ln = (n - 1) * PB_PITCH + 2 * PB_END
+        out.append((k, n, y, y + ln))
+        y, k = y + ln + PB_SPACE, k + n
+    return out
+
+
+def col_slot(c):
+    """The slot of column c (COL0 = the outer column): the 8-pin's slots 2-8 from the front, so COL0 sits next to
+    the 12-pin and the highest column (spare on most layouts) at the back, beside slot 1's GND."""
+    return 8 - c
+
+
+def slot_off(k):
+    """Slot k's pin along the row: its offset (y) from the row's centre PB_Y0."""
+    for k0, n, y0, _ in pb_bodies():
+        if k0 <= k < k0 + n:
+            return y0 + PB_END + (k - k0) * PB_PITCH
+    raise ValueError(f"no cable slot {k}")
 
 # optional RGB: the brightness the firmware caps the LEDs at (QMK's RGB_MATRIX_MAXIMUM_BRIGHTNESS, of 255). The
 # controller's circuit simulation (compose/sim/controller_spice.py, E2) works out the highest value that keeps

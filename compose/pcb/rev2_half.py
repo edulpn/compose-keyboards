@@ -1,24 +1,26 @@
 """
 Rev 2 half boards (controller rev 2 standard):  python3 -m compose half-rev2 OUT [board ...]
 
-  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 3 -> slot 18)
+  half_rev2_hotswap / half_rev2_solder           no LEDs: RGB data passes straight through (slot 11 -> slot 18)
   half_rev2_hotswap_rgb / half_rev2_solder_rgb   an SK6812 MINI-E under every switch, chained, 100 nF per 3 LEDs
   --plan       the placement drawing only          --preroute   the layout's pre-routed copper laid, checked against
                                                                 the plan and drawn (neither needs KiCad)
 
 One reversible board serves both halves: the left half has its switches on F and everything else
 on B; the right half is the same board flipped (switches on B, the rest on F). So every one-sided part has a
-copy on each face (hotswap sockets, LEDs, capacitors, the cable connector) and only the bottom face's copies
+copy on each face (hotswap sockets, LEDs, capacitors, the cable connectors) and only the bottom face's copies
 are fitted. Through-hole parts (diodes, solder-in switches) serve both.
 
   - Outline: the plate outline less PCB_INSET (inside the gasket pads). No case screws go through it: the
     board hangs from the plate on four M2 screws into heat-set inserts in the plate (posts solved here).
   - Matrix: the layout's (row, col), COL2ROW, a through-hole diode per key in the same spot at every key.
-  - Jumper connector: Molex 200528-0200 (20 pos, 1.0 mm, right angle, bottom contact) on the bottom face along
-    the inner edge, its contact row on bridge-frame y = the controller's Pico centre - jumper_row_y() (derived:
-    where the straight flex jumper needs the least skew, see compose.pcb.jumper). Contacts get their nets
-    by physical position: the back-most contact is slot 1, as on the controller (the jumper keeps the order).
-  - Slots: 1 GND, 2 5V, 3 RGB in, 4 GND, 5-11 COL0-6, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
+  - Cable connectors: Molex PicoBlade 53047-0810 behind a 53047-1210 (1.25 mm, vertical, through hole), end to end
+    along the inner edge, fitted from the face away from the switches (one footprint each serves both halves), their
+    pins on the bridge-frame line of the controller's connector row and level with its slots, so the 12-way and
+    8-way PicoBlade cables run straight across. Pins get their nets by physical position: the back-most pin is slot
+    1, as on the controller (the cables keep the order; a reversed one, or a connector fitted turned round, is the
+    controller's flipped case, put right by turning it 180 deg).
+  - Slots: 8-pin 1 GND, 2-8 COL6-0; 12-pin 9 GND, 10 5V, 11 RGB in, 12-17 ROW0-5, 18 RGB out, 19 5V, 20 GND.
 
 Coordinates: plate-local (left half, x right, y up, z = 0 plate underside), like compose/pcb/switch.py.
 """
@@ -63,17 +65,20 @@ LED_PINS = {"1": (1, -1), "2": (1, 1), "3": (-1, 1), "4": (-1, -1)}   # VDD, DOU
 CAP_EVERY = 3                        # 100 nF (1206) per this many LEDs (hot-plug inrush, see the controller sim)
 CAP_AT = (5.6, 5.05)                 # footprint coords, upright (pads along y) beside the LED, inside the switch
                                      #   cell, so the row gaps stay free for the diodes
-FFC_LIB, FFC_NAME = "Connector_FFC-FPC", "Molex_200528-0200_1x20-1MP_P1.00mm_Horizontal"
-FFC_BODY = (-12.65, 12.65, -0.5, 5.15)   # along the row (u) / toward the cable side (n), from the contact row
-                                         #   (n from -0.5: the contacts' back ends)
-FFC_EDGE = 0.3                       # cable side of the body to the board's inner edge (flush)
-FFC_PROUD_MAX = 0.5                  # ... or up to this far proud of the edge, if that's what the gap below needs
-FFC_GAP = 0.6                        # the connector (body and contact pads) to any other part on its face: both are
-                                     #   hand-soldered, so as far apart as the connector's own contacts (0.6 mm)
-JUMPER_ROW_Y = None                  # the connector's row centre in the controller's frame (y, mm). None = derived:
-                                     #   where the straight flex jumper needs the least skew in its bends (jumper_row_y)
-SLOT_NET = {1: "GND", 2: "+5V", 3: "RGB_IN", 4: "GND", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
-SLOT_NET.update({5 + c: f"COL{c}" for c in range(7)})
+from compose.controller.rev2_std import PB_N, PB_END, PB_L, PB_PARTS, pb_bodies, slot_off, col_slot   # noqa: E402
+PB_LIB = "Connector_Molex"
+PB_ACROSS = 2.05                     # the body across the row, either way: KiCad's fab outline runs 2.05 mm to one
+                                     #   side of the pins and 1.15 to the other, and the right half's part (fitted
+                                     #   from the other face) has it the other way round
+PB_BODY = (-PB_L / 2, PB_L / 2, -PB_ACROSS, PB_ACROSS)
+                                     # both bodies and the space between, along the row (u) / across it toward the
+                                     #   bridge (n), from the row's centre: build() holds them to KiCad's footprints
+PB_EDGE = 1.0                        # body to the board's inner edge, at least
+PB_GAP = 0.6                         # the connector (body and pins) to any other part, both faces (it's through-hole):
+                                     #   hand-soldered, so as far as the diodes' pads keep
+PB_PAD = (1.3, 0.8)                  # pin pad for the plan's copper checks: across the row x along it
+SLOT_NET = {1: "GND", 9: "GND", 10: "+5V", 11: "RGB_IN", 18: "RGB_OUT", 19: "+5V", 20: "GND"}
+SLOT_NET.update({col_slot(c): f"COL{c}" for c in range(7)})
 SLOT_NET.update({12 + r: f"ROW{r}" for r in range(6)})
 POST_SEARCH = 18.0
 M2_KEEP = PR.M2_HEAD_D / 2 + 0.4     # round the centre of each M2 hole: no part (the plan), and no copper on either face
@@ -144,102 +149,47 @@ def socket_shapes(k):
 
 
 # ---------------------------------------------------------------- cable connector
-def ffc_frame():
-    """Contact-row direction u (toward the back) and the cable-side normal n (toward the bridge), unit vectors
-    in the board plane (plate-local xy). The row runs along the board's inner edge: turned to the bridge
-    frame's y axis instead (the splay, 10 deg) its 25 mm body would sweep into the inner column's sockets.
-    The flex jumper's flat top turns by the splay in plan, so the controller's connectors stay square."""
+def conn_frame():
+    """Pin-row direction u (toward the back) and the normal n toward the bridge, unit vectors in the board plane
+    (plate-local xy): the row runs along the board's inner edge."""
     return np.array([0.0, 1.0]), np.array([1.0, 0.0])
 
 
-_ROW = {}
-
-
-def jumper_row_y():
-    """The connector's row centre in the controller's frame (y): JUMPER_ROW_Y if set, else derived. Place the
-    connector, solve the jumper with the half connector free to slide along its row (least bend skew), move
-    the row by that slide, repeat until it settles (rounded to 0.01 mm). Cached in out_cache/<layout>/, keyed by the
-    sources and the parameter values it depends on, since the solve takes a minute."""
-    if JUMPER_ROW_Y is not None:
-        return JUMPER_ROW_Y
-    if "v" in _ROW:
-        return _ROW["v"]
-    import hashlib
-    import json
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = [os.path.join(here, "..", f) for f in ("params.py", "geom.py", "layout.py", "pcb/switch.py", "pcb/rev2_half.py",
-                                                  "pcb/jumper.py", "controller/rev2_std.py", "case/gasket.py")]
-    src.append(os.path.join(here, "..", "..", "layouts", PR.LAYOUT, "layout.py"))
-    # params.py as it resolved, not only as written: COMPOSE_TENT, COMPOSE_SPLAY, COMPOSE_GAP_TOP and the other environment
-    # overrides move the row as much as an edit does
-    vals = repr(sorted((k, v) for k, v in vars(PR).items() if k.isupper() and isinstance(v, (int, float, tuple))))
-    key = hashlib.sha1(b"".join(pathlib.Path(f).read_bytes() for f in src) + vals.encode()).hexdigest()
-    cache = os.path.join(outputs.cache(PR.LAYOUT), "jumper_row_y.json")
-    try:
-        got = json.loads(pathlib.Path(cache).read_text())
-        if got.get("key") == key:
-            _ROW["v"] = got["row_y"]
-            return _ROW["v"]
-    except (OSError, ValueError):
-        pass
-    from compose.pcb import jumper as J
-    y = 0.72                                                 # start: Compose58's value
-    for _ in range(6):
-        _ROW["v"] = y
-        _PLACEMENT.clear()
-        g = J.solve(free_shift=True)
-        y_new = round(y - g.shift * float(g.F0[1, 1]), 2)    # slide along the row -> its bridge-frame y part
-        if abs(y_new - y) < 0.005:
-            break
-        y = y_new
-    _ROW["v"] = y
-    _PLACEMENT.clear()
-    J._SOLVED.clear()
-    os.makedirs(os.path.dirname(cache), exist_ok=True)
-    pathlib.Path(cache).write_text(json.dumps({"key": key, "row_y": y}))
-    return y
-
-
-def ffc_row_y_P():
-    """The connector's contact row (bridge-frame y), set from the controller's Pico centre by jumper_row_y()."""
+def conn_row_y_P():
+    """The connector's pin row (bridge-frame y): level with the controller's connector row, so the cable runs
+    straight across."""
     from compose.case import gasket as C
-    return C.CT.y_pc - jumper_row_y()
+    from compose.controller import rev2_std as CS
+    return C.CT.y_pc - CS.PB_Y0
 
 
-def ffc_place(keep, ol):
-    """Contact-row centre (local) on the bridge-frame line of the controller's row, as close to the board's
-    inner edge as the parts allow: FFC_GAP clear of every other part (both faces' sockets, LEDs, holes), the body
-    flush with the edge, or up to FFC_PROUD_MAX proud of it if the gap needs that, else further in."""
-    u, n = ffc_frame()
-    yP = ffc_row_y_P()
+def conn_place(keep, ol):
+    """Pin-row centre (local) on the bridge-frame line of the controller's row, as close to the board's inner edge as
+    the parts allow: the body PB_EDGE in from the edge or further, PB_GAP clear of every other part on either face
+    (it's through-hole), slid along the row if its spot is taken."""
+    u, n = conn_frame()
+    yP = conn_row_y_P()
     ax = G.ANCHOR[0] - PR.PCB_INSET                          # board inner edge (local x) along the bridge
     M = G.M_LP
+    lo, hi = -80.0, 40.0
+    for _ in range(60):                                      # local y on the edge line giving P y = yP
+        mid = (lo + hi) / 2
+        if G.apply(M, (ax, mid, -PR.PCB_T))[1] > yP:
+            hi = mid
+        else:
+            lo = mid
+    c0 = np.array([ax, (lo + hi) / 2])
 
     def body(c):
-        q = [c + u * a + n * b for a, b in ((FFC_BODY[0], FFC_BODY[2]), (FFC_BODY[1], FFC_BODY[2]),
-                                             (FFC_BODY[1], FFC_BODY[3]), (FFC_BODY[0], FFC_BODY[3]))]
-        return Polygon(q)
+        return Polygon([c + u * a + n * b for a, b in ((PB_BODY[0], PB_BODY[2]), (PB_BODY[1], PB_BODY[2]),
+                                                        (PB_BODY[1], PB_BODY[3]), (PB_BODY[0], PB_BODY[3]))])
     best = None
-    for shift in np.arange(0.0, 8.01, 0.25):                 # along the row, either way, if the spot is taken
+    for shift in np.arange(0.0, 12.01, 0.25):                # along the row, either way, if the spot is taken
         for s in (shift, -shift):
-            for back in list(np.arange(0.0, -FFC_PROUD_MAX - FFC_EDGE - 1e-9, -0.1)) + list(np.arange(0.25, 15.01, 0.25)):
-                # row centre: P-frame y = yP, cable-side corner FFC_EDGE + back from the edge
-                lo, hi = -80.0, 40.0
-                for _ in range(60):                          # local y on the edge line giving P y = yP
-                    mid = (lo + hi) / 2
-                    if G.apply(M, (ax, mid, -PR.PCB_T))[1] > yP:
-                        hi = mid
-                    else:
-                        lo = mid
-                c0 = np.array([ax, (lo + hi) / 2])
-                c = c0 - n * FFC_BODY[3] + u * s
+            for back in np.arange(0.0, 15.01, 0.25):
+                c = c0 + u * s - n * (PB_BODY[3] + PB_EDGE + back)
                 bx = body(c)
-                d = max(x for x, _ in bx.exterior.coords) - ax
-                c = c - n * (d + FFC_EDGE + back)
-                bx = body(c)
-                # inside the board, except that the cable side may stand proud of the (straight) inner edge
-                inside = ol.buffer(-0.29).contains(bx.difference(sbox(ax - 0.29, -1e3, ax + 10.0, 1e3)))
-                if inside and not bx.buffer(FFC_GAP).intersects(keep):
+                if ol.buffer(-0.29).contains(bx) and not bx.buffer(PB_GAP).intersects(keep):
                     best = (c, bx, s, back)
                     break
             if best:
@@ -247,10 +197,10 @@ def ffc_place(keep, ol):
         if best:
             break
     if best is None:
-        raise RuntimeError("no room for the FFC connector near the inner edge")
+        raise RuntimeError("no room for the cable connector near the inner edge")
     c, bx, s, back = best
     f2 = lambda v: tuple(float(t) for t in v)
-    pads = [f2(c + u * (9.5 - i)) for i in range(20)]         # back-most first (index 0 = slot 1)
+    pads = [f2(c - u * slot_off(k)) for k in range(1, PB_N + 1)]   # back-most first (index 0 = slot 1)
     return SimpleNamespace(c=f2(c), u=f2(u), n=f2(n), body=bx, pads=pads, shift=float(s), back=float(back))
 
 
@@ -275,7 +225,7 @@ def plan(variant="hotswap", rgb=False):
     s.socks = base.socks if variant == "hotswap" else Polygon()
     if not rgb:
         s.ledcut, s.leds, s.led_order, s.caps = [], {"B": {}, "F": {}}, [], []
-        s.extra_keep = [s.ffc.body.buffer(1.0)] + base.extra_keep[4:]
+        s.extra_keep = [s.conn.body.buffer(1.0)] + base.extra_keep[4:]
     return s
 
 
@@ -313,17 +263,17 @@ def _place():
             capshape += [cap_box(keys[i], "B"), cap_box(keys[i], "F")]
     caps_u = unary_union(capshape) if capshape else Polygon()
 
-    # cable connector (both faces, same spot): clear of every hole, socket, LED and capacitor
+    # cable connector (through-hole: both faces): clear of every hole, socket, LED and capacitor
     keep = unary_union([holes, socks, ledcut_u.buffer(0.3), ledpads_u, caps_u])
     # diodes go after the connector, the connector only needs the column-edge strip
-    s.ffc = ffc_place(keep, ol)
+    s.conn = conn_place(keep, ol)
 
     # diodes: one candidate spot for every key if one fits all of them, else per key. The body
     # keeps a 0.9 mm margin to socket bodies and other diodes; to SMD pads, LEDs and the connector it keeps
     # 0.25 mm from its real (2 mm) diameter
     inside = ol.buffer(-1.0)
     sbodies = unary_union([SW.socket_body(k) for k in keys]) if variant == "hotswap" else Polygon()
-    smd = unary_union([socks.difference(sbodies), s.ffc.body, ledcut_u, ledpads_u, caps_u])
+    smd = unary_union([socks.difference(sbodies), s.conn.body, ledcut_u, ledpads_u, caps_u])
     taken0 = Polygon()
 
     def fits(k, cand, taken):
@@ -373,7 +323,7 @@ def _place():
     # M2 posts (board -> plate inserts): near the layout's, clear of everything on either face, the insert in
     # solid plate (core, away from switch holes and the flange)
     # underside (screw head): real part outlines; plate side (insert): switch holes and solder-joint pockets
-    allparts = unary_union([holes, socks, ledcut_u, ledpads_u, caps_u, s.ffc.body,
+    allparts = unary_union([holes, socks, ledcut_u, ledpads_u, caps_u, s.conn.body,
                             unary_union([LineString([ks.cathode, ks.anode]).buffer(PR.DIODE_BODY[1] / 2) for ks in s.keys]),
                             unary_union([Point(p).buffer(0.8) for ks in s.keys for p in (ks.cathode, ks.anode)])])
     core = G.OUTLINE.buffer(-PR.FLANGE_W - (PR.M2_INSERT_D / 2 + 0.8), join_style="round")
@@ -418,30 +368,43 @@ def _place():
     s.ledcut = ledcut
     s.leds = leds
     s.cuts, s.holes, s.socks = cuts, holes, socks
-    pl = np.array(s.ffc.pads[-1]) - np.array(s.ffc.u) * 5.0 + np.array(s.ffc.n) * 2.4
-    s.extra_keep = [s.ffc.body.buffer(1.0), ledcut_u.buffer(0.6), ledpads_u.buffer(0.4), caps_u.buffer(0.4),
-                    Point(*pl).buffer(2.6)]
+    pl = conn_label_xy(s)
+    s.extra_keep = [s.conn.body.buffer(1.0), ledcut_u.buffer(0.6), ledpads_u.buffer(0.4), caps_u.buffer(0.4),
+                    Point(*pl).buffer(2.6)] + [Point(*m).buffer(1.0) for m in conn_marks(s)]   # labels: no hex lattice
     s.extra_keep += [Point(ks.cathode).buffer(3.2) for ks in s.keys]           # the diodes' 'K' marks
     # the fields art.free_area reads
-    s.conn_body = s.ffc.body
-    s.conn_pins = [s.ffc.pads[0], s.ffc.pads[-1]]
+    s.conn_body = s.conn.body
+    s.conn_pins = [s.conn.pads[0], s.conn.pads[-1]]
     s.holes_m2 = list(s.posts)
     return s
+
+
+def conn_label_xy(s):
+    """Where the lhs / rhs label goes: behind the back connector, past its "1" (beside the row, the switches' outlines,
+    the front "1" and the hotswap sockets' pads leave no room for it on every board)."""
+    return np.array(s.conn.pads[0]) + np.array(s.conn.u) * (PB_END + 4.0)
+
+
+def conn_marks(s):
+    """Where the two "1" marks go: past the back connector's end by slot 1, and inboard of the front one's pin 1."""
+    u, n = np.array(s.conn.u), np.array(s.conn.n)
+    return [tuple(float(t) for t in np.array(s.conn.pads[0]) + u * (PB_END + 1.0)),
+            tuple(float(t) for t in np.array(s.conn.pads[pb_bodies()[1][0] - 1]) - n * (PB_ACROSS + 0.9))]
 
 
 def slot_of_pad_xy(s):
     """Physical order -> slot: the contact row's pads sorted by bridge-frame y, back first."""
     M = G.M_LP
-    ys = [(G.apply(M, (x, y, -PR.PCB_T))[1], i) for i, (x, y) in enumerate(s.ffc.pads)]
+    ys = [(G.apply(M, (x, y, -PR.PCB_T))[1], i) for i, (x, y) in enumerate(s.conn.pads)]
     order = [i for _, i in sorted(ys, reverse=True)]
-    return {s.ffc.pads[i]: k + 1 for k, i in enumerate(order)}
+    return {s.conn.pads[i]: k + 1 for k, i in enumerate(order)}
 
 
 def slot_net(sl, rgb):
     """The net on connector slot sl of a board with or without LEDs (None: nothing)."""
     nm = SLOT_NET[sl]
-    if nm in ("COL6", "ROW5"):
-        return None                                               # the matrix's spare line: unused here
+    if nm[:3] in ("COL", "ROW") and nm not in {f"COL{k.col}" for k in L.keys} | {f"ROW{k.row}" for k in L.keys}:
+        return None                                               # a matrix line the layout doesn't use
     if not rgb and nm in ("RGB_IN", "RGB_OUT"):
         return "RGB_PASS"                                         # no LEDs: data straight back
     if not rgb and nm in ("+5V", "GND"):
@@ -449,8 +412,6 @@ def slot_net(sl, rgb):
     return nm
 
 
-FFC_PAD = (1.0, 0.4)                 # contact pad: across the row x along it (library footprint)
-FFC_MP = (2.7, 12.3, 1.3, 2.0)       # mounting pads: toward the cable side / along the row from the row's centre, size
 DIODE_PAD = 1.6                      # DO-35 pads: the cathode's square, the anode's round
 CAP_PAD = (1.8, 1.15)                # 1206 pad: across the part x along it
 
@@ -495,14 +456,11 @@ def field(s, keepouts=()):
             x0 = CAP_AT[0] * (-1 if face == "F" else 1)
             for num, net, dy in (("1", "+5V", -1.475), ("2", "GND", 1.475)):
                 f.pad(face, rect(L.keys[i], (x0, CAP_AT[1] + dy), *CAP_PAD), net, f"C{m + 1}{face}.{num}")
-    u, n = np.array(s.ffc.u), np.array(s.ffc.n)
+    u, n = np.array(s.conn.u), np.array(s.conn.n)
     quad = lambda c, a, b: Polygon([tuple(np.array(c) + n * i * a / 2 + u * j * b / 2) for i, j in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
     slot = slot_of_pad_xy(s)
-    for face in ("B", "F"):
-        for p in s.ffc.pads:
-            f.pad(face, quad(p, *FFC_PAD), slot_net(slot[p], s.rgb), f"J1{face}.slot{slot[p]}")
-        for sg in (-1, 1):
-            f.pad(face, quad(np.array(s.ffc.c) + n * FFC_MP[0] + u * sg * FFC_MP[1], *FFC_MP[2:]), None, f"J1{face}.MP")
+    for p in s.conn.pads:                                         # through-hole: one pad on both faces
+        f.pad("FB", quad(p, *PB_PAD), slot_net(slot[p], s.rgb), f"J{1 if slot[p] <= PB_PARTS[0] else 2}.slot{slot[p]}")
     for x, y in s.posts:
         f.hole(Point(x, y).buffer(PR.M2_CLEAR / 2))
         f.keepout(Point(x, y).buffer(M2_KEEP))                    # under the screw's head and the plate's insert
@@ -667,37 +625,40 @@ def build(name):
                 for p in c_.Pads():
                     p.SetNet(net("+5V" if p.GetNumber() == "1" else "GND"))
                 b.Add(c_)
-    # ---- cable connectors: one per face, same spot; nets by physical position (back-most contact = slot 1)
+    # ---- cable connectors: through-hole, one footprint each for both halves (fitted from the face away from the
+    #      switches); nets by physical position (back-most pin = slot 1). Their body outlines on the back, where the
+    #      left half has them
     slot = slot_of_pad_xy(s)
-    for face in ("B", "F"):
-        j = PK.lib_fp(b, FFC_LIB, FFC_NAME)
-        j.SetReference(f"J1{face}")
+    for i, (k0, n_, y0, y1) in enumerate(pb_bodies()):
+        ref = f"J{i + 1}"
+        j = PK.lib_fp(b, PB_LIB, f"Molex_PicoBlade_53047-{n_:02d}10_1x{n_:02d}_P1.25mm_Vertical")
+        j.SetReference(ref)
         j.Reference().SetVisible(False)
-        if face == "B":
-            j.Flip(j.GetPosition(), False)
-        for first, last in (("1", "20"), ("20", "1")):
-            PK.place_by_pads(j, first, K(s.ffc.pads[0]), last, K(s.ffc.pads[-1]))
-            mp = [pcbnew.ToMM(p.GetPosition().x) for p in j.Pads() if p.GetNumber() == "MP"]
-            if sum(mp) / len(mp) - PK.OX > s.ffc.c[0]:               # body (and cable side) toward the bridge
-                break
-        else:
-            raise RuntimeError("FFC: cable side won't face the bridge")
+        j.Value().SetVisible(False)
+        j.Flip(j.GetPosition(), False)
+        PK.place_by_pads(j, "1", K(s.conn.pads[k0 - 1]), str(n_), K(s.conn.pads[k0 + n_ - 2]))
         for p in j.Pads():
-            if p.GetNumber() == "MP":
+            if not p.GetNumber().isdigit():
                 continue
             xy = (pcbnew.ToMM(p.GetPosition().x) - PK.OX, PK.OY - pcbnew.ToMM(p.GetPosition().y))
             k_ = [q for q in slot if math.dist(q, xy) < 1e-3]
-            must(k_, f"FFC pad {p.GetNumber()} off the planned row")
+            must(k_, f"cable connector {ref} pin {p.GetNumber()} off the planned row")
             nm = slot_net(slot[k_[0]], rgb)
             if nm:
                 p.SetNet(net(nm))
-        # the library footprint's body outline runs to the cable side, which may stand proud of the board edge:
-        # those silk lines go to the fab layer (not printed) rather than being clipped by the edge
-        edge_X = PK.OX + G.ANCHOR[0] - PR.PCB_INSET
-        for gi in j.GraphicalItems():
-            if gi.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS) and \
-                    pcbnew.ToMM(gi.GetBoundingBox().GetRight()) > edge_X - 0.3:
-                gi.SetLayer(pcbnew.F_Fab if gi.GetLayer() == pcbnew.F_SilkS else pcbnew.B_Fab)
+        # the body the plan used (PB_BODY: this part's stretch of it) against KiCad's own outline (its fab layer)
+        fab = [g for g in j.GraphicalItems() if isinstance(g, pcbnew.FP_SHAPE) and g.GetLayer() in (pcbnew.F_Fab, pcbnew.B_Fab)]
+        must(fab, f"PicoBlade 53047-{n_:02d}10: KiCad's footprint has no body outline on the fab layer")
+        bb = fab[0].GetBoundingBox()
+        for g in fab[1:]:
+            bb.Merge(g.GetBoundingBox())
+        cx_, cy_ = K(s.conn.c)
+        across = sorted((pcbnew.ToMM(bb.GetLeft()) - cx_, pcbnew.ToMM(bb.GetRight()) - cx_))
+        along = pcbnew.ToMM(bb.GetBottom() - bb.GetTop())
+        print(f"  {ref}: KiCad's body {across[0]:.2f} .. {across[1]:.2f} mm across the row, {along:.2f} along it; the "
+              f"plan's {PB_BODY[2]:.2f} .. {PB_BODY[3]:.2f}, {y1 - y0:.2f}")
+        must(abs(along - (y1 - y0)) < 0.4 and across[0] >= PB_BODY[2] - 0.4 and across[1] <= PB_BODY[3] + 0.4,
+             f"PicoBlade 53047-{n_:02d}10: PB_BODY doesn't hold KiCad's footprint")
         b.Add(j)
     # ---- M2 holes (board -> plate inserts)
     for i, (x, y) in enumerate(s.posts):                      # no courtyard: they sit in the column gaps,
@@ -714,13 +675,11 @@ def build(name):
     from compose.pcb import art as pcb_art
     art = pcb_art.plan_half_art(s, variant + (" · rgb" if rgb else ""))
     PK.add_art_half(b, art, PK.OX, PK.OY)
-    p1 = np.array(s.ffc.pads[0])
-    u, n = np.array(s.ffc.u), np.array(s.ffc.n)
     lhs, rhs = PR.HALF_NAMES
     for face, nm, lay, mir in (("B", lhs, pcbnew.B_SilkS, True), ("F", rhs, pcbnew.F_SilkS, False)):
-        PK.text(b, "1", K(tuple(float(t) for t in p1 + u * 1.3 - n * 1.6)), lay, 1.0, mirror=mir)
-        pl = np.array(s.ffc.pads[-1])                            # past the body's front end, mid-depth
-        PK.text(b, nm, K(tuple(float(t) for t in pl - u * 5.0 + n * 2.4)), lay, 1.0, mirror=mir, angle=90)
+        for m in conn_marks(s):                                   # each connector's pin 1
+            PK.text(b, "1", K(m), lay, 1.0, mirror=mir)
+        PK.text(b, nm, K(tuple(float(t) for t in conn_label_xy(s))), lay, 1.0, mirror=mir)
     # ---- copper the layout lays itself, before the autorouter (optional: layouts/<layout>/preroute.py)
     pre = PRE.hook("half_rev2")
     if pre:
@@ -756,13 +715,16 @@ def _clear_switch_silk(b):
                 fp.Delete(g)                        # Delete, not Remove: see kicad.remove_dangling
 
 
+CONN_REFS = ("J1", "J2")              # the cable connectors
 FANOUT_R = (0.9, 2.6, 0.1)           # via centre distance from its pad's centre: min, max, step (mm)
 
 
 def gnd_fanout(b):
     """Before routing (RGB boards): every SMD GND pad gets its own via on a short stub, so it reaches the GND
     pours on both faces whatever the router does around it. Without this, the pour couldn't reach ~30 pads
-    (mostly LED GND pads boxed in by the tracks round the LED cutouts). Each via takes the closest spot
+    (mostly LED GND pads boxed in by the tracks round the LED cutouts). So do the cable connectors' GND pins
+    (through hole, a stub on the back, else the front): the pins are too close together for the pour to pass
+    between them, and with tracks along the row on both faces it reached none of them on some routes. Each via takes the closest spot
     clear of every other pad, hole, art, edge and via, and of any copper already laid (pre-routed nets); the
     stub runs on the pad's own face."""
     pcbnew, PK = _pc()
@@ -796,7 +758,7 @@ def gnd_fanout(b):
                         sh = sh.envelope                              #   these pads bigger; keep to their box
                     isg = p.GetNetCode() == gnd.GetNetCode()
                     obst[f].append((sh, isg))
-                    if isg and p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD:
+                    if isg and (p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD or fp.GetReference() in CONN_REFS):
                         gpads.append((fp.GetReference(), p.GetNumber(), f, lay, sh))
     for d in b.GetDrawings():                                    # exposed-copper art
         f = lay_of.get(d.GetLayer())
@@ -827,8 +789,10 @@ def gnd_fanout(b):
     inner = inner.buffer(-edge_clr)                                         #   cutouts 0.45 mm in (kicad.route)
     allp = {f: uu([s for s, _ in obst[f]]) for f in obst}
     other = {f: uu([s for s, g in obst[f] if not g]) for f in obst}
-    vias, n, missed = [], 0, []
-    for ref, num, f, lay, pad in sorted(gpads):
+    vias, n, missed, done = [], 0, [], set()
+    for ref, num, f, lay, pad in sorted(gpads, key=lambda g: (g[0], g[1], g[2] != "B")):   # a pin: the back first
+        if (ref, num) in done:
+            continue
         c = pad.centroid
         best = None
         r = FANOUT_R[0]
@@ -850,8 +814,10 @@ def gnd_fanout(b):
                 break
             r += FANOUT_R[2]
         if best is None:
-            missed.append(f"{ref}.{num}")
+            if ref not in CONN_REFS or f == "F":
+                missed.append(f"{ref}.{num}")
             continue
+        done.add((ref, num))
         vias.append(best)
         t = pcbnew.PCB_TRACK(b)
         t.SetStart(pcbnew.VECTOR2I(MM(c.x), MM(c.y)))
@@ -868,7 +834,7 @@ def gnd_fanout(b):
         v.SetNet(gnd)
         b.Add(v)
         n += 1
-    print(f"  GND fanout: {n} of {len(gpads)} GND pads given a via" + (f"; no room at {', '.join(missed)}" if missed else ""))
+    print(f"  GND fanout: {n} of {len({(g[0], g[1]) for g in gpads})} GND pads given a via" + (f"; no room at {', '.join(missed)}" if missed else ""))
 
 
 GND_POUR_CLEAR = 0.3
@@ -1051,10 +1017,10 @@ def laid(name):
 
 
 def rail_points(s, face):
-    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 2 and 19, every LED's
+    """(feeds, loads) of the 5 V rail with the parts fitted on `face`: connector slots 10 and 19, every LED's
     5 V pad. Plate-local points for Field.resistance."""
     slot = {v: k for k, v in slot_of_pad_xy(s).items()}
-    return ([(slot[2], face), (slot[19], face)],
+    return ([(slot[10], face), (slot[19], face)],
             [(led_pads(L.keys[i], face)["1"].centroid.coords[0], face) for i in s.led_order])
 
 
@@ -1077,16 +1043,19 @@ def preroute_report(out, which=None):
               f"to the edge {f.worst['edge']:.2f} | {len(probs)} rules broken")
         for p_ in probs[:20]:
             print("   ", p_)
-        g = copy.copy(f)                                         # negative control: the same copper 0.3 mm off
-        g.tracks = [(n, fc, (a[0] + 0.3, a[1] + 0.3), (b[0] + 0.3, b[1] + 0.3), w) for n, fc, a, b, w in f.tracks]
-        g.vias = [(n, (p_[0] + 0.3, p_[1] + 0.3)) for n, p_ in f.vias]
-        caught = len(g.problems())
+        caught = 0                                               # negative control: the same copper 0.3 mm off,
+        for dx, dy in ((0.3, 0.3), (-0.3, 0.3), (0.3, -0.3), (-0.3, -0.3)):   # each diagonal (a lone net may have
+            g = copy.copy(f)                                     #   room on one side): the worst counts
+            g.tracks = [(n, fc, (a[0] + dx, a[1] + dy), (b[0] + dx, b[1] + dy), w) for n, fc, a, b, w in f.tracks]
+            g.vias = [(n, (p_[0] + dx, p_[1] + dy)) for n, p_ in f.vias]
+            caught = max(caught, len(g.problems()))
         bad += not caught
-        print(f"    negative control: the same copper moved 0.3 mm breaks {caught} rules" + ("" if caught else ": NOT CAUGHT"))
+        print(f"    negative control: the same copper moved 0.3 mm diagonally breaks up to {caught} rules"
+              + ("" if caught else ": NOT CAUGHT"))
         if "+5V" in f.nets():
             for face, half in (("B", PR.HALF_NAMES[0]), ("F", PR.HALF_NAMES[1])):
                 feeds, loads = rail_points(s, face)
-                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 2 + 19 to the "
+                print(f"    5 V rail as {half}: {f.resistance('+5V', feeds, loads) * 1e3:.0f} mohm from slots 10 + 19 to the "
                       f"farthest LED ({f.resistance('+5V', feeds, loads, width=PR.TRACE_W) * 1e3:.0f} at the signal width)")
         draw_laid(f, os.path.join(out, "pcb", f"{name}_preroute.png"))
     return bad
@@ -1152,8 +1121,8 @@ def draw(s, path):
     for ks in s.keys:
         P(ks.dbody, fc="#555", alpha=0.6)
         ax.plot(*ks.cathode, "o", ms=2, c="w")
-    P(s.ffc.body, fc="#a70", alpha=0.6)
-    for p in s.ffc.pads[:1]:
+    P(s.conn.body, fc="#a70", alpha=0.6)
+    for p in s.conn.pads[:1]:
         ax.plot(*p, "r*", ms=8)
     for x, y in s.posts:
         ax.add_patch(plt.Circle((x, y), PR.M2_CLEAR / 2, fc="none", ec="m"))
@@ -1165,16 +1134,15 @@ def draw(s, path):
 
 
 if __name__ == "__main__":
-    # Through the importable module, not this __main__ copy of it: compose.pcb.jumper imports this module by name,
-    # and with two copies each keeps its own placement and connector row. jumper_row_y() then ran its real solve
-    # in the other copy, saw no slide left here and kept (and cached) its start value.
+    # Through the importable module, not this __main__ copy of it: other modules import it by name, and with two
+    # copies each would keep its own placement.
     from compose.pcb import rev2_half as _M
     args = [a for a in sys.argv[2:] if not a.startswith("-")]
     if "--plan" in sys.argv:
         out = sys.argv[1] if len(sys.argv) > 1 else "out_r2t"
         os.makedirs(os.path.join(out, "pcb"), exist_ok=True)
         s = _M.plan("hotswap", True)
-        print("diodes in one common spot:", s.diode_common, "| ffc shift/back", s.ffc.shift, s.ffc.back,
+        print("diodes in one common spot:", s.diode_common, "| connector shift/back", s.conn.shift, s.conn.back,
               "| posts", [tuple(round(v, 1) for v in p) for p in s.posts], "| caps", len(s.caps))
         _M.draw(s, os.path.join(out, "pcb", "half_rev2_plan.png"))
     elif "--preroute" in sys.argv:

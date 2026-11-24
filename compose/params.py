@@ -50,7 +50,7 @@ OUTLINE_CONVEX_R = 6.0       # outline corner rounding (>= BEZEL_BEVEL + 2)
 OUTLINE_CONCAVE_R = 3.0
 
 # ---------------------------------------------------------------- ergonomics
-SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 10.0))           # each half rotated toward the centre (top view)
+SPLAY_DEG = float(_os.environ.get("COMPOSE_SPLAY", 14.0))           # each half rotated toward the centre (top view)
 if _KB:                                                              # the keyboard's own: layouts/<name>/keyboard.py
     TENT_DEG = float(_os.environ.get("COMPOSE_TENT", _KB.TENT_DEG))    # gable tent: inner edges raised
     TILT_DEG = float(_os.environ.get("COMPOSE_TILT", _KB.TILT_DEG))    # typing tilt: back raised (negative = front raised)
@@ -152,6 +152,8 @@ ART_COPPER_KEEPOUT = 0.6         # traces kept this far from the exposed-copper 
 # ---------------------------------------------------------------- rev 2 controller (rev 2 board on standoffs)
 CTRL_BACK_CLEAR = 0.5            # board's back edge to the bridge's back wall
 STANDOFF_MIN_GAP = 0.5           # Pico top -> cover underside, at least
+CTRL_FLOOR_CLEAR = 3.0           # the controller's tallest underside part -> the floor, at least (sets the case's height
+#                                   when the angles would leave less: geom.solve_z0)
 
 # ---------------------------------------------------------------- rev 2: gasket mount (compose/case/gasket.py)
 # Local half frame: z = 0 plate underside, PLATE_T plate top. The plate's outer FLANGE_W is a thin flange
@@ -171,7 +173,7 @@ GK_C = GK_T * (1 - GK_SQUEEZE)   # installed thickness
 GK_PAD_L, GK_PAD_W = 10.0, 4.0   # pad: tape width along the edge (9.5-10) x slice length inward
 LEDGE_W = 4.5                    # case ledge under the flange, inward from the outline
 LEDGE_T = 1.0                    # flat part of the ledge; under it a smooth 60-degree chamfer back to the wall
-LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by up to 12 deg: 48 deg worst, printable)
+LEDGE_CHAMFER_DEG = 60.0         # from horizontal, local frame (the tent tilts it by its angle: 48 deg at a 12 deg tent, still printable)
 LEDGE_TOP = FLANGE_Z0 - GK_C     # pad seat (local z)
 FRAME_LIP_Z = FLANGE_Z0 + FLANGE_T + GK_C   # frame underside over the flange (local z)
 SEAM_Z = FLANGE_Z0               # case wall top = frame bottom (local z)
@@ -184,7 +186,6 @@ GK_TABS = 18                     # pad pairs per half (outer edges)
 INNER_SEATS_P = ((-3.0, -13.0), (-48.5, -58.5))   # inner-edge pad pairs: P-frame y spans (back, front)
 INNER_SEAT_IN = 4.5              # inner seat width under the flange, from the plate edge
 PCB_INSET = LEDGE_W + 0.5        # half board outline inside the plate outline
-JUMPER_W = 21.0                  # rev 2 flex jumper width (20 x 1.0 mm pitch + 1 mm margins: both connectors' N+1)
 # middle (controller rev 2): the board drops onto four case posts and is clamped by four M3 male-female
 # standoffs; the cover drops onto the standoffs and takes four M3 x 6 screws (nothing slides or hooks).
 # Same M3 x 6 screws and M3 x 5 x 4 inserts as the frames (M3_INSERT_D / M3_INSERT_L / M3_HEAD_H / M3_CBORE_D).

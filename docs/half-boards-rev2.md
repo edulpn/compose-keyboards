@@ -25,33 +25,44 @@ Pick hotswap or solder, and RGB or not, the way you'd pick on any keyboard. Orde
 >
 > If you build one, please report what you find.
 
-**On this page:** [Design](#design) · [Jumper connector](#jumper-connector) · [RGB boards](#rgb-boards) · [Firmware](#firmware) · [What the simulation checks](#what-sim-half-rev2-checks)
+**On this page:** [Design](#design) · [Cable connectors](#cable-connectors) · [RGB boards](#rgb-boards) · [Firmware](#firmware) · [What the simulation checks](#what-sim-half-rev2-checks)
 
 ## Design
 
 - **One reversible board for both halves.** The left half has its switches on the front and everything else on the back; the right half is the same board flipped over.
-- **Every one-sided part has a copy on each face**: sockets, LEDs, capacitors, the jumper connector. Fit only the copies on the face away from the switches. Through-hole parts (diodes, solder-in switches) serve both.
-- **One placement for all four boards**: diodes, mounting posts and the connector sit in the same spots on every variant, so one plate fits them all.
+- **Every one-sided part has a copy on each face**: sockets, LEDs, capacitors. Fit only the copies on the face away from the switches. Through-hole parts (diodes, solder-in switches, the cable connectors) serve both; the cable connectors, too, go on the face away from the switches.
+- **One placement for all four boards**: diodes, mounting posts and the connectors sit in the same spots on every variant, so one plate fits them all.
 - **Outline:** the plate outline less 5 mm, inside the gasket pads. No case screws go through it: the board hangs from the plate on four M2 screws into heat-set inserts in the plate, placed in column gaps clear of every part. No copper runs within 2.15 mm of a screw's centre on either face, so the screw's head (up to 4 mm across) and the insert's face have no track or pour under them to cut into.
 - **Matrix:** the layout's rows and columns, COL2ROW, a through-hole diode per key in the column or row gap beside it. The plate has a shallow pocket over each diode's top-side solder joint.
 - **Diode joints on the hotswap boards:** the joint at a diode's switch end can sit close to a socket's column pad: the placement keeps 0.45 mm between them. Solder bridging the two closes a key's circuit without its switch, so that key reads as held down. Keep those joints small and look at each one before the switches go in.
 
-## Jumper connector
+## Cable connectors
 
-- **Connector:** Molex 200528-0200 (20 positions, 1.0 mm pitch, right angle, bottom contact, 1.9 mm tall) on the bottom face along the inner edge. Its pads stay at least 0.6 mm from every other part's pads on the same face (the same gap as between its own contacts; both are hand-soldered), which puts its cable side 0.1 mm proud of the board edge; `sim-half-rev2` checks the gap on the routed copper. Its contact row sits where the straight jumper needs the least skew in its bends: `jumper_row_y()` in `compose/pcb/rev2_half.py` derives it from the case (0.72 mm forward of the controller's Pico centre on Compose58), so new angles need no hand-tuning. Checked against Molex's drawing: contact side, 4 mm insertion depth, slot about 1.0 mm above the board, 21 mm width; the case checks use its 2.1 mm worst-case height. Its actuator flips up to 3.95 mm while the jumper goes in, so plug the jumpers in before the board goes into the case. Contacts follow the [controller rev 2](controller-rev2.md) slot order by physical position: the back-most contact is slot 1, on both halves.
+- **Connectors:** a Molex PicoBlade 53047-0810 (8 positions) behind a 53047-1210 (12 positions), 1.25 mm pitch, vertical, through-hole, end to end along the inner edge on the face away from the switches, openings facing down into the bay. KiCad's own footprints; the build compares each body outline with the sizes the case checks use and prints both.
+- **Where:** their pins are level with the controller's (`conn_row_y_P()` in `compose/pcb/rev2_half.py` reads the row from the controller standard, and each slot sits at the controller's spacing), so the cables run straight across and new angles need no hand-tuning. The bodies sit at least 1.0 mm in from the board edge, and the pins and bodies 0.6 mm from every other part on either face (they're through-hole, and hand-soldered); `sim-half-rev2` checks the gap on the routed copper. If their spot is taken they slide along the row. A body runs 2.05 mm to one side of its pins and 1.15 mm to the other; on the right half (fitted from the other face) it's the other way round, so the placement keeps 2.05 mm clear on both sides.
+- **Slot order:** the [controller rev 2](controller-rev2.md#cable-connectors-and-slot-order) order by physical position: the back-most pin is slot 1, on both halves. The 8-pin holds slots 1–8, the 12-pin 9–20. The columns run from the front of the 8-pin: COL0 in slot 8, COL6 in slot 2.
+- **Which way round:** the rule is the "1" marks: each cable has to join the controller's "1" to the half's "1", the back-most slot to the back-most slot. A half's connectors fit their pins either way round, and the cable decides which way meets the rule. The square pads (pin 1) are no guide on their own: the controller's connectors fit one way only, opening outward, so their pin 1 is at the back end (at the "1") on the left side but at the front end on the right side. Ready-made PicoBlade cables come in two kinds, *same direction* (pin 1 to pin 1) and *reverse direction* (pin 1 to the last pin), and each half's connector goes on accordingly:
+
+  | cable | left half | right half |
+  |---|---|---|
+  | same direction | as printed: pin 1 on the square pad, beside the "1" | turned round: pin 1 at the far end from the "1" |
+  | reverse direction | turned round | as printed |
+
+  "As printed" puts the housing over its outline on the board; turned round, the same housing sits half a turn round, its wider side across the pins from the outline. An 8-pin and a 12-pin cable can be of different kinds: take each on its own. When you don't know a cable's kind, plug it into the controller before soldering the half's connector and follow the wire from the controller's "1". Fitted the other way, that cable's slots meet in reverse: harmless (the pinout is [reversal-safe](controller-rev2.md#cable-connectors-and-slot-order)), but that half's keys scramble; turning the connector round puts it right.
+- **Plug the cables in first:** the connectors are under the board, so the cables go in before the board goes onto its plate.
 
 | slots | signal |
 |---|---|
-| 1, 4, 20 | GND |
-| 2, 19 | 5 V |
-| 3 | RGB data in |
-| 5–11 | COL0–COL6 |
+| 1, 9, 20 | GND |
+| 2–8 | COL6–COL0 (COL0 in slot 8) |
+| 10, 19 | 5 V |
+| 11 | RGB data in |
 | 12–17 | ROW0–ROW5 |
 | 18 | RGB data out |
 
-A layout uses the columns and rows it has (Compose58 leaves COL6 and ROW5 spare). The plain boards wire slot 3 straight to slot 18, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
+A layout uses the columns and rows it has (Compose58 leaves COL6 spare, and puts only its inner key on ROW5). The plain boards wire slot 11 straight to slot 18, so the controller's RGB chain still passes through, and leave 5 V and GND unconnected.
 
-The jumper itself: [flex jumpers](flex-jumper.md).
+The cables: a ready-made 8-pin and 12-pin PicoBlade cable, 150 mm (see the [controller's BOM](controller-rev2.md#bom)).
 
 ## RGB boards
 
@@ -63,8 +74,8 @@ The jumper itself: [flex jumpers](flex-jumper.md).
 | light | comes out on the near side of each key ("south-facing"): MX switches have their LED window opposite their pins, and the pins point away from you. Any MX switch with an LED window works; sockets and LEDs never share a side. |
 | chain | one per half, in the order the placement gives it (Compose58: up the outer column, down the next and so on, then the inner key and the thumb arc from the inside out) |
 | capacitors | 100 nF 1206 beside every third LED (10 per half on Compose58) |
-| power | 5 V from slots 2/19, GND from slots 1/4/20 |
-| 5 V rail | autorouted, unless the layout lays it out by hand (`layouts/<name>/preroute.py`, see [Routing](building.md#routing)). `sim-half-rev2` reads its resistance from the routed copper, from the connector to the farthest LED, and the return's through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 4 and 20. For a rail laid by hand, the worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half. The figures include 20 % for temperature and plating tolerance. |
+| power | 5 V from slots 10/19, GND from slots 1/9/20 |
+| 5 V rail | autorouted, unless the layout lays it out by hand (`layouts/<name>/preroute.py`, see [Routing](building.md#routing)). `sim-half-rev2` reads its resistance from the routed copper, from the connector to the farthest LED, and the return's through the GND pour (both faces, with the pads' stubs and vias) from the worst LED's GND pad back to slots 1, 9 and 20. For a rail laid by hand, the worst rail and the worst return together are held to 150 mΩ, the figure the controller's power simulation allows a half. The figures include 20 % for temperature and plating tolerance. |
 | GND | a copper pour on both faces, stitched with vias. Every SMD GND pad (LEDs, capacitors, connector) has its own via on a short stub, placed before routing, so the pour reaches it on both faces whatever the tracks do around it. (With every pad doubled for both halves, GND as tracks didn't fit on two layers.) |
 
 ## Firmware
@@ -93,11 +104,11 @@ Past the cap each LED can draw up to 36 mA (2.1 A for Compose58's 58); the contr
 - spare slots stay unconnected;
 - a diode's solder joint at least 0.45 mm from the pad of every other net on its face;
 - no copper of any net within 2.15 mm of an M2 hole's centre, on either face (under the screw's head and the plate's insert);
-- RGB boards: one unbroken LED chain from slot 3 to slot 18, with every LED and capacitor across 5 V and GND;
+- RGB boards: one unbroken LED chain from slot 11 to slot 18, with every LED and capacitor across 5 V and GND;
 - RGB boards: the 5 V rail and the return through the GND pour, each read from the copper, within 150 mΩ together;
 - RGB boards: the LED data run into the half and out of it within the lengths the controller's circuit simulation sweeps (200 and 300 mm of track);
 - RGB boards: LED data tracks beside column and row tracks move no column or row more than 0.7 V, with every data net switching at once;
 - RGB boards: the firmware lists its LEDs in the chain's order, the left half's then the right's;
 - plain boards: the RGB pass-through.
 
-Then it checks the jumpers: the jumper board's copper rebuilt the same way, and the flat strip bent along its solved path on the left and as its mirror image on the right, so every finger has to land on a contact of the half's connector and of the controller's (it does, within 0.01 mm) and slot k meets slot k. Then it scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper and both jumpers: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a jumper with its fingers in reverse order, a half connector 0.5 mm off along its row) are caught.
+Then it joins each half to the controller through model cables, slot k to slot k (both ends number their slots by physical position), and scans end to end with QMK's COL2ROW scan, through the real controller rev 2 copper: every key alone at its keymap position, 1000 random chords exact, no ghosting. Negative controls (a cut column, a diode fitted backwards, a reversed cable) are caught.

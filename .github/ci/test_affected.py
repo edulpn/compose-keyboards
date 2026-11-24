@@ -11,7 +11,7 @@ POINTER = ["compose/checks/pointer.py", "pointers/", "pointers/pim447/module.py"
 
 CASES = [
     ("docs only", FIRMWARE, ["docs/building.md", "README.md"], False),
-    ("modules the suite does not read", FIRMWARE, ["compose/case/gasket.py", "compose/pcb/jumper.py"], False),
+    ("modules the suite does not read", FIRMWARE, ["compose/case/gasket.py", "compose/render/gasket.py"], False),
     ("shared params", FIRMWARE, ["compose/params.py"], True),
     ("the entry module", FIRMWARE, ["compose/firmware_rev2.py"], True),
     ("a new module nothing imports", FIRMWARE, ["compose/pcb/newthing.py"], False),

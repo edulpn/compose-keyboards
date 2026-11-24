@@ -282,6 +282,9 @@ def case2_world():
     cavL, cavR = _both(cav)
     # ---- middle (P): back/front walls up to the cover underside, open between the plates' inner edges
     bridge = G.P2W(_bridge_block_P(yb, yf, DEEP, CT.cover_under, -PR.FLOAT_GAP))
+    # and FLOAT_GAP clear of the plate's outline wherever that reaches past the inner edge: at its front end the
+    # bridge can meet where the margin starts to round out to the thumbs (more splay takes it further down the edge)
+    bridge = bridge.cut(union(_both(prism(ring(O_WALL_IN), -60.0, 60.0))))
     interior = G.P2W(_bridge_block_P(yb - BW, yf + BW, DEEP, CT.cover_under + 1, W + PR.FLOAT_GAP + 1.0))
     top = big_box(-500, 500, -500, 500, 0, 500)
     body = union([tubL, tubR, bridge]).intersect(top)

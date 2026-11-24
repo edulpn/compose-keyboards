@@ -105,7 +105,7 @@ def main():
             ok = verdict == want and word in " ".join(heads + lines)
             bad += not ok
             print(("ok   " if ok else "FAIL ") + f"{name}: {verdict}" + ("" if ok else f" {heads + lines}"))
-        # a board with no router files beside it (the jumper): compared as before, no word about a job
+        # a board with no router files beside it (one not routed by Freerouting): compared as before, no word about a job
         verdict, heads, lines = sameboard.judge(a, was, "b")
         ok = verdict == "differs" and len(heads) == 1
         bad += not ok

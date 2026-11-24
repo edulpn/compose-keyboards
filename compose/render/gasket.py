@@ -5,7 +5,7 @@ Exports the rev 2 assembly as STLs + a manifest for compose/render/web/view.html
 into OUTDIR/png/: case, plates, frames, cover, gasket pads, the controller with its parts, placeholder switches and
 keycaps, and, for the assembly views, the half boards and the controller wearing their own Gerber renders
 (board_preview.js; each texture's placement checked against the board's drill holes and pads), the parts of one
-build (hotswap + RGB) and both flex jumpers in the shape flex-sim settles them into.
+build (hotswap + RGB) with both ends' PicoBlade connectors (the cables themselves are not drawn).
 Needs the routed boards (half-rev2 in OUTDIR, controller in CTRL_OUT, default out/controller).
 """
 from compose import must
@@ -37,9 +37,9 @@ L = G.LAYOUT
 CTRL_OUT = outputs.controller()
 BUILD = "half_rev2_hotswap_rgb"            # the half board shown in the assembly views
 METAL = ("standoff", "hhead", "hmetal", "cmetal", "cusb", "cpin")
-COL = dict(jumper=(0xc98a2b, 0.45), hsock=(0x1a1a1a, 0.55), hdiode=(0xd2662e, 0.25), hband=(0x101010, 0.4),
-           hled=(0xf4f4f0, 0.45), hcap=(0xb89b6c, 0.6), hffc=(0x2c2c2c, 0.55), hact=(0xcdb98d, 0.5),
-           hhead=(0x9a9aa0, 0.3), hmetal=(0xcfcfc8, 0.3), cffc=(0x2c2c2c, 0.55), cslide=(0xd6ccb4, 0.5),
+COL = dict(hsock=(0x1a1a1a, 0.55), hdiode=(0xd2662e, 0.25), hband=(0x101010, 0.4),
+           hled=(0xf4f4f0, 0.45), hcap=(0xb89b6c, 0.6), hpb=(0xf2efe6, 0.55),
+           hhead=(0x9a9aa0, 0.3), hmetal=(0xcfcfc8, 0.3), cpb=(0xf2efe6, 0.55),
            cmetal=(0xcfcfc8, 0.3), cpico=(0x2e8b47, 0.6), cchip=(0x141414, 0.5), cusb=(0xc8c8cc, 0.25),
            chdr=(0x161616, 0.6), cpin=(0xd4af37, 0.25), cjst=(0xe8dfca, 0.55), cdip=(0x34343a, 0.3),
            cres=(0x7ea6cf, 0.45), ccer=(0xd99a2e, 0.45), celec=(0x22232a, 0.4), cfuse=(0xe3b52a, 0.5),
@@ -187,20 +187,13 @@ def build():
         p = os.path.join(RD, f"r_{nm}.stl")
         m.export(p)
         add(nm, p)
-    # ---- the assembly views' extras: parts of one build, board textures, the jumpers as they settle
+    # ---- the assembly views' extras: parts of one build, board textures
     from compose.render import parts3d as P3
     hb_ = os.path.join(OUT, "pcb", BUILD + ".kicad_pcb")
     for nm, sols in P3.half_local(hb_).items():
         add(nm, stl(pair(cq.Compound.makeCompound(sols)), nm, tol=0.02), smooth=nm in ("hdiode", "hband"))
     for nm, sols in P3.controller_P(os.path.join(CTRL_OUT, "pcb", "controller_rev2.kicad_pcb")).items():
         add(nm, stl(G.P2W(cq.Compound.makeCompound(sols)), nm, tol=0.02))
-    from compose.checks import flex_sim as F
-    from compose.pcb import jumper as J
-    st = F.Strip(J.solve())
-    zj, ok, _ = st.solve(F.initial(st))
-    must(ok, "flex-sim: the jumper doesn't settle")
-    jl = G.P2W(st.solid(zj))
-    add("jumper", stl(cq.Compound.makeCompound([jl, jl.mirror("YZ")]), "jumper", tol=0.02), smooth=True)
     from compose.pcb import toolbox as PK
     S = np.diag([-1.0, 1, 1, 1])
     hb = os.path.join(OUT, "pcb", BUILD + ".kicad_pcb")
@@ -245,18 +238,19 @@ def views():
     for nm, d in (("frame", 45), ("pads", 0), ("plate", 22), ("switch", 22), ("keycap", 70), ("keycap2", 70),
                   ("halfpcb", 22), ("halftex_l_bot", 22), ("halftex_l_top", 22), ("halftex_r_bot", 22),
                   ("halftex_r_top", 22), ("hsock", 22), ("hdiode", 22), ("hband", 22), ("hled", 22), ("hcap", 22),
-                  ("hffc", 22), ("hact", 22), ("hmetal", 22), ("hhead", 22)):
+                  ("hpb", 22), ("hmetal", 22), ("hhead", 22)):
         ex[nm] = [0, float(n[1] * d), float(n[2] * d)]
     ex["frame"] = [0, float(n[1] * 45), float(n[2] * 45)]
     P = lambda x, y, z: list(G.apply(G.M_PW, (x, y, z)))
-    jc = np.array(G.apply(G.M_PW, (-CS.VFFC_SLOT_X - 4.0, CT.y_pc - CS.VFFC_Y0, CT.board_top + 5.0)))  # left jumper
+    xo = CS.PB_ROW_X + CS.PB_BODY_OUT                                              # the controller's openings
+    jc = np.array(G.apply(G.M_PW, (-xo - 6.0, CT.y_pc - CS.PB_Y0, CT.board_top + 2.0)))  # the left cable's bay
     from compose.pcb import rev2_half as H2
-    fc = H2.plan().ffc.c
-    hc = np.array(G.apply(G.M_LW, (fc[0] + 2.5, fc[1], -PR.PCB_T - 1.0)))      # the left half's 200528
-    cc = np.array(G.apply(G.M_PW, (-CS.VFFC_SLOT_X, CT.y_pc - CS.VFFC_Y0, CT.board_top + 3.0)))  # left 52610
+    fc = H2.plan().conn.c
+    hc = np.array(G.apply(G.M_LW, (fc[0], fc[1], -PR.PCB_T - 2.0)))            # the left half's 53047
+    cc = np.array(G.apply(G.M_PW, (-xo, CT.y_pc - CS.PB_Y0, CT.board_top + 2.0)))  # left 53048
     cb = np.array(G.apply(G.M_PW, (0.0, CT.y_pc, CT.board_bot - 4.0)))            # the controller's underside
     halfb = ["halfpcb", "halftex_l_bot", "halftex_l_top", "halftex_r_bot", "halftex_r_top", "hsock", "hdiode",
-             "hband", "hled", "hcap", "hffc", "hact", "hmetal", "hhead"]
+             "hband", "hled", "hcap", "hpb", "hmetal", "hhead"]
     caps = ["keycap", "keycap2", "switch"]
     return [
         ("r2_01_hero", q([-250, -360, 270], Cn)),
@@ -269,15 +263,15 @@ def views():
         ("r2_08_section_front_seat", q([-10, -320, 60], P(0, -53, 30), fov=18, clip=[0, 1, 0, 53.5], hide=caps)),
         ("r2_09_case_only", q([-230, -330, 300], Cn, show=["case"])),
         ("r2_10_controller_underside", q([-90, -140, -120], [0, -30, 22], fov=24,
-                                         show=["cpcb", "standoff", "ctex_top", "ctex_bot", "cffc", "cslide", "cmetal",
+                                         show=["cpcb", "standoff", "ctex_top", "ctex_bot", "cpb", "cmetal",
                                                "cpico", "cchip", "cusb", "chdr", "cpin", "cjst", "cdip", "cres", "ccer",
                                                "celec", "cfuse"])),
-        # assembly views: real board faces, the parts of one build, the jumpers as they settle
+        # assembly views: real board faces, the parts of one build, the connectors at both ends of a cable
         ("r2_11_assembly_underside", q([-170, -330, -230], [0, -60, 20], fov=30,
                                        hide=["case", "cover", "frame", "pads"])),
-        ("r2_12_jumper_bay", q(list(jc + np.array([-45.0, -95.0, 80.0])), list(jc), fov=22,
+        ("r2_12_cable_bay", q(list(jc + np.array([-45.0, -95.0, 80.0])), list(jc), fov=22,
                                hide=["cover"] + caps)),
-        ("r2_13_jumper_section", q(list(jc + np.array([-8.0, -230.0, 25.0])), list(jc), fov=12,
+        ("r2_13_cable_section", q(list(jc + np.array([-8.0, -230.0, 25.0])), list(jc), fov=12,
                                    clip=[0, 1, 0, -float(jc[1])], hide=["cover"] + caps)),
         ("r2_14_boards_plates_off", q([-200, -330, 300], [0, -60, 15], fov=28,
                                       hide=["cover", "plate", "frame", "pads"] + caps)),
@@ -286,7 +280,7 @@ def views():
         ("r2_16_controller_connector", q(list(cc + np.array([-62.0, -38.0, 40.0])), list(cc), fov=22,
                                          hide=["cover", "case", "frame", "plate", "pads"] + caps + halfb)),
         ("r2_17_controller_bottom", q(list(cb + np.array([-40.0, -75.0, -70.0])), list(cb), fov=26,
-                                      show=["cpcb", "standoff", "ctex_top", "ctex_bot", "cffc", "cslide", "cmetal",
+                                      show=["cpcb", "standoff", "ctex_top", "ctex_bot", "cpb", "cmetal",
                                             "cpico", "cchip", "cusb", "chdr", "cpin", "cjst", "cdip", "cres", "ccer",
                                             "celec", "cfuse"])),
     ]
