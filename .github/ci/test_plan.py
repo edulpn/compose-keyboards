@@ -88,6 +88,11 @@ def plan(repo, deps_dir, record, event="pull_request", base_ref="main"):
         assert set(per) == set(BOARDS) and all(len(v) == v[0] for v in per.values()), (name, per)
         half[name] = sorted({v[0] for v in per.values()})
     assert set(half) == {s.split("-", 1)[1] for s in runs if s.startswith("boards-")}, (half, runs)
+    # the list checks-passed reports from: every suite, a reason for exactly the ones that don't run
+    suites = json.loads(got["suites"])
+    assert [s["suite"] for s in suites] == P.suites(P.layouts(repo)), suites
+    assert {s["suite"] for s in suites if s["skip"] is None} == runs, (suites, runs)
+    assert all(s["skip"] is None or s["skip"].startswith("not affected") for s in suites), suites
     return runs, half
 
 

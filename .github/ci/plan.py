@@ -15,6 +15,9 @@ builds its jobs from:
     rev2, boards                            the layouts whose suite of that kind runs, as a JSON list
     half                                    the half-board jobs of those layouts, as a JSON list of
                                             {layout, board, shard, shards}
+    suites                                  every suite and why it is skipped, as a JSON list of
+                                            {suite, skip}: skip is null for a suite that runs (passed.py
+                                            reports from it)
 
 A half board is one job when its layout names a router that routes the same job the same way every time (ROUTER
 in layouts/<layout>/preroute.py), and three racing jobs under the default router, which is random.
@@ -126,7 +129,7 @@ def main():
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     sha_f = os.path.join(d, "SHA")
     traced = pathlib.Path(sha_f).read_text().strip() if os.path.exists(sha_f) else None
-    lines, run = [], {}
+    lines, run, skips = [], {}, {}
     lay = layouts()
     SUITES = suites(lay)
     if event != "pull_request" or not traced:
@@ -164,11 +167,14 @@ def main():
             for s in SUITES:
                 why, deps = found[s]
                 run[s] = bool(why)
+                if not why:
+                    skips[s] = f"not affected by this pull request's changes (none of the {len(deps)} files it reads)"
                 lines.append(f"- **{s}**: " + ("runs: " + "; ".join(why[:8]) + (" ..." if len(why) > 8 else "")
                                                if why else f"skipped: the pull request changes none of the {len(deps)} "
                                                            f"files it reads"))
     with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as o:
         o.write("\n".join(outputs(run, lay)) + "\n")
+        o.write("suites=" + json.dumps([{"suite": s, "skip": skips.get(s)} for s in SUITES]) + "\n")
     jobs = half_jobs([name for name in lay if run.get(f"boards-{name}")])
     if jobs:
         per = {}

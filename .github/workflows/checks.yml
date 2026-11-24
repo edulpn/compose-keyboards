@@ -53,6 +53,7 @@ jobs:
       rev2: ${{ steps.plan.outputs.rev2 }}          # the layouts each kind of suite runs for, as JSON lists
       boards: ${{ steps.plan.outputs.boards }}
       half: ${{ steps.plan.outputs.half }}          # the half-board jobs: {layout, board, shard, shards}
+      suites: ${{ steps.plan.outputs.suites }}      # every suite and why it's skipped, for checks-passed
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -60,6 +61,7 @@ jobs:
         with: { path: deps, key: "deps-${{ github.sha }}", restore-keys: "deps-" }
       - run: python3 .github/ci/test_affected.py
       - run: python3 .github/ci/test_plan.py
+      - run: python3 .github/ci/test_passed.py
       - run: python3 .github/ci/test_routed.py
       - run: python3 .github/ci/test_sameboard.py
       - run: python3 .github/ci/test_imports.py
@@ -340,7 +342,7 @@ jobs:
         with: { name: "deps-boards-${{ matrix.layout }}-sim", path: deps, retention-days: 7 }
 
   # ---------------------------------------------------------------- the docs' pictures, on a manual run that asks
-  # The renders check nothing, so they are not a suite and no other job waits on this one. It takes the boards this
+  # The renders check nothing, so they are not a suite and fail nothing (checks-passed waits on it to list it). It takes the boards this
   # run routed, renders the assembly (gasket-render) and writes the pictures the docs show under their repository
   # paths (docs-pictures): the artifact pictures-<layout>, to unzip over the repository's root. renders-<layout>
   # holds every gasket-render view.
@@ -371,7 +373,7 @@ jobs:
             echo "$b: $d"; cp -r "$d"/. o2/pcb/
           done
       - uses: ./.github/actions/setup
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: "22" }
       - name: Node packages and Playwright's Chromium
         run: |
@@ -387,18 +389,23 @@ jobs:
         with: { name: "renders-${{ matrix.layout }}", path: o2/png, retention-days: 7, if-no-files-found: ignore }
 
   # ---------------------------------------------------------------- one status to require, and the record for PRs
+  # Every suite listed as passed, failed or skipped, with the plan's reason for each skip (.github/ci/passed.py):
+  # a run that skipped everything doesn't read like one where everything ran. A skipped suite fails nothing.
+  # pictures is listed too, and waited on for that, but it checks nothing and never fails this job.
   checks-passed:
-    needs: [plan, rev2, controller, spice, half, boards-sim]
+    needs: [plan, rev2, controller, spice, half, boards-sim, pictures]
     if: always()
     runs-on: ubuntu-24.04
+    permissions: { contents: read, actions: read }    # to list this run's jobs, one per layout
     steps:
-      - name: every suite that ran passed
-        run: |
-          echo '${{ toJSON(needs) }}' | python3 -c "
-          import json, sys
-          bad = {k: v['result'] for k, v in json.load(sys.stdin).items() if v['result'] not in ('success', 'skipped')}
-          print('failed:', bad) if bad else print('all suites that ran passed')
-          sys.exit(1 if bad else 0)"
+      - uses: actions/checkout@v7
+        with: { sparse-checkout: .github/ci }
+      - name: every suite that had to run passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          PICTURES: ${{ github.event_name == 'workflow_dispatch' && inputs.pictures }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/ci/passed.py
 
   # always(): without a status function a job is skipped when any job behind it was, however far back. A job that
   # is skipped on main must not cost the record.
