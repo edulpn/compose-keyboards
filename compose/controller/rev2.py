@@ -400,8 +400,8 @@ TITLE_Y0, TITLE_Y1 = -18.9, -14.2              #   0.6 mm in from the edge, 0.95
 
 
 def art(b):
-    rec = []
-    L = lambda *a, **k: label(b, *a, records=rec, **k)
+    rec, shapes = [], []                                    # shapes: every front label's outline, checked at the end
+    L = lambda *a, **k: shapes.append((a[0], label(b, *a, records=rec, **k)))
     # title: the composition ring, "Compose" and the board's name, stacked in the left strip beside the Pico's
     # back half (the back is narrowed there for the plates' inner seats), behind the cable connector
     x_mid = (TITLE_X0 + TITLE_X1) / 2
@@ -426,6 +426,7 @@ def art(b):
     g, (wx, wy) = title(x_mid)
     PK.add_poly(b, g, pcbnew.F_SilkS, CX, CY)
     rec.append(dict(text="Compose", x=round(wx, 2), y=round(wy, 2)))
+    shapes.append(("the title", g))
     # bottom face (it faces the case floor): the same title, mirrored so it reads from below
     PK.add_poly(b, LT.mirror_about(g, x_mid), pcbnew.B_SilkS, CX, CY)
     # cover standoffs
@@ -449,14 +450,22 @@ def art(b):
     L("AUX", 7.49 + 0.5, ROW_Y, anchor="l")
     # J5 (Qwiic): centred right behind the connector body
     L("Qwiic", 15.8, 24.75, anchor="b")
-    # cable connectors: the side name along the pin row, centred on it, and "1" level with each connector's
-    # pin 1 (slots 1 and 9), all just outside the openings (the strip between the Pico's socket and the bodies is too
-    # narrow): seen while plugging in
+    # cable connectors: "1" level with each connector's pin 1 (slots 1 and 9) and the side name along the front
+    # connector's pins, centred on them (the row's own centre is that connector's pin 1, where its "1" goes), all
+    # just outside the openings (the strip between the Pico's socket and the bodies is too narrow): seen while
+    # plugging in
+    k_f, n_f, _, _ = pb_bodies()[-1]                                        # the front connector: slots k_f..
+    y_name = PB_Y0 + (slot_off(k_f) + slot_off(k_f + n_f - 1)) / 2
     for sx, s in zip((-1, 1), PR.HALF_NAMES, strict=True):                 # lhs / rhs, read from the outside
         x_out = PB_ROW_X + PB_BODY_OUT + PB_CRT + 1.2                # 1.2 mm past the courtyard
-        L(s, sx * x_out, PB_Y0, angle=90 * sx)
+        L(s, sx * x_out, y_name, angle=90 * sx)
         for k0, _, _, _ in pb_bodies():
             L("1", sx * x_out, PB_Y0 + slot_off(k0))
+    # no two front labels touch: KiCad's DRC doesn't compare one board graphic with another
+    gap = min((a.distance(c), na, nc) for i, (na, a) in enumerate(shapes) for nc, c in shapes[i + 1:])
+    must(gap[0] > 0, f"silkscreen labels '{gap[1]}' and '{gap[2]}' overlap")
+    print(f"  silkscreen: {len(shapes)} front labels, none touching; the nearest two ('{gap[1]}', '{gap[2]}') "
+          f"{gap[0]:.2f} mm apart", flush=True)
     return rec
 
 
